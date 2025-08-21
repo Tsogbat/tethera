@@ -12,11 +12,13 @@ let package = Package(
             targets: ["Terminal"]
         )
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.0.0")
+    ],
     targets: [
         .executableTarget(
             name: "Terminal",
-            dependencies: [],
+            dependencies: ["SwiftTerm"],
             path: "Terminal",
             sources: [
                 "TerminalApp.swift",
