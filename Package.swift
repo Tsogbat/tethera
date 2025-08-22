@@ -22,12 +22,18 @@ let package = Package(
             path: "Terminal",
             sources: [
                 "TerminalApp.swift",
-                "ContentView.swift", 
+                "ContentView.swift",
                 "TerminalSession.swift",
                 "TerminalBuffer.swift",
                 "TerminalView.swift",
                 "MetalRenderer.swift",
-                "SimpleTerminalView.swift"
+                "SimpleTerminalView.swift",
+                "BlockTerminalView.swift",
+                "BlockTerminalViewModel.swift",
+                "TerminalBlock.swift",
+                "TerminalTheme.swift",
+                "CommandPaletteView.swift",
+                "TerminalSettingsView.swift"
             ],
             resources: [
                 .process("Shaders.metal"),
