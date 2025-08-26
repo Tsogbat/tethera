@@ -83,4 +83,5 @@ Tethera/
 
 ## License
 
-This project is for educational purposes. Free to use and modify as needed.
+This is opensource project feel free to contribute
+GNU AFFERO GENERAL PUBLIC LICENSE
