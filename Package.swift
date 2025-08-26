@@ -33,11 +33,13 @@ let package = Package(
                 "TerminalBlock.swift",
                 "TerminalTheme.swift",
                 "CommandPaletteView.swift",
-                "TerminalSettingsView.swift"
+                "TerminalSettingsView.swift",
+                "FontLoader.swift"
             ],
             resources: [
                 .process("Shaders.metal"),
-                .process("Assets.xcassets")
+                .process("Assets.xcassets"),
+                .process("Fonts") 
             ]
         )
     ]

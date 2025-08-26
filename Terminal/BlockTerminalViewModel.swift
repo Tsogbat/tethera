@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import CoreText
 
 class BlockTerminalViewModel: ObservableObject {
     @Published var workingDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
@@ -11,6 +12,9 @@ class BlockTerminalViewModel: ObservableObject {
     @Published var paletteActions: [String] = ["New Tab", "Split Pane", "Settings"]
     
     init() {
+        // Load the JetBrains Mono font
+        FontLoader.shared.loadJetBrainsMono()
+        
         // Demo block so UI is not blank
         blocks.append(TerminalBlock.example)
     }
@@ -67,7 +71,19 @@ class BlockTerminalViewModel: ObservableObject {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
-    func loadFont() {
-        // Register JetBrains Mono if bundled, or ensure it's available on the system
+
+    
+    /// Get a shortened working directory for display
+    var displayWorkingDirectory: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if workingDirectory.hasPrefix(home) {
+            let relativePath = String(workingDirectory.dropFirst(home.count))
+            if relativePath.isEmpty {
+                return "~"
+            } else {
+                return "~\(relativePath)"
+            }
+        }
+        return workingDirectory
     }
 }

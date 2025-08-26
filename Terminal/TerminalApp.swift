@@ -10,6 +10,7 @@ struct TerminalApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
+        .defaultSize(width: 900, height: 600)
     }
 }
 
@@ -24,6 +25,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let window = NSApp.windows.first {
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
+            
+            // Set window properties for better appearance
+            window.backgroundColor = NSColor(red: 0.06, green: 0.07, blue: 0.10, alpha: 1.0)
+            window.isMovableByWindowBackground = true
+            window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
         }
     }
     
