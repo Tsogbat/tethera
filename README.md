@@ -1,4 +1,4 @@
-# Foundation Terminal
+# Tethera
 
 A modern, high-performance terminal application for macOS built with SwiftUI and Metal.
 
@@ -24,11 +24,34 @@ A modern, high-performance terminal application for macOS built with SwiftUI and
 # Build the project
 swift build
 
-# Run the terminal
+# Run Tethera
 swift run
 ```
 
-Or open `Terminal.xcodeproj` in Xcode and press ⌘+R.
+Or open `Tethera.xcodeproj` in Xcode and press ⌘+R.
+
+### Build App Bundle with Icon
+
+To build a proper macOS app bundle (.app) with the custom icon:
+
+```bash
+# Build the app bundle
+make app
+
+# Run the app bundle
+make run-app
+```
+
+Or use the build script directly:
+
+```bash
+./build_app.sh
+open Tethera.app
+```
+
+The app bundle will include the custom icon and can be moved to Applications folder or run from anywhere.
+
+**Note**: The build script automatically generates a proper macOS `.icns` icon file from your `icon.png` source file, ensuring the icon displays correctly in the dock, Finder, and throughout the system.
 
 ## Usage
 
@@ -49,7 +72,7 @@ Or open `Terminal.xcodeproj` in Xcode and press ⌘+R.
 ## Project Structure
 
 ```
-Terminal/
+Tethera/
 ├── BlockTerminalView.swift      # Main UI
 ├── BlockTerminalViewModel.swift # Business logic
 ├── FontLoader.swift            # Font management
@@ -60,4 +83,4 @@ Terminal/
 
 ## License
 
-This project is for educational purposes. Feel free to use and modify as needed.
+This project is for educational purposes. Free to use and modify as needed.

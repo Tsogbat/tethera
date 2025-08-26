@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "Terminal",
+    name: "Tethera",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .executable(
-            name: "Terminal",
-            targets: ["Terminal"]
+            name: "Tethera",
+            targets: ["Tethera"]
         )
     ],
     dependencies: [
@@ -17,7 +17,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "Terminal",
+            name: "Tethera",
             dependencies: ["SwiftTerm"],
             path: "Terminal",
             sources: [

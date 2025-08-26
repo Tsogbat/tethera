@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "Testing Foundation Terminal..."
-echo "=============================="
+echo "Testing Tethera..."
+echo "=================="
 
 # Build the project
 echo "Building project..."
@@ -12,7 +12,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "To run the terminal:"
     echo "1. Run: make run"
-    echo "2. Or run directly: ./.build/debug/Terminal"
+    echo "2. Or run directly: ./.build/debug/Tethera"
     echo ""
     echo "You should see:"
     echo "- A black terminal window"

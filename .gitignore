@@ -128,6 +128,20 @@ Temporary Items
 .swiftpm/
 Package.resolved
 
+# App bundles and build outputs (generated artifacts - do not commit)
+# These are created when building the project and should be regenerated locally
+*.app/
+Tethera.app/
+*.dmg
+*.pkg
+*.icns
+*.iconset/
+
+# Note: The following files SHOULD be committed:
+# - icon.png (source icon file)
+# - build_app.sh (build script)
+# - All source code and configuration files
+
 # Temporary files
 *.tmp
 *.temp
