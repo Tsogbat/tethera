@@ -19,8 +19,8 @@ DerivedData/
 !default.mode1v3
 *.mode2v3
 !default.mode2v3
-*.perspectivev3
-!default.perspectivev3
+*.perspective3
+!default.perspective3
 
 ## Obj-C/Swift specific
 *.hmap
@@ -136,11 +136,19 @@ Tethera.app/
 *.pkg
 *.icns
 *.iconset/
+releases/
+
+# Development tools and scripts (should not be committed)
+# These are local development tools that other developers can recreate
+release.sh
+build_app.sh
+.github/
 
 # Note: The following files SHOULD be committed:
 # - icon.png (source icon file)
-# - build_app.sh (build script)
-# - All source code and configuration files
+RELEASE_GUIDE.md 
+# - # - All source code and configuration files
+# - Package.swift, Makefile, etc.
 
 # Temporary files
 *.tmp

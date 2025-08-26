@@ -15,6 +15,11 @@ app: build
 	@echo "Building Tethera app bundle..."
 	@./build_app.sh
 
+# Prepare release
+release: clean
+	@echo "Preparing Tethera release..."
+	@./release.sh
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
@@ -22,6 +27,7 @@ clean:
 	@rm -rf Tethera.app/
 	@rm -rf *.icns
 	@rm -rf *.iconset/
+	@rm -rf releases/
 
 # Run the application
 run: build
@@ -48,6 +54,7 @@ help:
 	@echo "Available targets:"
 	@echo "  build     - Build the project"
 	@echo "  app       - Build the app bundle with icon"
+	@echo "  release   - Prepare release package for GitHub"
 	@echo "  clean     - Clean build artifacts"
 	@echo "  run       - Build and run the application"
 	@echo "  run-app   - Build app bundle and run it"
