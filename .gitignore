@@ -142,6 +142,7 @@ releases/
 # These are local development tools that other developers can recreate
 release.sh
 build_app.sh
+test_terminal.sh
 .github/
 
 # Note: The following files SHOULD be committed:
