@@ -10,37 +10,31 @@ class FontLoader {
     
     /// Load and register the JetBrains Mono font family
     func loadJetBrainsMono() {
-        let fontNames = ["JetBrainsMono-Regular", "JetBrainsMono-Medium", "JetBrainsMono-Bold"]
+        let fontNames = [
+            ("JetBrainsMono-Medium", "ttf"),
+            ("JetBrainsMono-Bold", "ttf"),
+            ("JetBrainsMono-Regular", "ttf")
+        ]
         
-        for fontName in fontNames {
-            if let fontURL = Bundle.main.url(forResource: fontName, withExtension: "ttf", subdirectory: "Fonts") {
+        for fontTuple in fontNames {
+            let fontName = fontTuple.0
+            let fontExtension = fontTuple.1
+            
+            if let fontURL = Bundle.main.url(forResource: fontName, withExtension: fontExtension, subdirectory: "Fonts") {
                 loadFont(from: fontURL, name: fontName)
-            } else {
-                print("Warning: \(fontName).ttf not found in bundle")
+            } else if let fontURL = Bundle.main.url(forResource: fontName, withExtension: fontExtension) {
+                loadFont(from: fontURL, name: fontName)
             }
         }
     }
     
     /// Load a specific font from URL
     private func loadFont(from url: URL, name: String) {
-        guard let fontDataProvider = CGDataProvider(url: url as CFURL) else {
-            print("Warning: Could not create font data provider for \(name)")
-            return
-        }
-        
-        guard let font = CGFont(fontDataProvider) else {
-            print("Warning: Could not create font from data provider for \(name)")
-            return
-        }
+        guard let fontDataProvider = CGDataProvider(url: url as CFURL) else { return }
+        guard let font = CGFont(fontDataProvider) else { return }
         
         var error: Unmanaged<CFError>?
-        if !CTFontManagerRegisterGraphicsFont(font, &error) {
-            if let error = error?.takeRetainedValue() {
-                print("Warning: Could not register font \(name): \(error)")
-            }
-        } else {
-            print("Successfully registered font: \(name)")
-        }
+        CTFontManagerRegisterGraphicsFont(font, &error)
     }
     
     /// Check if a font is available
@@ -50,10 +44,12 @@ class FontLoader {
     
     /// Get a fallback font if JetBrains Mono is not available
     func getFallbackFont() -> Font {
-        if isFontAvailable("JetBrainsMono-Regular") {
-            return .custom("JetBrainsMono-Regular", size: 15)
-        } else if isFontAvailable("JetBrainsMono-Medium") {
+        if isFontAvailable("JetBrainsMono-Medium") {
             return .custom("JetBrainsMono-Medium", size: 15)
+        } else if isFontAvailable("JetBrainsMono-Regular") {
+            return .custom("JetBrainsMono-Regular", size: 15)
+        } else if isFontAvailable("JetBrainsMono-Bold") {
+            return .custom("JetBrainsMono-Bold", size: 15)
         } else {
             return .system(.body, design: .monospaced)
         }

@@ -86,4 +86,15 @@ class BlockTerminalViewModel: ObservableObject {
         }
         return workingDirectory
     }
+    
+    /// Get the appropriate font for the current system
+    func getTerminalFont() -> Font {
+        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
+            return .custom("JetBrainsMono-Medium", size: 15)
+        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
+            return .custom("JetBrainsMono-Regular", size: 15)
+        } else {
+            return .system(.body, design: .monospaced)
+        }
+    }
 }

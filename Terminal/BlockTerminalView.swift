@@ -26,8 +26,8 @@ struct BlockTerminalView: View {
                             .foregroundColor(.blue)
                             .font(.system(size: 14, weight: .medium))
                         Text(viewModel.displayWorkingDirectory)
-                            .font(.custom("JetBrainsMono-Regular", size: 13))
-                            .foregroundColor(.secondary)
+                            .font(getFont(size: 13))
+                            .foregroundColor(.white)
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 20)
@@ -73,13 +73,27 @@ struct BlockTerminalView: View {
                                 .foregroundColor(.green)
                                 .font(.system(size: 14, weight: .semibold))
                             
-                            TextField("Enter command...", text: $commandInput)
-                                .font(.custom("JetBrainsMono-Regular", size: 15))
+                            TextField("", text: $commandInput)
+                                .font(getFont(size: 15))
                                 .textFieldStyle(PlainTextFieldStyle())
                                 .foregroundColor(.white)
+                                .accentColor(.green)
                                 .focused($isInputFocused)
                                 .onAppear { isInputFocused = true }
                                 .onSubmit { submitCommand() }
+                                .overlay(
+                                    Group {
+                                        if commandInput.isEmpty {
+                                            HStack {
+                                                Text("Enter command...")
+                                                    .font(getFont(size: 15))
+                                                    .foregroundColor(.white.opacity(0.6))
+                                                    .padding(.leading, 12)
+                                                Spacer()
+                                            }
+                                        }
+                                    }
+                                )
                         }
                         
                         Button(action: submitCommand) {
@@ -92,7 +106,10 @@ struct BlockTerminalView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 16)
-                    .background(SwiftUI.Color.white.opacity(0.02))
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(SwiftUI.Color.white.opacity(0.03))
+                    )
                 }
             }
         }
@@ -108,7 +125,19 @@ struct BlockTerminalView: View {
         viewModel.runShellCommand(trimmed)
         isInputFocused = true
     }
+    
+    private func getFont(size: CGFloat) -> Font {
+        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
+            return .custom("JetBrainsMono-Medium", size: size)
+        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
+            return .custom("JetBrainsMono-Regular", size: size)
+        } else {
+            return .system(size: size, design: .monospaced)
+        }
+    }
 }
+
+
 
 // Separate view for terminal blocks for better organization
 struct TerminalBlockView: View {
@@ -123,7 +152,7 @@ struct TerminalBlockView: View {
                     .font(.system(size: 12, weight: .semibold))
                 
                 Text(block.input)
-                    .font(.custom("JetBrainsMono-Regular", size: 14))
+                    .font(getFont(size: 14))
                     .foregroundColor(.white)
                     .textSelection(.enabled)
                 
@@ -134,8 +163,8 @@ struct TerminalBlockView: View {
                     let displayPath = workingDir.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ? 
                         "~\(String(workingDir.dropFirst(FileManager.default.homeDirectoryForCurrentUser.path.count)))" : workingDir
                     Text(displayPath)
-                        .font(.custom("JetBrainsMono-Regular", size: 11))
-                        .foregroundColor(.secondary)
+                        .font(getFont(size: 11))
+                        .foregroundColor(.white.opacity(0.7))
                         .lineLimit(1)
                 }
             }
@@ -143,8 +172,8 @@ struct TerminalBlockView: View {
             // Command output
             if !block.output.isEmpty {
                 Text(block.output)
-                    .font(.custom("JetBrainsMono-Regular", size: 13))
-                    .foregroundColor(.secondary)
+                    .font(getFont(size: 13))
+                    .foregroundColor(.white.opacity(0.8))
                     .textSelection(.enabled)
                     .padding(.leading, 20)
             }
@@ -159,5 +188,15 @@ struct TerminalBlockView: View {
                 )
         )
         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+    }
+    
+    private func getFont(size: CGFloat) -> Font {
+        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
+            return .custom("JetBrainsMono-Medium", size: size)
+        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
+            return .custom("JetBrainsMono-Regular", size: size)
+        } else {
+            return .system(size: size, design: .monospaced)
+        }
     }
 }

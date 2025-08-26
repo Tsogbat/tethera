@@ -15,16 +15,12 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf .build/
 
-# Run the application (if built)
+# Run the application
 run: build
 	@echo "Running Terminal..."
-	@if [ -f ".build/debug/Terminal" ]; then \
-		./.build/debug/Terminal; \
-	else \
-		echo "No built executable found. Run 'make build' first."; \
-	fi
+	@swift run
 
-# Install dependencies (if using SPM)
+# Install dependencies
 deps:
 	@echo "Installing dependencies..."
 	@swift package resolve
@@ -32,8 +28,7 @@ deps:
 # Show project structure
 structure:
 	@echo "Project Structure:"
-	@echo "Terminal/"
-	@find Terminal -name "*.swift" -o -name "*.metal" -o -name "*.plist" | sort
+	@find Terminal -name "*.swift" -o -name "*.metal" | sort
 
 # Help
 help:
