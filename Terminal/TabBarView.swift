@@ -116,24 +116,6 @@ struct TabView: View {
                 isHovered = hovering
             }
         }
-        .draggable(tab) {
-            // Drag preview
-            HStack(spacing: 8) {
-                Text(tab.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                Image(systemName: "terminal")
-                    .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.white.opacity(0.2))
-                    .shadow(radius: 4)
-            )
-        }
         .onDrag {
             onDragStart()
             return NSItemProvider(object: tab.id.uuidString as NSString)

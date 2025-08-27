@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TabbedTerminalView: View {
     @StateObject private var tabManager = TabManager()
@@ -10,6 +11,54 @@ struct TabbedTerminalView: View {
         let manager = SplitPaneManager(initialTab: initialTab)
         self._splitPaneManager = StateObject(wrappedValue: manager)
     }
+
+// MARK: - Root Pane Drop Delegate (for single-tab mode)
+
+private class RootPaneDropDelegate: DropDelegate {
+    let splitPaneManager: SplitPaneManager
+    let tabManager: TabManager
+    let onSplit: () -> Void
+    let containerSize: CGSize
+    
+    init(splitPaneManager: SplitPaneManager, tabManager: TabManager, onSplit: @escaping () -> Void, containerSize: CGSize) {
+        self.splitPaneManager = splitPaneManager
+        self.tabManager = tabManager
+        self.onSplit = onSplit
+        self.containerSize = containerSize
+    }
+    
+    func validateDrop(info: DropInfo) -> Bool { true }
+    func dropEntered(info: DropInfo) {}
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .copy) }
+    func dropExited(info: DropInfo) {}
+    
+    func performDrop(info: DropInfo) -> Bool {
+        guard let provider = info.itemProviders(for: [UTType.text.identifier]).first else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { (data, error) in
+            DispatchQueue.main.async {
+                guard error == nil else { return }
+                let uuidString: String
+                if let str = data as? String { uuidString = str }
+                else if let d = data as? Data, let s = String(data: d, encoding: .utf8) { uuidString = s }
+                else if let ns = data as? NSString { uuidString = ns as String }
+                else { return }
+                guard let uuid = UUID(uuidString: uuidString), let tab = self.tabManager.tabs.first(where: { $0.id == uuid }) else { return }
+                let orientation = self.orientation(for: info)
+                self.splitPaneManager.handleTabDrop(tab, onto: self.splitPaneManager.rootPane, orientation: orientation)
+                self.onSplit()
+            }
+        }
+        return true
+    }
+    
+    private func orientation(for info: DropInfo) -> SplitOrientation {
+        let loc = info.location
+        let x = loc.x / containerSize.width
+        if x < 0.33 { return .horizontal }
+        if x > 0.66 { return .horizontal }
+        return .vertical
+    }
+}
     
     var body: some View {
         VStack(spacing: 0) {
@@ -25,12 +74,21 @@ struct TabbedTerminalView: View {
                 SplitPaneView(
                     pane: splitPaneManager.rootPane,
                     splitPaneManager: splitPaneManager,
-                    tabManager: tabManager
+                    tabManager: tabManager,
+                    onSplit: { showSplitView = true }
                 )
             } else {
-                // Show active tab content directly
-                if let activeTab = tabManager.activeTab {
-                    BlockTerminalView(viewModel: activeTab.viewModel)
+                // Show active tab content directly, but still accept drops to initiate split view
+                GeometryReader { geo in
+                    if let activeTab = tabManager.activeTab {
+                        BlockTerminalView(viewModel: activeTab.viewModel)
+                            .onDrop(of: [UTType.text.identifier], delegate: RootPaneDropDelegate(
+                                splitPaneManager: splitPaneManager,
+                                tabManager: tabManager,
+                                onSplit: { showSplitView = true },
+                                containerSize: geo.size
+                            ))
+                    }
                 }
             }
         }
