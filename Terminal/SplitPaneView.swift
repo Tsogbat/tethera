@@ -7,6 +7,7 @@ struct SplitPaneView: View {
     @ObservedObject var tabManager: TabManager
     let onSplit: () -> Void
     @State private var hoverEdge: DropEdgeHighlight? = nil
+    @State private var isHovered: Bool = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -14,13 +15,43 @@ struct SplitPaneView: View {
                 // Leaf pane - show terminal
                 if let tab = pane.tab {
                     ZStack {
-                        BlockTerminalView(viewModel: tab.viewModel)
+                        BlockTerminalView(viewModel: tab.viewModel, isActivePane: splitPaneManager.activePane == pane)
+                        
+                        // Close pane button (top-right corner)
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    splitPaneManager.removeTab(tab)
+                                    onSplit()
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .background(Circle().fill(.black.opacity(0.3)))
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .opacity(isHovered ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.2), value: isHovered)
+                                .padding(8)
+                            }
+                            Spacer()
+                        }
+                        
                         // Visual drop target highlight
                         if splitPaneManager.dropTarget == pane, let edge = hoverEdge {
                             DropHighlightOverlay(orientation: edge)
                                 .allowsHitTesting(false)
                                 .transition(.opacity)
                         }
+                    }
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isHovered = hovering
+                        }
+                    }
+                    .onTapGesture {
+                        splitPaneManager.setActivePane(pane)
                     }
                     .onDrop(of: [UTType.plainText.identifier, UTType.text.identifier], delegate: PaneDropDelegate(
                         pane: pane,
@@ -53,6 +84,8 @@ struct SplitPaneView: View {
                                 .frame(width: geometry.size.width * (1 - pane.splitRatio))
                         }
                     }
+                    // Smooth animation while dragging divider
+                    .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.9, blendDuration: 0.1), value: pane.splitRatio)
                 } else {
                     VStack(spacing: 0) {
                         if pane.children.count >= 1 {
@@ -73,9 +106,13 @@ struct SplitPaneView: View {
                                 .frame(height: geometry.size.height * (1 - pane.splitRatio))
                         }
                     }
+                    // Smooth animation while dragging divider
+                    .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.9, blendDuration: 0.1), value: pane.splitRatio)
                 }
             }
         }
+        // Smooth appearance of drop highlight
+        .animation(.spring(response: 0.25, dampingFraction: 0.85, blendDuration: 0.1), value: hoverEdge)
     }
 }
 
@@ -96,7 +133,7 @@ struct DividerView: View {
             .contentShape(Rectangle())
             .cursor(orientation == .vertical ? .resizeLeftRight : .resizeUpDown)
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.85, blendDuration: 0.1)) {
                     isHovered = hovering
                 }
             }
@@ -146,7 +183,7 @@ private struct DropHighlightOverlay: View {
                     .overlay(
                         Rectangle().stroke(SwiftUI.Color(red: 0.0, green: 0.48, blue: 1.0, opacity: 0.6), lineWidth: 2)
                     )
-                    .animation(.easeInOut(duration: 0.12), value: orientation)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.85, blendDuration: 0.1), value: orientation)
             }
         }
     }

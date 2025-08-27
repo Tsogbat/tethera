@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// Represents a terminal tab with its own session and view model
 class Tab: ObservableObject, Identifiable, Transferable {
@@ -11,12 +12,36 @@ class Tab: ObservableObject, Identifiable, Transferable {
     init(title: String = "Terminal") {
         self.title = title
         self.viewModel = BlockTerminalViewModel()
+        
+        // Auto-update title when blocks change
+        viewModel.objectWillChange.sink { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self?.updateTitle()
+            }
+        }.store(in: &cancellables)
     }
     
-    /// Update tab title based on current working directory
+    private var cancellables = Set<AnyCancellable>()
+    
+    /// Update tab title based on current working directory or last command
     func updateTitle() {
+        // Try to get the last command first
+        if let lastBlock = viewModel.blocks.last, !lastBlock.input.isEmpty {
+            let command = lastBlock.input.components(separatedBy: " ").first ?? ""
+            if !command.isEmpty && command != "cd" {
+                self.title = command
+                return
+            }
+        }
+        
+        // Fall back to directory name
         let displayDir = viewModel.displayWorkingDirectory
-        self.title = displayDir == "~" ? "Terminal" : displayDir.components(separatedBy: "/").last ?? "Terminal"
+        if displayDir == "~" {
+            self.title = "Home"
+        } else {
+            let dirName = displayDir.components(separatedBy: "/").last ?? "Terminal"
+            self.title = dirName.isEmpty ? "Terminal" : dirName
+        }
     }
     
     // MARK: - Transferable

@@ -112,7 +112,7 @@ struct TabView: View {
             onSelect()
         }
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1)) {
                 isHovered = hovering
             }
         }
@@ -120,6 +120,9 @@ struct TabView: View {
             onDragStart()
             return NSItemProvider(object: tab.id.uuidString as NSString)
         }
+        // Smoothen state-driven changes
+        .animation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1), value: isHovered)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1), value: isActive)
     }
 }
 
@@ -130,4 +133,4 @@ struct TabView: View {
     TabBarView(tabManager: tabManager, splitPaneManager: splitPaneManager, onTabSplit: {})
         .frame(width: 600, height: 36)
         .background(.black)
-}
+} 

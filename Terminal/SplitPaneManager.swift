@@ -7,9 +7,11 @@ class SplitPaneManager: ObservableObject {
     @Published var draggedTab: Tab?
     @Published var dropTarget: SplitPane?
     @Published var dropOrientation: SplitOrientation = .horizontal
+    @Published var activePane: SplitPane?
     
     init(initialTab: Tab) {
         self.rootPane = SplitPane(tab: initialTab)
+        self.activePane = self.rootPane
     }
     
     /// Find a pane containing the specified tab
@@ -79,5 +81,10 @@ class SplitPaneManager: ObservableObject {
     /// Update split ratio for a pane
     func updateSplitRatio(_ pane: SplitPane, ratio: CGFloat) {
         pane.splitRatio = max(0.1, min(0.9, ratio))
+    }
+    
+    /// Set the active pane for focus management
+    func setActivePane(_ pane: SplitPane) {
+        activePane = pane
     }
 }

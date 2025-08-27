@@ -28,7 +28,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             // Set window properties for better appearance
             window.backgroundColor = NSColor(red: 0.06, green: 0.07, blue: 0.10, alpha: 1.0)
-            window.isMovableByWindowBackground = true
+            // Restrict window dragging to explicit drag areas (e.g., the tab bar)
+            window.isMovableByWindowBackground = false
             window.titlebarAppearsTransparent = true
             window.titlebarSeparatorStyle = .none
         }

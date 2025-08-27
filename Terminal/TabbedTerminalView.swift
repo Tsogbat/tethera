@@ -11,6 +11,108 @@ struct TabbedTerminalView: View {
         let manager = SplitPaneManager(initialTab: initialTab)
         self._splitPaneManager = StateObject(wrappedValue: manager)
     }
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Tab bar - draggable area for window
+            TabBarView(
+                tabManager: tabManager, 
+                splitPaneManager: splitPaneManager,
+                onTabSplit: { showSplitView = true }
+            )
+            .background(WindowDragArea())
+            
+            // Content area - show either single tab or split view
+            if showSplitView {
+                SplitPaneView(
+                    pane: splitPaneManager.rootPane,
+                    splitPaneManager: splitPaneManager,
+                    tabManager: tabManager,
+                    onSplit: { showSplitView = true }
+                )
+            } else {
+                // Show active tab content directly, but still accept drops to initiate split view
+                GeometryReader { geo in
+                    if let activeTab = tabManager.activeTab {
+                        BlockTerminalView(viewModel: activeTab.viewModel, isActivePane: true)
+                            .onDrop(of: [UTType.text.identifier], delegate: RootPaneDropDelegate(
+                                splitPaneManager: splitPaneManager,
+                                tabManager: tabManager,
+                                onSplit: { showSplitView = true },
+                                containerSize: geo.size
+                            ))
+                    }
+                }
+            }
+        }
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    SwiftUI.Color(red: 0.06, green: 0.07, blue: 0.10),
+                    SwiftUI.Color(red: 0.09, green: 0.11, blue: 0.15)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .onAppear {
+            // Set up keyboard shortcut handling
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "t" {
+                    tabManager.createNewTab()
+                    return nil
+                }
+                return event
+            }
+        }
+    }
+}
+
+// MARK: - Window Drag Area
+
+struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Enable window dragging for this view
+        DispatchQueue.main.async {
+            if let window = nsView.window {
+                nsView.addGestureRecognizer(NSPanGestureRecognizer(target: WindowDragHandler(window: window), action: #selector(WindowDragHandler.handlePan(_:))))
+            }
+        }
+    }
+}
+
+class WindowDragHandler: NSObject {
+    weak var window: NSWindow?
+    
+    init(window: NSWindow) {
+        self.window = window
+        super.init()
+    }
+    
+    @objc func handlePan(_ gesture: NSPanGestureRecognizer) {
+        guard let window = window else { return }
+        
+        switch gesture.state {
+        case .began:
+            window.performDrag(with: NSEvent())
+        case .changed:
+            let translation = gesture.translation(in: gesture.view)
+            let currentLocation = window.frame.origin
+            let newLocation = NSPoint(x: currentLocation.x + translation.x, y: currentLocation.y - translation.y)
+            window.setFrameOrigin(newLocation)
+            gesture.setTranslation(.zero, in: gesture.view)
+        default:
+            break
+        }
+    }
+}
 
 // MARK: - Root Pane Drop Delegate (for single-tab mode)
 
@@ -57,61 +159,6 @@ private class RootPaneDropDelegate: DropDelegate {
         if x < 0.33 { return .horizontal }
         if x > 0.66 { return .horizontal }
         return .vertical
-    }
-}
-    
-    var body: some View {
-        VStack(spacing: 0) {
-            // Tab bar
-            TabBarView(
-                tabManager: tabManager, 
-                splitPaneManager: splitPaneManager,
-                onTabSplit: { showSplitView = true }
-            )
-            
-            // Content area - show either single tab or split view
-            if showSplitView {
-                SplitPaneView(
-                    pane: splitPaneManager.rootPane,
-                    splitPaneManager: splitPaneManager,
-                    tabManager: tabManager,
-                    onSplit: { showSplitView = true }
-                )
-            } else {
-                // Show active tab content directly, but still accept drops to initiate split view
-                GeometryReader { geo in
-                    if let activeTab = tabManager.activeTab {
-                        BlockTerminalView(viewModel: activeTab.viewModel)
-                            .onDrop(of: [UTType.text.identifier], delegate: RootPaneDropDelegate(
-                                splitPaneManager: splitPaneManager,
-                                tabManager: tabManager,
-                                onSplit: { showSplitView = true },
-                                containerSize: geo.size
-                            ))
-                    }
-                }
-            }
-        }
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    SwiftUI.Color(red: 0.06, green: 0.07, blue: 0.10),
-                    SwiftUI.Color(red: 0.09, green: 0.11, blue: 0.15)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .onAppear {
-            // Set up keyboard shortcut handling
-            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "t" {
-                    tabManager.createNewTab()
-                    return nil
-                }
-                return event
-            }
-        }
     }
 }
 

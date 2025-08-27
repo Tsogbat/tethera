@@ -4,6 +4,7 @@ struct BlockTerminalView: View {
     @ObservedObject var viewModel: BlockTerminalViewModel
     @State private var commandInput: String = ""
     @FocusState private var isInputFocused: Bool
+    let isActivePane: Bool
 
     var body: some View {
         ZStack {
@@ -79,7 +80,20 @@ struct BlockTerminalView: View {
                                 .foregroundColor(.white)
                                 .accentColor(.green)
                                 .focused($isInputFocused)
-                                .onAppear { isInputFocused = true }
+                                .onAppear { 
+                                    if isActivePane {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            isInputFocused = true
+                                        }
+                                    }
+                                }
+                                .onChange(of: isActivePane) { _, newValue in
+                                    if newValue {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            isInputFocused = true
+                                        }
+                                    }
+                                }
                                 .onSubmit { submitCommand() }
                                 .overlay(
                                     Group {
@@ -123,7 +137,11 @@ struct BlockTerminalView: View {
         commandInput = ""
         guard !trimmed.isEmpty else { return }
         viewModel.runShellCommand(trimmed)
-        isInputFocused = true
+        if isActivePane {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isInputFocused = true
+            }
+        }
     }
     
     private func getFont(size: CGFloat) -> Font {
