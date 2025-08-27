@@ -27,27 +27,25 @@ struct TabBarView: View {
                         .offset(draggedTab?.id == tab.id ? dragOffset : .zero)
                         .zIndex(draggedTab?.id == tab.id ? 1 : 0)
                     }
+                    
+                    // New tab button - now inside ScrollView but after all tabs
+                    Button(action: {
+                        tabManager.createNewTab()
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                            .frame(width: 24, height: 24)
+                            .background(
+                                Circle()
+                                    .fill(.white.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.trailing, 12)
                 }
                 .padding(.horizontal, 8)
             }
-            
-            Spacer()
-            
-            // New tab button
-            Button(action: {
-                tabManager.createNewTab()
-            }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 24, height: 24)
-                    .background(
-                        Circle()
-                            .fill(.white.opacity(0.1))
-                    )
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.trailing, 12)
         }
         .frame(height: 36)
         .background(
