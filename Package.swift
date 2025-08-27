@@ -34,7 +34,14 @@ let package = Package(
                 "TerminalTheme.swift",
                 "CommandPaletteView.swift",
                 "TerminalSettingsView.swift",
-                "FontLoader.swift"
+                "FontLoader.swift",
+                "Tab.swift",
+                "TabManager.swift",
+                "SplitPane.swift",
+                "SplitPaneManager.swift",
+                "TabBarView.swift",
+                "SplitPaneView.swift",
+                "TabbedTerminalView.swift"
             ],
             resources: [
                 .process("Shaders.metal"),
