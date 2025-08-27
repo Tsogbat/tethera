@@ -41,7 +41,9 @@ let package = Package(
                 "SplitPaneManager.swift",
                 "TabBarView.swift",
                 "SplitPaneView.swift",
-                "TabbedTerminalView.swift"
+                "TabbedTerminalView.swift",
+                "AutocompleteEngine.swift",
+                "AutocompleteSuggestionView.swift"
             ],
             resources: [
                 .process("Shaders.metal"),

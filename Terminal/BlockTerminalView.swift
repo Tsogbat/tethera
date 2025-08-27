@@ -4,6 +4,7 @@ struct BlockTerminalView: View {
     @ObservedObject var viewModel: BlockTerminalViewModel
     @State private var commandInput: String = ""
     @FocusState private var isInputFocused: Bool
+    @StateObject private var autocompleteEngine = AutocompleteEngine()
     let isActivePane: Bool
 
     var body: some View {
@@ -65,6 +66,34 @@ struct BlockTerminalView: View {
 
                 // Modern command input area
                 VStack(spacing: 0) {
+                    // Autocomplete suggestions overlay
+                    if autocompleteEngine.isShowingSuggestions && !autocompleteEngine.suggestions.isEmpty {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                AutocompleteSuggestionView(
+                                    suggestions: autocompleteEngine.suggestions,
+                                    onSuggestionSelected: { suggestion in
+                                        commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
+                                        autocompleteEngine.clearSuggestions()
+                                        // Add space after completion for better UX
+                                        if suggestion.type == .command {
+                                            commandInput += " "
+                                        }
+                                    },
+                                    onArrowNavigation: { index in
+                                        autocompleteEngine.updateSelectedIndex(index)
+                                    },
+                                    selectedIndex: $autocompleteEngine.selectedSuggestionIndex
+                                )
+                                .frame(maxWidth: 400)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                        }
+                    }
+                    
                     Divider()
                         .background(SwiftUI.Color.white.opacity(0.1))
                     
@@ -74,30 +103,59 @@ struct BlockTerminalView: View {
                                 .foregroundColor(.green)
                                 .font(.system(size: 14, weight: .semibold))
                             
-                            TextField("", text: $commandInput)
-                                .font(getFont(size: 15))
-                                .textFieldStyle(PlainTextFieldStyle())
-                                .foregroundColor(.white)
-                                .accentColor(.green)
-                                .focused($isInputFocused)
-                                .onAppear { 
-                                    if isActivePane {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            isInputFocused = true
+                            ZStack(alignment: .leading) {
+                                TextField("", text: $commandInput)
+                                    .font(getFont(size: 15))
+                                    .textFieldStyle(PlainTextFieldStyle())
+                                    .foregroundColor(.white)
+                                    .accentColor(.green)
+                                    .focused($isInputFocused)
+                                    .onAppear { 
+                                        if isActivePane {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                isInputFocused = true
+                                            }
                                         }
                                     }
-                                }
-                                .onChange(of: isActivePane) { _, newValue in
-                                    if newValue {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                            isInputFocused = true
+                                    .onChange(of: isActivePane) { _, newValue in
+                                        if newValue {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                                isInputFocused = true
+                                            }
                                         }
                                     }
+                                    .onChange(of: commandInput) { _, newValue in
+                                        if isInputFocused {
+                                            autocompleteEngine.getSuggestions(for: newValue, in: viewModel.workingDirectory)
+                                        }
+                                    }
+                                    .onSubmit { 
+                                        if autocompleteEngine.isShowingSuggestions {
+                                            autocompleteEngine.clearSuggestions()
+                                        }
+                                        submitCommand() 
+                                    }
+                                    .onKeyPress { keyPress in
+                                        handleKeyPress(keyPress)
+                                    }
+                                
+                                // Inline completion preview
+                                if !autocompleteEngine.inlineCompletion.isEmpty && autocompleteEngine.inlineCompletion.hasPrefix(commandInput) {
+                                    HStack {
+                                        Text(commandInput)
+                                            .font(getFont(size: 15))
+                                            .foregroundColor(.clear)
+                                        Text(String(autocompleteEngine.inlineCompletion.dropFirst(commandInput.count)))
+                                            .font(getFont(size: 15))
+                                            .foregroundColor(.white.opacity(0.4))
+                                        Spacer()
+                                    }
+                                    .allowsHitTesting(false)
                                 }
-                                .onSubmit { submitCommand() }
+                            }
                                 .overlay(
                                     Group {
-                                        if commandInput.isEmpty {
+                                        if commandInput.isEmpty && autocompleteEngine.inlineCompletion.isEmpty {
                                             HStack {
                                                 Text("Enter command...")
                                                     .font(getFont(size: 15))
@@ -142,6 +200,58 @@ struct BlockTerminalView: View {
                 isInputFocused = true
             }
         }
+    }
+    
+    private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
+        // Handle Tab for inline completion
+        if keyPress.key == .tab {
+            if !autocompleteEngine.inlineCompletion.isEmpty {
+                commandInput = autocompleteEngine.inlineCompletion
+                autocompleteEngine.clearSuggestions()
+                return .handled
+            } else if autocompleteEngine.isShowingSuggestions {
+                let selectedIndex = autocompleteEngine.selectedSuggestionIndex
+                if selectedIndex < autocompleteEngine.suggestions.count {
+                    let suggestion = autocompleteEngine.suggestions[selectedIndex]
+                    commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
+                    if suggestion.type == .command {
+                        commandInput += " "
+                    }
+                    autocompleteEngine.clearSuggestions()
+                }
+                return .handled
+            }
+        }
+        
+        if autocompleteEngine.isShowingSuggestions {
+            switch keyPress.key {
+            case .downArrow:
+                let newIndex = min(autocompleteEngine.selectedSuggestionIndex + 1, autocompleteEngine.suggestions.count - 1)
+                autocompleteEngine.updateSelectedIndex(newIndex)
+                return .handled
+            case .upArrow:
+                let newIndex = max(autocompleteEngine.selectedSuggestionIndex - 1, 0)
+                autocompleteEngine.updateSelectedIndex(newIndex)
+                return .handled
+            case .return:
+                let selectedIndex = autocompleteEngine.selectedSuggestionIndex
+                if selectedIndex < autocompleteEngine.suggestions.count {
+                    let suggestion = autocompleteEngine.suggestions[selectedIndex]
+                    commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
+                    if suggestion.type == .command {
+                        commandInput += " "
+                    }
+                    autocompleteEngine.clearSuggestions()
+                }
+                return .handled
+            case .escape:
+                autocompleteEngine.clearSuggestions()
+                return .handled
+            default:
+                break
+            }
+        }
+        return .ignored
     }
     
     private func getFont(size: CGFloat) -> Font {
