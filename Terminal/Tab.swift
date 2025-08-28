@@ -8,15 +8,18 @@ class Tab: ObservableObject, Identifiable, Transferable {
     @Published var title: String
     @Published var viewModel: BlockTerminalViewModel
     @Published var isActive: Bool = false
+    @Published var isCustomTitle: Bool = false
     
     init(title: String = "Terminal") {
         self.title = title
         self.viewModel = BlockTerminalViewModel()
         
-        // Auto-update title when blocks change
+        // Auto-update title when blocks change (only if not custom)
         viewModel.objectWillChange.sink { [weak self] in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                self?.updateTitle()
+                if self?.isCustomTitle == false {
+                    self?.updateTitle()
+                }
             }
         }.store(in: &cancellables)
     }
@@ -42,6 +45,21 @@ class Tab: ObservableObject, Identifiable, Transferable {
             let dirName = displayDir.components(separatedBy: "/").last ?? "Terminal"
             self.title = dirName.isEmpty ? "Terminal" : dirName
         }
+    }
+    
+    /// Rename the tab with a custom title
+    func rename(to newTitle: String) {
+        let trimmedTitle = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTitle.isEmpty {
+            self.title = trimmedTitle
+            self.isCustomTitle = true
+        }
+    }
+    
+    /// Reset to auto-generated title
+    func resetToAutoTitle() {
+        self.isCustomTitle = false
+        updateTitle()
     }
     
     // MARK: - Transferable

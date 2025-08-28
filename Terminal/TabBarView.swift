@@ -22,6 +22,12 @@ struct TabBarView: View {
                             onDragEnd: { 
                                 draggedTab = nil
                                 dragOffset = .zero
+                            },
+                            onRename: { newTitle in
+                                tabManager.renameTab(tab.id, to: newTitle)
+                            },
+                            onResetTitle: {
+                                tabManager.resetTabTitle(tab.id)
                             }
                         )
                         .offset(draggedTab?.id == tab.id ? dragOffset : .zero)
@@ -74,26 +80,63 @@ struct TabView: View {
     let onClose: () -> Void
     let onDragStart: () -> Void
     let onDragEnd: () -> Void
+    let onRename: (String) -> Void
+    let onResetTitle: () -> Void
     
     @State private var isHovered = false
+    @State private var isEditing = false
+    @State private var editingTitle = ""
     
     var body: some View {
         HStack(spacing: 8) {
-            // Tab title
-            Text(tab.title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(isActive ? .white : .white.opacity(0.7))
-                .lineLimit(1)
-                .truncationMode(.middle)
+            // Tab title or text field for editing
+            if isEditing {
+                TextField("Tab name", text: $editingTitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(.white.opacity(0.1))
+                            .frame(height: 20)
+                    )
+                    .onSubmit {
+                        finishEditing()
+                    }
+                    .onExitCommand {
+                        cancelEditing()
+                    }
+            } else {
+                Text(tab.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(isActive ? .white : .white.opacity(0.7))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .onTapGesture(count: 2) {
+                        startEditing()
+                    }
+                    .contextMenu {
+                        Button("Rename") {
+                            startEditing()
+                        }
+                        if tab.isCustomTitle {
+                            Button("Reset to Auto Title") {
+                                onResetTitle()
+                            }
+                        }
+                    }
+            }
             
             // Close button
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+            if !isEditing {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .opacity(isHovered ? 1 : 0)
             }
-            .buttonStyle(PlainButtonStyle())
-            .opacity(isHovered ? 1 : 0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -107,7 +150,9 @@ struct TabView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            onSelect()
+            if !isEditing {
+                onSelect()
+            }
         }
         .onHover { hovering in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1)) {
@@ -115,12 +160,30 @@ struct TabView: View {
             }
         }
         .onDrag {
-            onDragStart()
-            return NSItemProvider(object: tab.id.uuidString as NSString)
+            if !isEditing {
+                onDragStart()
+                return NSItemProvider(object: tab.id.uuidString as NSString)
+            }
+            return NSItemProvider()
         }
         // Smoothen state-driven changes
         .animation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1), value: isHovered)
         .animation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1), value: isActive)
+    }
+    
+    private func startEditing() {
+        editingTitle = tab.title
+        isEditing = true
+    }
+    
+    private func finishEditing() {
+        onRename(editingTitle)
+        isEditing = false
+    }
+    
+    private func cancelEditing() {
+        editingTitle = tab.title
+        isEditing = false
     }
 }
 

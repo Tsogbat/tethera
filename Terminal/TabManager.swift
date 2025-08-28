@@ -61,4 +61,18 @@ class TabManager: ObservableObject {
     func tab(with id: UUID) -> Tab? {
         return tabs.first { $0.id == id }
     }
+    
+    /// Rename a tab
+    func renameTab(_ tabId: UUID, to newTitle: String) {
+        if let tab = tabs.first(where: { $0.id == tabId }) {
+            tab.rename(to: newTitle)
+        }
+    }
+    
+    /// Reset tab to auto-generated title
+    func resetTabTitle(_ tabId: UUID) {
+        if let tab = tabs.first(where: { $0.id == tabId }) {
+            tab.resetToAutoTitle()
+        }
+    }
 }
