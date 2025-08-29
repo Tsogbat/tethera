@@ -9,66 +9,54 @@ struct TabBarView: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            // Tabs
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(tabManager.tabs) { tab in
-                        TabView(
-                            tab: tab,
-                            isActive: tab.id == tabManager.activeTabId,
-                            onSelect: { tabManager.setActiveTab(tab.id) },
-                            onClose: { tabManager.closeTab(tab.id) },
-                            onDragStart: { draggedTab = tab },
-                            onDragEnd: { 
-                                draggedTab = nil
-                                dragOffset = .zero
-                            },
-                            onRename: { newTitle in
-                                tabManager.renameTab(tab.id, to: newTitle)
-                            },
-                            onResetTitle: {
-                                tabManager.resetTabTitle(tab.id)
-                            }
-                        )
-                        .offset(draggedTab?.id == tab.id ? dragOffset : .zero)
-                        .zIndex(draggedTab?.id == tab.id ? 1 : 0)
-                    }
-                    
-                    // New tab button - now inside ScrollView but after all tabs
-                    Button(action: {
-                        tabManager.createNewTab()
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
-                            .frame(width: 24, height: 24)
-                            .background(
-                                Circle()
-                                    .fill(.white.opacity(0.1))
-                            )
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.trailing, 12)
+            // Tabs - Remove ScrollView that's blocking interactions
+            HStack(spacing: 0) {
+                ForEach(tabManager.tabs) { tab in
+                    TabView(
+                        tab: tab,
+                        isActive: tab.id == tabManager.activeTabId,
+                        onSelect: { tabManager.setActiveTab(tab.id) },
+                        onClose: { tabManager.closeTab(tab.id) },
+                        onDragStart: { draggedTab = tab },
+                        onDragEnd: { 
+                            draggedTab = nil
+                            dragOffset = .zero
+                        },
+                        onRename: { newTitle in
+                            tabManager.renameTab(tab.id, to: newTitle)
+                        },
+                        onResetTitle: {
+                            tabManager.resetTabTitle(tab.id)
+                        },
+                        draggedTab: $draggedTab
+                    )
+                    .offset(draggedTab?.id == tab.id ? dragOffset : .zero)
+                    .zIndex(draggedTab?.id == tab.id ? 100 : (tab.id == tabManager.activeTabId ? 10 : 0))
+                    .onDrop(of: [.text], delegate: TabDropDelegate(
+                        tab: tab,
+                        tabManager: tabManager,
+                        draggedTab: $draggedTab
+                    ))
                 }
-                .padding(.horizontal, 8)
+                
+                // New tab button
+                Button(action: {
+                    tabManager.createNewTab()
+                }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
+            .padding(.horizontal, 8)
+            
+            Spacer()
         }
-        .frame(height: 36)
+        .frame(height: 32)
         .background(
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    SwiftUI.Color(red: 0.06, green: 0.07, blue: 0.10),
-                    SwiftUI.Color(red: 0.09, green: 0.11, blue: 0.15)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .overlay(
-                Rectangle()
-                    .fill(.white.opacity(0.05))
-                    .frame(height: 1),
-                alignment: .bottom
-            )
+            SwiftUI.Color(red: 0.08, green: 0.08, blue: 0.10)
         )
     }
 }
@@ -82,6 +70,7 @@ struct TabView: View {
     let onDragEnd: () -> Void
     let onRename: (String) -> Void
     let onResetTitle: () -> Void
+    @Binding var draggedTab: Tab?
     
     @State private var isHovered = false
     @State private var isEditing = false
@@ -92,16 +81,12 @@ struct TabView: View {
         HStack(spacing: 8) {
             // Tab title or text field for editing
             if isEditing {
-                TextField("Tab name", text: $editingTitle)
-                    .font(.system(size: 12, weight: .medium))
+                TextField("", text: $editingTitle)
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
                     .textFieldStyle(PlainTextFieldStyle())
                     .focused($isTextFieldFocused)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(.white.opacity(0.1))
-                            .frame(height: 20)
-                    )
+                    .frame(width: max(60, CGFloat(editingTitle.count * 8 + 20)))
                     .onSubmit {
                         finishEditing()
                     }
@@ -110,13 +95,10 @@ struct TabView: View {
                     }
             } else {
                 Text(tab.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(isActive ? .white : .white.opacity(0.7))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(isActive ? .white : .white.opacity(0.6))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .onTapGesture(count: 2) {
-                        startEditing()
-                    }
                     .contextMenu {
                         Button("Rename") {
                             startEditing()
@@ -140,15 +122,25 @@ struct TabView: View {
                 .opacity(isHovered ? 1 : 0)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .frame(height: 32)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isActive ? .white.opacity(0.1) : .clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(isActive ? .white.opacity(0.2) : .clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    isActive ? 
+                    SwiftUI.Color(red: 0.18, green: 0.18, blue: 0.20) : 
+                    SwiftUI.Color(red: 0.12, green: 0.12, blue: 0.14).opacity(isHovered ? 0.8 : 0.6)
                 )
+        )
+        .overlay(
+            // Bottom accent for active tab
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    isActive ? SwiftUI.Color(red: 0.4, green: 0.6, blue: 1.0) : SwiftUI.Color.clear,
+                    lineWidth: isActive ? 2 : 0
+                ),
+            alignment: .bottom
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -157,7 +149,7 @@ struct TabView: View {
             }
         }
         .onHover { hovering in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1)) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8, blendDuration: 0.05)) {
                 isHovered = hovering
             }
         }
@@ -168,9 +160,18 @@ struct TabView: View {
             }
             return NSItemProvider()
         }
-        // Smoothen state-driven changes
-        .animation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1), value: isHovered)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8, blendDuration: 0.1), value: isActive)
+        .scaleEffect(draggedTab?.id == tab.id ? 0.92 : 1.0)
+        .opacity(draggedTab?.id == tab.id ? 0.7 : 1.0)
+        .rotationEffect(.degrees(draggedTab?.id == tab.id ? 2 : 0))
+        .animation(.spring(response: 0.3, dampingFraction: 0.7, blendDuration: 0.1), value: draggedTab?.id == tab.id)
+        .simultaneousGesture(
+            TapGesture(count: 2)
+                .onEnded {
+                    if !isEditing {
+                        startEditing()
+                    }
+                }
+        )
     }
     
     private func startEditing() {

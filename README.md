@@ -1,17 +1,51 @@
-# Tethera
+# Tethera Terminal
 
-A modern, high-performance terminal application for macOS built with SwiftUI and Metal.
+A modern, high-performance terminal application for macOS built with SwiftUI and SwiftTerm.
 
-## Features
+## ✨ Features
 
-- **Modern UI**: Clean, minimalistic design with dark theme
-- **High Performance**: Metal-based GPU rendering for smooth 60 FPS
-- **Shell Integration**: Runs your default shell with full command support
-- **Block-based Interface**: Commands and outputs displayed as clean blocks
-- **Custom Fonts**: JetBrains Mono for optimal readability
-- **Working Directory**: Tracks and displays current directory
+### Core Terminal Features
+- **Multiple Tabs**: Chrome-style tab interface with drag-to-reorder
+- **Split Panes**: Horizontal and vertical terminal splitting
+- **Smart Autocomplete**: Intelligent command and path completion
+- **Metal Rendering**: Hardware-accelerated text rendering for performance
+- **Custom Themes**: Dark terminal theme with modern UI design
 
-## Quick Start
+### User Experience
+- **Smooth Animations**: Polished interactions and transitions
+- **Keyboard Shortcuts**: Full keyboard navigation support
+- **Minimal Rename**: Invisible inline tab renaming
+- **Command Palette**: Quick access to terminal functions
+- **Font Customization**: JetBrains Mono with multiple weights
+
+## 🏗️ Architecture
+
+```
+Sources/Tethera/
+├── Core/           # Core terminal functionality
+│   ├── TerminalApp.swift
+│   ├── TerminalSession.swift
+│   ├── TerminalBuffer.swift
+│   ├── AutocompleteEngine.swift
+│   ├── MetalRenderer.swift
+│   └── Shaders.metal
+├── UI/             # SwiftUI views and components
+│   ├── ContentView.swift
+│   ├── TabBarView.swift
+│   ├── BlockTerminalView.swift
+│   ├── TabbedTerminalView.swift
+│   └── AutocompleteSuggestionView.swift
+├── Models/         # Data models and managers
+│   ├── Tab.swift
+│   ├── TabManager.swift
+│   ├── TabDropDelegate.swift
+│   ├── SplitPane.swift
+│   └── TerminalTheme.swift
+└── Extensions/     # Utility extensions
+    └── FontLoader.swift
+```
+
+## 🚀 Getting Started
 
 ### Prerequisites
 

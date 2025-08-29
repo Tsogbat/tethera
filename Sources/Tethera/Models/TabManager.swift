@@ -38,23 +38,41 @@ class TabManager: ObservableObject {
     }
     
     /// Close a tab
-    func closeTab(_ tabId: UUID) {
-        guard tabs.count > 1 else { return } // Don't close the last tab
+    func closeTab(_ id: UUID) {
+        guard tabs.count > 1 else { return }
         
-        if let index = tabs.firstIndex(where: { $0.id == tabId }) {
+        if let index = tabs.firstIndex(where: { $0.id == id }) {
             tabs.remove(at: index)
             
-            // If we closed the active tab, activate another one
-            if activeTabId == tabId {
-                let newActiveIndex = min(index, tabs.count - 1)
-                setActiveTab(tabs[newActiveIndex].id)
+            // If we closed the active tab, set a new active tab
+            if activeTabId == id {
+                let newIndex = min(index, tabs.count - 1)
+                activeTabId = tabs[newIndex].id
             }
+            
+            // Notify split pane manager about tab closure
+            NotificationCenter.default.post(
+                name: NSNotification.Name("TabClosed"),
+                object: nil,
+                userInfo: ["tabId": id]
+            )
         }
     }
     
     /// Move a tab to a new position
     func moveTab(from source: IndexSet, to destination: Int) {
         tabs.move(fromOffsets: source, toOffset: destination)
+    }
+    
+    /// Move tab from one index to another
+    func moveTab(from sourceIndex: Int, to destinationIndex: Int) {
+        guard sourceIndex != destinationIndex,
+              sourceIndex >= 0, sourceIndex < tabs.count,
+              destinationIndex >= 0, destinationIndex <= tabs.count else { return }
+        
+        let tab = tabs.remove(at: sourceIndex)
+        let insertIndex = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        tabs.insert(tab, at: insertIndex)
     }
     
     /// Get tab by ID

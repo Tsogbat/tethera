@@ -19,34 +19,9 @@ let package = Package(
         .executableTarget(
             name: "Tethera",
             dependencies: ["SwiftTerm"],
-            path: "Terminal",
-            sources: [
-                "TerminalApp.swift",
-                "ContentView.swift",
-                "TerminalSession.swift",
-                "TerminalBuffer.swift",
-                "TerminalView.swift",
-                "MetalRenderer.swift",
-                "SimpleTerminalView.swift",
-                "BlockTerminalView.swift",
-                "BlockTerminalViewModel.swift",
-                "TerminalBlock.swift",
-                "TerminalTheme.swift",
-                "CommandPaletteView.swift",
-                "TerminalSettingsView.swift",
-                "FontLoader.swift",
-                "Tab.swift",
-                "TabManager.swift",
-                "SplitPane.swift",
-                "SplitPaneManager.swift",
-                "TabBarView.swift",
-                "SplitPaneView.swift",
-                "TabbedTerminalView.swift",
-                "AutocompleteEngine.swift",
-                "AutocompleteSuggestionView.swift"
-            ],
+            path: "Sources/Tethera",
             resources: [
-                .process("Shaders.metal"),
+                .process("Core/Shaders.metal"),
                 .process("Assets.xcassets"),
                 .process("Fonts") 
             ]

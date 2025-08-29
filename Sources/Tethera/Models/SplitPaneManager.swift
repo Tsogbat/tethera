@@ -12,6 +12,17 @@ class SplitPaneManager: ObservableObject {
     init(initialTab: Tab) {
         self.rootPane = SplitPane(tab: initialTab)
         self.activePane = self.rootPane
+        
+        // Listen for tab closure notifications
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("TabClosed"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let tabId = notification.userInfo?["tabId"] as? UUID {
+                self?.handleTabClosure(tabId)
+            }
+        }
     }
     
     /// Find a pane containing the specified tab
@@ -86,5 +97,15 @@ class SplitPaneManager: ObservableObject {
     /// Set the active pane for focus management
     func setActivePane(_ pane: SplitPane) {
         activePane = pane
+    }
+    
+    private func handleTabClosure(_ tabId: UUID) {
+        // Simply reset to single pane when any tab is closed
+        // This ensures split views don't persist after tab removal
+        if rootPane.children.count > 0 {
+            // Reset to single pane with the first available tab
+            rootPane = SplitPane(tab: rootPane.tab ?? Tab())
+            activePane = rootPane
+        }
     }
 }
