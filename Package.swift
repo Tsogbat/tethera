@@ -19,7 +19,7 @@ let package = Package(
         .executableTarget(
             name: "Tethera",
             dependencies: ["SwiftTerm"],
-            path: "Sources/Tethera",
+            path: "Tethera",
             resources: [
                 .process("Core/Shaders.metal"),
                 .process("Assets.xcassets"),

@@ -1,101 +1,98 @@
 # Tethera Terminal
 
-A modern, high-performance terminal application for macOS built with SwiftUI and SwiftTerm.
+<p align="center">
+  <strong>A modern, high-performance terminal application for macOS</strong><br>
+  Built with SwiftUI and SwiftTerm for the ultimate developer experience.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-14.0+-blue.svg" alt="macOS">
+  <img src="https://img.shields.io/badge/Swift-5.9+-orange.svg" alt="Swift">
+</p>
+
+---
 
 ## ✨ Features
 
-### Core Terminal Features
-- **Multiple Tabs**: Chrome-style tab interface with drag-to-reorder
-- **Split Panes**: Horizontal and vertical terminal splitting
-- **Smart Autocomplete**: Intelligent command and path completion
-- **Metal Rendering**: Hardware-accelerated text rendering for performance
-- **Custom Themes**: Dark terminal theme with modern UI design
+### 🚀 Core Terminal Features
 
-### User Experience
-- **Smooth Animations**: Polished interactions and transitions
-- **Keyboard Shortcuts**: Full keyboard navigation support
-- **Minimal Rename**: Invisible inline tab renaming
-- **Command Palette**: Quick access to terminal functions
-- **Font Customization**: JetBrains Mono with multiple weights
+- **Chrome-Style Tabs**: Fluid drag-to-reorder with smooth spring animations
+- **Smart Autocomplete**: Intelligent command and path completion with filtering
+- **Split Panes**: Horizontal and vertical terminal splitting for multitasking
+- **Metal Rendering**: Hardware-accelerated text rendering for peak performance
+- **Custom Themes**: Cohesive dark theme with modern UI design
 
-## 🏗️ Architecture
+### 🎨 User Experience
 
-```
-Sources/Tethera/
-├── Core/           # Core terminal functionality
-│   ├── TerminalApp.swift
-│   ├── TerminalSession.swift
-│   ├── TerminalBuffer.swift
-│   ├── AutocompleteEngine.swift
-│   ├── MetalRenderer.swift
-│   └── Shaders.metal
-├── UI/             # SwiftUI views and components
-│   ├── ContentView.swift
-│   ├── TabBarView.swift
-│   ├── BlockTerminalView.swift
-│   ├── TabbedTerminalView.swift
-│   └── AutocompleteSuggestionView.swift
-├── Models/         # Data models and managers
-│   ├── Tab.swift
-│   ├── TabManager.swift
-│   ├── TabDropDelegate.swift
-│   ├── SplitPane.swift
-│   └── TerminalTheme.swift
-└── Extensions/     # Utility extensions
-    └── FontLoader.swift
-```
+- **Polished Animations**: Spring-based transitions and hover effects
+- **Invisible Rename**: Double-click tabs for minimal inline editing
+- **Keyboard Navigation**: Full keyboard shortcuts and accessibility
+- **Custom Fonts**: JetBrains Mono with multiple weights included
+- **Responsive UI**: Adaptive layouts that scale beautifully
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- macOS 14.0 or later
-- Xcode 15.0 or later
+Before you begin, ensure you have the following installed:
 
-### Build & Run
+- **macOS 14.0** or later
+- **Xcode 15.0** or later
+- **Swift 5.9** or later
+- **Git** for cloning the repository
+
+### 1. Clone the Repository
 
 ```bash
-# Build the project
-swift build
+git clone https://github.com/Tsogbat/tethera.git
+cd tethera
+```
 
-# Run Tethera
+### 2. Build the Project
+
+Use Swift Package Manager to build the application:
+
+```bash
+swift build
+```
+
+This will:
+
+- Download and resolve all dependencies (SwiftTerm, etc.)
+- Compile the source code
+- Generate the executable
+
+### 3. Run the Application
+
+Launch Tethera directly from the command line:
+
+```bash
 swift run
 ```
 
-Or open `Tethera.xcodeproj` in Xcode and press ⌘+R.
-
-### Build App Bundle with Icon
-
-To build a proper macOS app bundle (.app) with the custom icon:
+Or use the convenient Makefile:
 
 ```bash
-# Build the app bundle
-make app
-
-# Run the app bundle
 make run-app
 ```
 
-Or use the build script directly:
+### 4. Development Build
+
+For development with debug symbols:
 
 ```bash
-./build_app.sh
-open Tethera.app
+swift build -c debug
 ```
 
-The app bundle will include the custom icon and can be moved to Applications folder or run from anywhere.
+For optimized release builds:
 
-**Note**: The build script automatically generates a proper macOS `.icns` icon file from your `icon.png` source file, ensuring the icon displays correctly in the dock, Finder, and throughout the system.
+```bash
+swift build -c release
+```
 
-## Usage
+## 🏗️ Project Architecture
 
-- **Type commands** in the input field at the bottom
-- **Press Enter** or click the arrow button to execute
-- **Use `cd`** to change directories
-- **Use `clear`** to clear the terminal
-- **All standard shell commands** work as expected
-
-## Architecture
+The codebase is organized into a clean, modular structure:
 
 - **SwiftUI**: Modern macOS UI framework
 - **Metal**: GPU-accelerated rendering
@@ -107,15 +104,55 @@ The app bundle will include the custom icon and can be moved to Applications fol
 
 ```
 Tethera/
-├── BlockTerminalView.swift      # Main UI
-├── BlockTerminalViewModel.swift # Business logic
-├── FontLoader.swift            # Font management
-├── TerminalBlock.swift         # Data model
-├── TerminalTheme.swift         # UI theming
-└── Fonts/                     # JetBrains Mono fonts
-```
+├── Package.swift
+├── LICENCE.TXT
+├── README.md
+├── Makefile
+├── Tethera/
+│   ├── Core/
+│   │   ├── TerminalApp.swift          # Main app entry point
+│   │   ├── TerminalSession.swift      # Shell session management
+│   │   ├── TerminalBuffer.swift       # Terminal buffer handling
+│   │   ├── TerminalBlock.swift        # Data model for terminal blocks
+│   │   ├── AutocompleteEngine.swift   # Command/path completion
+│   │   ├── MetalRenderer.swift        # GPU-accelerated rendering
+│   │   └── Shaders.metal             # Metal shader code
+│   │
+│   ├── UI/
+│   │   ├── ContentView.swift          # Root view
+│   │   ├── BlockTerminalView.swift    # Main terminal interface
+│   │   ├── TabBarView.swift          # Tab management UI
+│   │   ├── SplitPaneView.swift       # Split view management
+│   │   ├── TerminalView.swift        # Terminal rendering view
+│   │   ├── SimpleTerminalView.swift  # Basic terminal view
+│   │   ├── CommandPaletteView.swift  # Command palette UI
+│   │   ├── TerminalSettingsView.swift # Settings UI
+│   │   └── AutocompleteSuggestionView.swift # Completion UI
+│   │
+│   ├── Models/
+│   │   ├── Tab.swift                # Tab data model
+│   │   ├── TabManager.swift         # Tab lifecycle management
+│   │   ├── SplitPane.swift          # Split pane model
+│   │   ├── SplitPaneManager.swift   # Split view management
+│   │   ├── TabDropDelegate.swift    # Drag and drop handling
+│   │   ├── TabbedTerminalView.swift # Multi-tab container
+│   │   └── TerminalTheme.swift      # Theme configuration
+│   │
+│   ├── Extensions/
+│   │   └── FontLoader.swift         # Custom font loading
+│   │
+│   ├── Fonts/                       # JetBrains Mono font files
+│   │   ├── JetBrainsMono-Bold.ttf
+│   │   ├── JetBrainsMono-Medium.ttf
+│   │   └── JetBrainsMono-Regular.ttf
+│   │
+│   ├── Assets.xcassets/             # App assets
+│   └── Info.plist                   # App configuration
+│
+└── .build/                         # Build artifacts
 
 ## License
 
 This is opensource project feel free to contribute
 GNU AFFERO GENERAL PUBLIC LICENSE
+```
