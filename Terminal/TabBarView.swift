@@ -86,6 +86,7 @@ struct TabView: View {
     @State private var isHovered = false
     @State private var isEditing = false
     @State private var editingTitle = ""
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         HStack(spacing: 8) {
@@ -95,6 +96,7 @@ struct TabView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white)
                     .textFieldStyle(PlainTextFieldStyle())
+                    .focused($isTextFieldFocused)
                     .background(
                         RoundedRectangle(cornerRadius: 3)
                             .fill(.white.opacity(0.1))
@@ -174,16 +176,29 @@ struct TabView: View {
     private func startEditing() {
         editingTitle = tab.title
         isEditing = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            isTextFieldFocused = true
+        }
     }
     
     private func finishEditing() {
         onRename(editingTitle)
         isEditing = false
+        isTextFieldFocused = false
+        // Restore focus to terminal input
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            NotificationCenter.default.post(name: .restoreTerminalFocus, object: nil)
+        }
     }
     
     private func cancelEditing() {
         editingTitle = tab.title
         isEditing = false
+        isTextFieldFocused = false
+        // Restore focus to terminal input
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            NotificationCenter.default.post(name: .restoreTerminalFocus, object: nil)
+        }
     }
 }
 

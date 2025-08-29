@@ -31,14 +31,26 @@ class BlockTerminalViewModel: ObservableObject {
             blocks.removeAll()
             return
         }
-        if trimmed.hasPrefix("cd ") {
-            let path = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("cd ") || trimmed == "cd" {
+            let path = trimmed == "cd" ? "" : String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
             let newDir: String
-            if path.hasPrefix("/") {
+            
+            if path.isEmpty || path == "~" {
+                // cd with no arguments or cd ~ goes to home directory
+                newDir = FileManager.default.homeDirectoryForCurrentUser.path
+            } else if path.hasPrefix("/") {
+                // Absolute path
                 newDir = path
+            } else if path.hasPrefix("~/") {
+                // Home directory relative path
+                let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+                newDir = homePath + String(path.dropFirst(1))
             } else {
-                newDir = (workingDirectory as NSString).appendingPathComponent(path)
+                // Relative path - use NSString.standardizingPath to resolve .. and .
+                let tentativePath = (workingDirectory as NSString).appendingPathComponent(path)
+                newDir = (tentativePath as NSString).standardizingPath
             }
+            
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: newDir, isDirectory: &isDir), isDir.boolValue {
                 workingDirectory = newDir

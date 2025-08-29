@@ -7,17 +7,28 @@ struct AutocompleteSuggestionView: View {
     @Binding var selectedIndex: Int
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
-                suggestionRow(index: index, suggestion: suggestion)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                        suggestionRow(index: index, suggestion: suggestion)
+                            .id(index)
+                    }
+                }
+                .padding(.vertical, 8)
             }
-        }
-        .padding(.vertical, 8)
-        .background(suggestionBackground)
-        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutocompleteKeyDown"))) { notification in
-            if let keyCode = notification.object as? UInt16 {
-                handleKeyDown(keyCode: keyCode)
+            .frame(maxHeight: 200) // Limit height to make it scrollable
+            .background(suggestionBackground)
+            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+            .onChange(of: selectedIndex) { _, newIndex in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(newIndex, anchor: .center)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutocompleteKeyDown"))) { notification in
+                if let keyCode = notification.object as? UInt16 {
+                    handleKeyDown(keyCode: keyCode)
+                }
             }
         }
     }

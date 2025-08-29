@@ -1,11 +1,16 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let restoreTerminalFocus = Notification.Name("restoreTerminalFocus")
+}
+
 struct BlockTerminalView: View {
     @ObservedObject var viewModel: BlockTerminalViewModel
     @State private var commandInput: String = ""
     @FocusState private var isInputFocused: Bool
     @StateObject private var autocompleteEngine = AutocompleteEngine()
     let isActivePane: Bool
+    @State private var hasUsedArrowKeys = false
 
     var body: some View {
         ZStack {
@@ -82,7 +87,7 @@ struct BlockTerminalView: View {
                                         }
                                     },
                                     onArrowNavigation: { index in
-                                        autocompleteEngine.updateSelectedIndex(index)
+                                        autocompleteEngine.updateSelectedIndex(index, currentInput: commandInput)
                                     },
                                     selectedIndex: $autocompleteEngine.selectedSuggestionIndex
                                 )
@@ -124,7 +129,15 @@ struct BlockTerminalView: View {
                                             }
                                         }
                                     }
+                                    .onReceive(NotificationCenter.default.publisher(for: .restoreTerminalFocus)) { _ in
+                                        if isActivePane {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                isInputFocused = true
+                                            }
+                                        }
+                                    }
                                     .onChange(of: commandInput) { _, newValue in
+                                        hasUsedArrowKeys = false // Reset arrow key state when typing
                                         if isInputFocused {
                                             autocompleteEngine.getSuggestions(for: newValue, in: viewModel.workingDirectory)
                                         }
@@ -139,9 +152,9 @@ struct BlockTerminalView: View {
                                         handleKeyPress(keyPress)
                                     }
                                 
-                                // Inline completion preview
+                                // Inline completion preview - fixed spacing
                                 if !autocompleteEngine.inlineCompletion.isEmpty && autocompleteEngine.inlineCompletion.hasPrefix(commandInput) {
-                                    HStack {
+                                    HStack(spacing: 0) {
                                         Text(commandInput)
                                             .font(getFont(size: 15))
                                             .foregroundColor(.clear)
@@ -203,7 +216,7 @@ struct BlockTerminalView: View {
     }
     
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
-        // Handle Tab for inline completion
+        // Handle Tab for completion and directory browsing
         if keyPress.key == .tab {
             if !autocompleteEngine.inlineCompletion.isEmpty {
                 commandInput = autocompleteEngine.inlineCompletion
@@ -220,38 +233,80 @@ struct BlockTerminalView: View {
                     autocompleteEngine.clearSuggestions()
                 }
                 return .handled
+            } else {
+                // Smart Tab behavior: directory completion or force show suggestions
+                let components = commandInput.split(separator: " ", omittingEmptySubsequences: false)
+                let shouldShowDirectories = shouldUseDirectoryCompletion(components: components)
+                
+                if shouldShowDirectories {
+                    // Force show path suggestions for directory browsing
+                    autocompleteEngine.getSuggestions(for: commandInput, in: viewModel.workingDirectory, forceShow: true)
+                } else {
+                    // Force show command suggestions
+                    autocompleteEngine.getSuggestions(for: commandInput, in: viewModel.workingDirectory, forceShow: true)
+                }
+                return .handled
             }
+        }
+        
+        // Handle Right Arrow for instant inline completion
+        if keyPress.key == .rightArrow && !autocompleteEngine.inlineCompletion.isEmpty {
+            commandInput = autocompleteEngine.inlineCompletion
+            autocompleteEngine.clearSuggestions()
+            return .handled
         }
         
         if autocompleteEngine.isShowingSuggestions {
             switch keyPress.key {
             case .downArrow:
+                hasUsedArrowKeys = true
                 let newIndex = min(autocompleteEngine.selectedSuggestionIndex + 1, autocompleteEngine.suggestions.count - 1)
-                autocompleteEngine.updateSelectedIndex(newIndex)
+                autocompleteEngine.updateSelectedIndex(newIndex, currentInput: commandInput)
                 return .handled
             case .upArrow:
+                hasUsedArrowKeys = true
                 let newIndex = max(autocompleteEngine.selectedSuggestionIndex - 1, 0)
-                autocompleteEngine.updateSelectedIndex(newIndex)
+                autocompleteEngine.updateSelectedIndex(newIndex, currentInput: commandInput)
                 return .handled
             case .return:
-                let selectedIndex = autocompleteEngine.selectedSuggestionIndex
-                if selectedIndex < autocompleteEngine.suggestions.count {
-                    let suggestion = autocompleteEngine.suggestions[selectedIndex]
-                    commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
-                    if suggestion.type == .command {
-                        commandInput += " "
+                if hasUsedArrowKeys {
+                    let selectedIndex = autocompleteEngine.selectedSuggestionIndex
+                    if selectedIndex < autocompleteEngine.suggestions.count {
+                        let suggestion = autocompleteEngine.suggestions[selectedIndex]
+                        commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
+                        if suggestion.type == .command {
+                            commandInput += " "
+                        }
+                        autocompleteEngine.clearSuggestions()
+                        hasUsedArrowKeys = false
+                        return .handled
                     }
-                    autocompleteEngine.clearSuggestions()
                 }
-                return .handled
+                return .ignored
             case .escape:
                 autocompleteEngine.clearSuggestions()
+                hasUsedArrowKeys = false
                 return .handled
             default:
                 break
             }
         }
         return .ignored
+    }
+    
+    private func shouldUseDirectoryCompletion(components: [Substring]) -> Bool {
+        let firstWord = String(components.first ?? "").lowercased()
+        
+        // Commands that commonly work with directories/files
+        let pathCommands = ["cd", "ls", "cat", "less", "more", "rm", "cp", "mv", "mkdir", "rmdir", "touch", "open", "vim", "nano", "emacs", "code", "grep", "find"]
+        
+        // For path commands, always prefer directory completion
+        if pathCommands.contains(firstWord) {
+            return true
+        }
+        
+        // For other commands, only use directory completion if we have multiple components
+        return components.count > 1
     }
     
     private func getFont(size: CGFloat) -> Font {

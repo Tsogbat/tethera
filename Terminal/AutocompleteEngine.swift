@@ -32,7 +32,7 @@ class AutocompleteEngine: ObservableObject {
     
     private let fileManager = FileManager.default
     
-    func getSuggestions(for input: String, in workingDirectory: String) {
+    func getSuggestions(for input: String, in workingDirectory: String, forceShow: Bool = false) {
         guard !input.isEmpty else {
             clearSuggestions()
             return
@@ -46,14 +46,14 @@ class AutocompleteEngine: ObservableObject {
         
         let prefix = String(lastComponent)
         
-        // Check if input exactly matches a command - if so, clear everything
-        if components.count == 1 && commonCommands.contains(prefix.lowercased()) {
+        // Check if input exactly matches a command - if so, clear everything (unless forced)
+        if !forceShow && components.count == 1 && commonCommands.contains(prefix.lowercased()) {
             clearSuggestions()
             return
         }
         
-        // Smart autocomplete logic - be less aggressive
-        let shouldShowSuggestions = shouldTriggerAutocomplete(for: input, components: components, prefix: prefix)
+        // Smart autocomplete logic - be less aggressive (unless forced)
+        let shouldShowSuggestions = forceShow || shouldTriggerAutocomplete(for: input, components: components, prefix: prefix)
         
         if !shouldShowSuggestions {
             // Only show inline completion for commands without dropdown
@@ -84,6 +84,15 @@ class AutocompleteEngine: ObservableObject {
         // If it's the first word, suggest commands
         if components.count == 1 {
             newSuggestions.append(contentsOf: getCommandSuggestions(for: prefix))
+        } else {
+            // For multi-word commands, check if we should suggest command completions
+            let firstWord = String(components.first ?? "").lowercased()
+            if let commandCompletions = commandCompletions[firstWord] {
+                let commandSuggestions = commandCompletions
+                    .filter { $0.hasPrefix(prefix.lowercased()) }
+                    .map { AutocompleteSuggestion(text: $0, type: .command, description: "Option") }
+                newSuggestions.append(contentsOf: commandSuggestions)
+            }
         }
         
         // Suggest file/directory paths only when appropriate
@@ -98,7 +107,7 @@ class AutocompleteEngine: ObservableObject {
         let uniqueSuggestions = Array(Set(filteredSuggestions)).sorted { $0.text < $1.text }
         
         DispatchQueue.main.async {
-            self.suggestions = Array(uniqueSuggestions.prefix(6)) // Further reduced to 6 suggestions
+            self.suggestions = Array(uniqueSuggestions.prefix(20)) // Increased to 20 suggestions
             self.isShowingSuggestions = !self.suggestions.isEmpty
             self.selectedSuggestionIndex = 0
             
@@ -121,28 +130,25 @@ class AutocompleteEngine: ObservableObject {
     }
     
     private func shouldTriggerAutocomplete(for input: String, components: [Substring], prefix: String) -> Bool {
-        // Don't show dropdown for very short prefixes (less than 3 characters)
-        guard prefix.count >= 3 else { return false }
-        
         // For first word (commands), be very restrictive
         if components.count == 1 {
             // Only show dropdown if prefix is substantial and doesn't exactly match a command
-            return prefix.count >= 4 && !commonCommands.contains(prefix.lowercased())
+            return prefix.count >= 3 && !commonCommands.contains(prefix.lowercased())
         }
         
-        // For path completion, only show when explicitly typing paths
+        // For path completion, be more lenient to allow filtering
         let firstWord = String(components.first ?? "").lowercased()
         
         // Commands that commonly use paths - show suggestions
-        let pathCommands = ["cd", "vim", "nano", "emacs", "code", "cat", "less", "more"]
+        let pathCommands = ["cd", "vim", "nano", "emacs", "code", "cat", "less", "more", "ls", "rm", "cp", "mv", "mkdir", "rmdir", "touch", "open", "grep", "find"]
         
         if pathCommands.contains(firstWord) {
-            // Only show if prefix is substantial and looks like a path
-            return prefix.count >= 3 && (prefix.contains("/") || prefix.hasPrefix("~") || components.count > 2)
+            // Show suggestions even for short prefixes to allow filtering
+            return prefix.count >= 1 || prefix.isEmpty
         }
         
-        // Show suggestions only if the prefix clearly looks like a path
-        return prefix.contains("/") || prefix.hasPrefix("~")
+        // Show suggestions if the prefix looks like a path
+        return prefix.contains("/") || prefix.hasPrefix("~") || prefix.count >= 2
     }
     
     private func shouldSuggestPaths(for input: String, components: [Substring]) -> Bool {
@@ -194,15 +200,15 @@ class AutocompleteEngine: ObservableObject {
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: searchDirectory)
             let filteredContents = contents.filter { item in
-                // Skip hidden files unless explicitly requested
-                if item.hasPrefix(".") && !searchPrefix.hasPrefix(".") {
+                // Always skip hidden files/folders starting with .
+                if item.hasPrefix(".") {
                     return false
                 }
                 return item.hasPrefix(searchPrefix)
             }
             
             // Limit results to prevent overwhelming dropdown
-            let limitedContents = Array(filteredContents.prefix(6))
+            let limitedContents = Array(filteredContents.prefix(20))
             
             for item in limitedContents {
                 let fullPath = searchDirectory + "/" + item
@@ -234,13 +240,12 @@ class AutocompleteEngine: ObservableObject {
         }
     }
     
-    func updateSelectedIndex(_ index: Int) {
+    func updateSelectedIndex(_ index: Int, currentInput: String = "") {
         DispatchQueue.main.async {
             self.selectedSuggestionIndex = index
             if index < self.suggestions.count {
                 let suggestion = self.suggestions[index]
                 // Update inline completion based on selected suggestion
-                let currentInput = "" // This will be passed from the view
                 self.inlineCompletion = self.getInlineCompletion(for: currentInput, suggestion: suggestion)
             }
         }
