@@ -70,11 +70,7 @@ Launch Tethera directly from the command line:
 swift run
 ```
 
-Or use the convenient Makefile:
-
-```bash
-make run-app
-```
+Makefile launch is not available at the moment since there is no scripts at the moment...
 
 ### 4. Development Build
 

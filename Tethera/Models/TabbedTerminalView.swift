@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct TabbedTerminalView: View {
     @StateObject private var tabManager = TabManager()
+    @StateObject private var userSettings = UserSettings()
     @State private var showSplitView = false
     @StateObject private var splitPaneManager: SplitPaneManager
     
@@ -48,8 +49,8 @@ struct TabbedTerminalView: View {
         .background(
             LinearGradient(
                 gradient: Gradient(colors: [
-                    SwiftUI.Color(red: 0.06, green: 0.07, blue: 0.10),
-                    SwiftUI.Color(red: 0.09, green: 0.11, blue: 0.15)
+                    userSettings.themeConfiguration.backgroundColor.color,
+                    userSettings.themeConfiguration.backgroundColor.color.opacity(0.8)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

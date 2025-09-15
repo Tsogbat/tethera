@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Manages the split pane layout and operations
+@MainActor
 class SplitPaneManager: ObservableObject {
     @Published var rootPane: SplitPane
     @Published var draggedTab: Tab?

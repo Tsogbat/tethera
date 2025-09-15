@@ -3,6 +3,7 @@ import SwiftUI
 struct TabBarView: View {
     @ObservedObject var tabManager: TabManager
     @ObservedObject var splitPaneManager: SplitPaneManager
+    @StateObject private var userSettings = UserSettings()
     let onTabSplit: () -> Void
     @State private var draggedTab: Tab?
     @State private var dragOffset: CGSize = .zero
@@ -28,7 +29,8 @@ struct TabBarView: View {
                         onResetTitle: {
                             tabManager.resetTabTitle(tab.id)
                         },
-                        draggedTab: $draggedTab
+                        draggedTab: $draggedTab,
+                        userSettings: userSettings
                     )
                     .offset(draggedTab?.id == tab.id ? dragOffset : .zero)
                     .zIndex(draggedTab?.id == tab.id ? 100 : (tab.id == tabManager.activeTabId ? 10 : 0))
@@ -71,6 +73,7 @@ struct TabView: View {
     let onRename: (String) -> Void
     let onResetTitle: () -> Void
     @Binding var draggedTab: Tab?
+    let userSettings: UserSettings
     
     @State private var isHovered = false
     @State private var isEditing = false

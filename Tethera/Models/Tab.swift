@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 
 /// Represents a terminal tab with its own session and view model
+@MainActor
 class Tab: ObservableObject, Identifiable, Transferable {
     let id = UUID()
     @Published var title: String
@@ -28,6 +29,7 @@ class Tab: ObservableObject, Identifiable, Transferable {
     
     /// Update tab title based on current working directory or last command
     func updateTitle() {
+        
         // Try to get the last command first
         if let lastBlock = viewModel.blocks.last, !lastBlock.input.isEmpty {
             let command = lastBlock.input.components(separatedBy: " ").first ?? ""

@@ -6,9 +6,17 @@ struct TerminalApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TabbedTerminalView()
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(HiddenTitleBarWindowStyle())
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    SettingsWindowController.shared.showSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
         .windowResizability(.contentSize)
         .defaultSize(width: 900, height: 600)
     }

@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Manages tabs and their lifecycle
+@MainActor
 class TabManager: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
@@ -93,4 +94,5 @@ class TabManager: ObservableObject {
             tab.resetToAutoTitle()
         }
     }
+    
 }

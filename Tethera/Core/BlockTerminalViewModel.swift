@@ -2,21 +2,41 @@ import Foundation
 import SwiftUI
 import CoreText
 
+@MainActor
 class BlockTerminalViewModel: ObservableObject {
     @Published var workingDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
     @Published var blocks: [TerminalBlock] = []
     @Published var selectedBlockID: UUID? = nil
     @Published var isPalettePresented: Bool = false
     @Published var isSettingsPresented: Bool = false
-    @Published var theme: TerminalTheme = .defaultTheme
+    @Published var theme: TerminalTheme
+    private var userSettings = UserSettings()
     @Published var paletteActions: [String] = ["New Tab", "Split Pane", "Settings"]
     
     init() {
+        // Initialize theme from user settings
+        self.theme = TerminalTheme(from: userSettings.themeConfiguration)
+        
         // Load the JetBrains Mono font
         FontLoader.shared.loadJetBrainsMono()
         
         // Demo block so UI is not blank
         blocks.append(TerminalBlock.example)
+        
+        // Listen for settings changes
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SettingsChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.updateTheme()
+            }
+        }
+    }
+    
+    private func updateTheme() {
+        theme = TerminalTheme(from: userSettings.themeConfiguration)
     }
 
     func addBlock(input: String, output: String, success: Bool? = nil) {
