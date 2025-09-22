@@ -189,6 +189,31 @@ class UserSettings: ObservableObject, @unchecked Sendable {
     // MARK: - Built-in Theme Presets
     static let presets: [ThemePreset] = [
         ThemePreset(id: "tethera-dark", name: "Tethera Dark", configuration: .defaultDark),
-        ThemePreset(id: "tethera-light", name: "Tethera Light", configuration: .defaultLight)
+        ThemePreset(id: "tethera-light", name: "Tethera Light", configuration: .defaultLight),
+        // Add your new themes here:
+        ThemePreset(id: "solarized-dark", name: "Solarized Dark", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(SwiftUI.Color(red: 0.027, green: 0.212, blue: 0.259)),
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.345, green: 0.431, blue: 0.459)),
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.000, green: 0.168, blue: 0.212)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.149, green: 0.545, blue: 0.824)),
+            textColor: CodableColor(SwiftUI.Color(red: 0.933, green: 0.910, blue: 0.835)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
+        )),
+        ThemePreset(id: "dracula", name: "Dracula", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(.purple),
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.161, green: 0.157, blue: 0.216)),
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.090, green: 0.086, blue: 0.125)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.678, green: 0.498, blue: 0.659)),
+            textColor: CodableColor(SwiftUI.Color(red: 0.937, green: 0.937, blue: 0.937)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
+        ))
     ]
 }
