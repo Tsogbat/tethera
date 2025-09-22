@@ -5,6 +5,7 @@ struct AutocompleteSuggestionView: View {
     let onSuggestionSelected: (AutocompleteSuggestion) -> Void
     let onArrowNavigation: (Int) -> Void
     @Binding var selectedIndex: Int
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -17,9 +18,10 @@ struct AutocompleteSuggestionView: View {
                 }
                 .padding(.vertical, 8)
             }
+            .scrollIndicators(.hidden)
             .frame(maxHeight: 200) // Limit height to make it scrollable
             .background(suggestionBackground)
-            .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+            .shadow(color: (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.black : SwiftUI.Color.gray).opacity(0.25), radius: 8, x: 0, y: 4)
             .onChange(of: selectedIndex) { _, newIndex in
                 withAnimation(.easeInOut(duration: 0.2)) {
                     proxy.scrollTo(newIndex, anchor: .center)
@@ -43,22 +45,22 @@ struct AutocompleteSuggestionView: View {
             
             // Suggestion text
             Text(suggestion.text)
-                .font(getFont(size: 13))
-                .foregroundColor(.white)
+                .font(themeFont(size: 13))
+                .foregroundColor(userSettings.themeConfiguration.textColor.color)
                 .lineLimit(1)
             
             Spacer()
             
             // Type description
             Text(suggestion.description)
-                .font(getFont(size: 11))
-                .foregroundColor(.white.opacity(0.6))
+                .font(themeFont(size: 11))
+                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.65))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(index == selectedIndex ? SwiftUI.Color.white.opacity(0.1) : SwiftUI.Color.clear)
+                .fill(index == selectedIndex ? userSettings.themeConfiguration.accentColor.color.opacity(0.18) : SwiftUI.Color.clear)
         )
         .onTapGesture {
             onSuggestionSelected(suggestion)
@@ -72,18 +74,24 @@ struct AutocompleteSuggestionView: View {
     
     private var suggestionBackground: some View {
         RoundedRectangle(cornerRadius: 10)
-            .fill(SwiftUI.Color(red: 0.08, green: 0.09, blue: 0.12))
+            .fill(
+                userSettings.themeConfiguration.isDarkMode ?
+                SwiftUI.Color.white.opacity(0.06) : SwiftUI.Color.black.opacity(0.04)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(SwiftUI.Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(
+                        (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.black.opacity(0.08)),
+                        lineWidth: 1
+                    )
             )
     }
     
     private func colorForType(_ type: AutocompleteSuggestion.SuggestionType) -> SwiftUI.Color {
         switch type {
-        case .command: return .green
-        case .file: return .blue
-        case .directory: return SwiftUI.Color.orange
+        case .command: return userSettings.themeConfiguration.accentColor.color
+        case .file: return userSettings.themeConfiguration.accentColor.color
+        case .directory: return userSettings.themeConfiguration.accentColor.color
         }
     }
     
@@ -110,13 +118,15 @@ struct AutocompleteSuggestionView: View {
         }
     }
     
-    private func getFont(size: CGFloat) -> Font {
-        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
-            return .custom("JetBrainsMono-Medium", size: size)
-        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
-            return .custom("JetBrainsMono-Regular", size: size)
-        } else {
-            return .system(size: size, design: .monospaced)
+    private func themeFont(size: CGFloat) -> Font {
+        let family = userSettings.themeConfiguration.fontFamily
+        if FontLoader.shared.isFontAvailable("\(family)-Medium") {
+            return .custom("\(family)-Medium", size: size)
         }
+        if FontLoader.shared.isFontAvailable(family) {
+            return .custom(family, size: size)
+        }
+        return .system(size: size, design: .monospaced)
     }
 }
+
