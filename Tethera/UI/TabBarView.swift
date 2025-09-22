@@ -3,7 +3,7 @@ import SwiftUI
 struct TabBarView: View {
     @ObservedObject var tabManager: TabManager
     @ObservedObject var splitPaneManager: SplitPaneManager
-    @StateObject private var userSettings = UserSettings()
+    @EnvironmentObject private var userSettings: UserSettings
     let onTabSplit: () -> Void
     @State private var draggedTab: Tab?
     @State private var dragOffset: CGSize = .zero
@@ -11,7 +11,7 @@ struct TabBarView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Tabs - Remove ScrollView that's blocking interactions
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 ForEach(tabManager.tabs) { tab in
                     TabView(
                         tab: tab,
@@ -29,8 +29,7 @@ struct TabBarView: View {
                         onResetTitle: {
                             tabManager.resetTabTitle(tab.id)
                         },
-                        draggedTab: $draggedTab,
-                        userSettings: userSettings
+                        draggedTab: $draggedTab
                     )
                     .offset(draggedTab?.id == tab.id ? dragOffset : .zero)
                     .zIndex(draggedTab?.id == tab.id ? 100 : (tab.id == tabManager.activeTabId ? 10 : 0))
@@ -47,19 +46,18 @@ struct TabBarView: View {
                 }) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.7))
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(PlainButtonStyle())
+
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 12)
             
             Spacer()
         }
-        .frame(height: 32)
-        .background(
-            SwiftUI.Color(red: 0.08, green: 0.08, blue: 0.10)
-        )
+        .frame(height: 40)
+        .background(userSettings.themeConfiguration.backgroundColor.color)
     }
 }
 
@@ -73,7 +71,7 @@ struct TabView: View {
     let onRename: (String) -> Void
     let onResetTitle: () -> Void
     @Binding var draggedTab: Tab?
-    let userSettings: UserSettings
+    @EnvironmentObject private var userSettings: UserSettings
     
     @State private var isHovered = false
     @State private var isEditing = false
@@ -81,15 +79,15 @@ struct TabView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             // Tab title or text field for editing
             if isEditing {
                 TextField("", text: $editingTitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
                     .textFieldStyle(PlainTextFieldStyle())
                     .focused($isTextFieldFocused)
-                    .frame(width: max(60, CGFloat(editingTitle.count * 8 + 20)))
+                    .frame(width: max(80, CGFloat(editingTitle.count * 10 + 20)))
                     .onSubmit {
                         finishEditing()
                     }
@@ -98,17 +96,15 @@ struct TabView: View {
                     }
             } else {
                 Text(tab.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(isActive ? .white : .white.opacity(0.6))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(isActive ? userSettings.themeConfiguration.textColor.color : userSettings.themeConfiguration.textColor.color.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .contextMenu {
-                        Button("Rename") {
-                            startEditing()
-                        }
-                        if tab.isCustomTitle {
-                            Button("Reset to Auto Title") {
-                                onResetTitle()
+                        if !tab.isSettingsTab {
+                            Button("Rename") { startEditing() }
+                            if tab.isCustomTitle {
+                                Button("Reset to Auto Title") { onResetTitle() }
                             }
                         }
                     }
@@ -118,39 +114,40 @@ struct TabView: View {
             if !isEditing {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .opacity(isHovered ? 1 : 0)
+                .opacity(isHovered ? 1 : 0.3)
+                .frame(width: 20, height: 20)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .frame(height: 32)
+        .padding(.vertical, 8)
+        .frame(height: 40)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(
-                    isActive ? 
-                    SwiftUI.Color(red: 0.18, green: 0.18, blue: 0.20) : 
-                    SwiftUI.Color(red: 0.12, green: 0.12, blue: 0.14).opacity(isHovered ? 0.8 : 0.6)
+                    isActive ?
+                        userSettings.themeConfiguration.backgroundColor.color.opacity(userSettings.themeConfiguration.isDarkMode ? 0.4 : 0.15) :
+                        userSettings.themeConfiguration.backgroundColor.color.opacity(userSettings.themeConfiguration.isDarkMode ? (isHovered ? 0.3 : 0.25) : (isHovered ? 0.1 : 0.08))
                 )
         )
         .overlay(
             // Bottom accent for active tab
             RoundedRectangle(cornerRadius: 8)
                 .stroke(
-                    isActive ? SwiftUI.Color(red: 0.4, green: 0.6, blue: 1.0) : SwiftUI.Color.clear,
+                    isActive ? userSettings.themeConfiguration.accentColor.color : SwiftUI.Color.clear,
                     lineWidth: isActive ? 2 : 0
                 ),
             alignment: .bottom
         )
         .contentShape(Rectangle())
-        .onTapGesture {
-            if !isEditing {
-                onSelect()
+        .highPriorityGesture(
+            TapGesture(count: 1).onEnded {
+                if !isEditing { onSelect() }
             }
-        }
+        )
         .onHover { hovering in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8, blendDuration: 0.05)) {
                 isHovered = hovering
@@ -170,7 +167,7 @@ struct TabView: View {
         .simultaneousGesture(
             TapGesture(count: 2)
                 .onEnded {
-                    if !isEditing {
+                    if !isEditing && !tab.isSettingsTab {
                         startEditing()
                     }
                 }
@@ -211,6 +208,8 @@ struct TabView: View {
     let splitPaneManager = SplitPaneManager(initialTab: tabManager.tabs[0])
     
     TabBarView(tabManager: tabManager, splitPaneManager: splitPaneManager, onTabSplit: {})
-        .frame(width: 600, height: 36)
+        .environmentObject(UserSettings())
+        .frame(width: 600, height: 44)
         .background(.black)
-} 
+}
+ 

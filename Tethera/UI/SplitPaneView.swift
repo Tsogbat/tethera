@@ -8,6 +8,7 @@ struct SplitPaneView: View {
     let onSplit: () -> Void
     @State private var hoverEdge: DropEdgeHighlight? = nil
     @State private var isHovered: Bool = false
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
         GeometryReader { geometry in
@@ -23,12 +24,15 @@ struct SplitPaneView: View {
                                 Spacer()
                                 Button(action: {
                                     splitPaneManager.removeTab(tab)
-                                    onSplit()
                                 }) {
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.system(size: 16))
-                                        .foregroundColor(.white.opacity(0.6))
-                                        .background(Circle().fill(.black.opacity(0.3)))
+                                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.65))
+                                        .background(
+                                            Circle().fill(
+                                                SwiftUI.Color.black.opacity(userSettings.themeConfiguration.isDarkMode ? 0.30 : 0.10)
+                                            )
+                                        )
                                 }
                                 .buttonStyle(PlainButtonStyle())
                                 .opacity(isHovered ? 1 : 0)
@@ -53,7 +57,7 @@ struct SplitPaneView: View {
                     .onTapGesture {
                         splitPaneManager.setActivePane(pane)
                     }
-                    .onDrop(of: [UTType.plainText.identifier, UTType.text.identifier], delegate: PaneDropDelegate(
+                    .onDrop(of: [UTType.plainText, UTType.text], delegate: PaneDropDelegate(
                         pane: pane,
                         splitPaneManager: splitPaneManager,
                         tabManager: tabManager,
@@ -84,8 +88,6 @@ struct SplitPaneView: View {
                                 .frame(width: geometry.size.width * (1 - pane.splitRatio))
                         }
                     }
-                    // Smooth animation while dragging divider
-                    .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.9, blendDuration: 0.1), value: pane.splitRatio)
                 } else {
                     VStack(spacing: 0) {
                         if pane.children.count >= 1 {
@@ -106,8 +108,6 @@ struct SplitPaneView: View {
                                 .frame(height: geometry.size.height * (1 - pane.splitRatio))
                         }
                     }
-                    // Smooth animation while dragging divider
-                    .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.9, blendDuration: 0.1), value: pane.splitRatio)
                 }
             }
         }
@@ -122,10 +122,17 @@ struct DividerView: View {
     
     @State private var isDragging = false
     @State private var isHovered = false
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
         Rectangle()
-            .fill(isDragging ? .blue.opacity(0.5) : (isHovered ? .white.opacity(0.2) : .white.opacity(0.1)))
+            .fill(
+                isDragging ? userSettings.themeConfiguration.accentColor.color.opacity(0.5) : (
+                    isHovered ?
+                        (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.22) : SwiftUI.Color.black.opacity(0.10)) :
+                        (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.black.opacity(0.06))
+                )
+            )
             .frame(
                 width: orientation == .vertical ? 4 : nil,
                 height: orientation == .horizontal ? 4 : nil

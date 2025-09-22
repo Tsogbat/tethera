@@ -2,10 +2,12 @@ import SwiftUI
 
 extension Notification.Name {
     static let restoreTerminalFocus = Notification.Name("restoreTerminalFocus")
+    static let openSettingsTab = Notification.Name("openSettingsTab")
 }
 
 struct BlockTerminalView: View {
     @ObservedObject var viewModel: BlockTerminalViewModel
+    @EnvironmentObject private var userSettings: UserSettings
     @State private var commandInput: String = ""
     @FocusState private var isInputFocused: Bool
     @StateObject private var autocompleteEngine = AutocompleteEngine()
@@ -14,32 +16,27 @@ struct BlockTerminalView: View {
 
     var body: some View {
         ZStack {
-            // Modern, subtle gradient background
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    SwiftUI.Color(red: 0.06, green: 0.07, blue: 0.10),
-                    SwiftUI.Color(red: 0.09, green: 0.11, blue: 0.15)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Use container background (set in TabbedTerminalView) for a unified look
+            SwiftUI.Color.clear
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Header with working directory
                 HStack {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.fill")
-                            .foregroundColor(.blue)
+                            .foregroundColor(userSettings.themeConfiguration.accentColor.color)
                             .font(.system(size: 14, weight: .medium))
                         Text(viewModel.displayWorkingDirectory)
-                            .font(getFont(size: 13))
-                            .foregroundColor(.white)
+                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                            .foregroundColor(userSettings.themeConfiguration.textColor.color)
                             .lineLimit(1)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .background(SwiftUI.Color.white.opacity(0.03))
+                    .background(
+                        (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white : SwiftUI.Color.black).opacity(0.05)
+                    )
                     .cornerRadius(8)
                     
                     Spacer()
@@ -60,6 +57,7 @@ struct BlockTerminalView: View {
                         .padding(.top, 16)
                         .padding(.bottom, 100) // Ensure content doesn't overlap with input
                     }
+                    .scrollIndicators(.hidden)
                     .onChange(of: viewModel.blocks.count) { _, _ in
                         if let last = viewModel.blocks.last {
                             withAnimation(.easeOut(duration: 0.3)) {
@@ -100,20 +98,22 @@ struct BlockTerminalView: View {
                     }
                     
                     Divider()
-                        .background(SwiftUI.Color.white.opacity(0.1))
+                        .background(
+                            (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.1) : SwiftUI.Color.black.opacity(0.06))
+                        )
                     
                     HStack(spacing: 16) {
                         HStack(spacing: 12) {
                             Image(systemName: "chevron.right")
-                                .foregroundColor(.green)
+                                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
                                 .font(.system(size: 14, weight: .semibold))
                             
                             ZStack(alignment: .leading) {
                                 TextField("", text: $commandInput)
-                                    .font(getFont(size: 15))
+                                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
                                     .textFieldStyle(PlainTextFieldStyle())
-                                    .foregroundColor(.white)
-                                    .accentColor(.green)
+                                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
+                                    .accentColor(userSettings.themeConfiguration.accentColor.color)
                                     .focused($isInputFocused)
                                     .onAppear { 
                                         if isActivePane {
@@ -156,11 +156,11 @@ struct BlockTerminalView: View {
                                 if !autocompleteEngine.inlineCompletion.isEmpty && autocompleteEngine.inlineCompletion.hasPrefix(commandInput) {
                                     HStack(spacing: 0) {
                                         Text(commandInput)
-                                            .font(getFont(size: 15))
+                                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
                                             .foregroundColor(.clear)
                                         Text(String(autocompleteEngine.inlineCompletion.dropFirst(commandInput.count)))
-                                            .font(getFont(size: 15))
-                                            .foregroundColor(.white.opacity(0.4))
+                                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.4))
                                         Spacer()
                                     }
                                     .allowsHitTesting(false)
@@ -171,8 +171,8 @@ struct BlockTerminalView: View {
                                         if commandInput.isEmpty && autocompleteEngine.inlineCompletion.isEmpty {
                                             HStack {
                                                 Text("Enter command...")
-                                                    .font(getFont(size: 15))
-                                                    .foregroundColor(.white.opacity(0.6))
+                                                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                                                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
                                                     .padding(.leading, 12)
                                                 Spacer()
                                             }
@@ -183,7 +183,7 @@ struct BlockTerminalView: View {
                         
                         Button(action: submitCommand) {
                             Image(systemName: "arrow.right.circle.fill")
-                                .foregroundColor(.green)
+                                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
                                 .font(.system(size: 20))
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -193,7 +193,9 @@ struct BlockTerminalView: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(SwiftUI.Color.white.opacity(0.03))
+                            .fill(
+                                (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white : SwiftUI.Color.black).opacity(0.05)
+                            )
                     )
                 }
             }
@@ -290,6 +292,22 @@ struct BlockTerminalView: View {
             default:
                 break
             }
+        } else {
+            // No suggestion list: use history navigation on up/down
+            switch keyPress.key {
+            case .upArrow:
+                if let prev = viewModel.historyPrevious(currentInput: commandInput) {
+                    commandInput = prev
+                }
+                return .handled
+            case .downArrow:
+                if let next = viewModel.historyNext() {
+                    commandInput = next
+                }
+                return .handled
+            default:
+                break
+            }
         }
         return .ignored
     }
@@ -310,13 +328,15 @@ struct BlockTerminalView: View {
     }
     
     private func getFont(size: CGFloat) -> Font {
-        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
-            return .custom("JetBrainsMono-Medium", size: size)
-        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
-            return .custom("JetBrainsMono-Regular", size: size)
-        } else {
-            return .system(size: size, design: .monospaced)
+        let family = userSettings.themeConfiguration.fontFamily
+        // Try a medium weight face first if available
+        if FontLoader.shared.isFontAvailable("\(family)-Medium") {
+            return .custom("\(family)-Medium", size: size)
         }
+        if FontLoader.shared.isFontAvailable(family) {
+            return .custom(family, size: size)
+        }
+        return .system(size: size, design: .monospaced)
     }
 }
 
@@ -325,18 +345,19 @@ struct BlockTerminalView: View {
 // Separate view for terminal blocks for better organization
 struct TerminalBlockView: View {
     let block: TerminalBlock
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Command input
             HStack(spacing: 8) {
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.green)
+                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
                     .font(.system(size: 12, weight: .semibold))
                 
                 Text(block.input)
-                    .font(getFont(size: 14))
-                    .foregroundColor(.white)
+                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
                     .textSelection(.enabled)
                 
                 Spacer()
@@ -346,8 +367,8 @@ struct TerminalBlockView: View {
                     let displayPath = workingDir.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ? 
                         "~\(String(workingDir.dropFirst(FileManager.default.homeDirectoryForCurrentUser.path.count)))" : workingDir
                     Text(displayPath)
-                        .font(getFont(size: 11))
-                        .foregroundColor(.white.opacity(0.7))
+                        .font(getFont(size: max(11, CGFloat(userSettings.themeConfiguration.fontSize - 2))))
+                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.7))
                         .lineLimit(1)
                 }
             }
@@ -355,8 +376,8 @@ struct TerminalBlockView: View {
             // Command output
             if !block.output.isEmpty {
                 Text(block.output)
-                    .font(getFont(size: 13))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
                     .textSelection(.enabled)
                     .padding(.leading, 20)
             }
@@ -364,22 +385,32 @@ struct TerminalBlockView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(SwiftUI.Color.white.opacity(0.03))
+                .fill(
+                    userSettings.themeConfiguration.isDarkMode ?
+                        SwiftUI.Color.white.opacity(0.05) :
+                        SwiftUI.Color.black.opacity(0.04)
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(SwiftUI.Color.white.opacity(0.05), lineWidth: 1)
+                        .stroke(
+                            userSettings.themeConfiguration.isDarkMode ?
+                                SwiftUI.Color.white.opacity(0.10) :
+                                SwiftUI.Color.black.opacity(0.08),
+                            lineWidth: 1
+                        )
                 )
         )
-        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .shadow(color: SwiftUI.Color.black.opacity(userSettings.themeConfiguration.isDarkMode ? 0.2 : 0.08), radius: 4, x: 0, y: 2)
     }
     
     private func getFont(size: CGFloat) -> Font {
-        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
-            return .custom("JetBrainsMono-Medium", size: size)
-        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
-            return .custom("JetBrainsMono-Regular", size: size)
-        } else {
-            return .system(size: size, design: .monospaced)
+        let family = userSettings.themeConfiguration.fontFamily
+        if FontLoader.shared.isFontAvailable("\(family)-Medium") {
+            return .custom("\(family)-Medium", size: size)
         }
+        if FontLoader.shared.isFontAvailable(family) {
+            return .custom(family, size: size)
+        }
+        return .system(size: size, design: .monospaced)
     }
 }

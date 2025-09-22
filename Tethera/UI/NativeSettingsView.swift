@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NativeSettingsView: View {
-    @StateObject private var userSettings = UserSettings()
+    @EnvironmentObject private var userSettings: UserSettings
     @State private var selectedTab = 0
     
     private func terminalFont(size: CGFloat = 13) -> Font {
@@ -30,16 +30,78 @@ struct NativeSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if selectedTab == 0 {
-                        AppearanceSettings(userSettings: userSettings)
+                        AppearanceSettings()
                     } else {
-                        TerminalSettings(userSettings: userSettings)
+                        TerminalSettings()
                     }
                 }
                 .padding(20)
             }
+            .scrollIndicators(.hidden)
+            .background(userSettings.themeConfiguration.backgroundColor.color)
         }
-        .background(SwiftUI.Color(NSColor.windowBackgroundColor))
-        .frame(minWidth: 600, minHeight: 500)
+        .background(userSettings.themeConfiguration.backgroundColor.color)
+        .frame(minWidth: 650, minHeight: 550)
+    }
+}
+
+// MARK: - Theme Gallery
+
+struct ThemeGalleryView: View {
+    @EnvironmentObject private var userSettings: UserSettings
+    private let columns = [
+        GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
+    ]
+    
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(UserSettings.presets) { preset in
+                ThemeTile(preset: preset, isSelected: userSettings.selectedThemeId == preset.id) {
+                    userSettings.applyPreset(preset)
+                }
+            }
+        }
+    }
+}
+
+struct ThemeTile: View {
+    let preset: ThemePreset
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(spacing: 10) {
+                ZStack(alignment: .bottomTrailing) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(preset.configuration.backgroundColor.color)
+                        .frame(height: 90)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(isSelected ? preset.configuration.accentColor.color : SwiftUI.Color.gray.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                        )
+                    
+                    HStack(spacing: 6) {
+                        Text("Aa")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(preset.configuration.textColor.color)
+                            .padding(6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(preset.configuration.backgroundColor.color.opacity(0.5))
+                            )
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(preset.configuration.accentColor.color)
+                            .frame(width: 20, height: 10)
+                    }
+                    .padding(8)
+                }
+                Text(preset.name)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(.primary)
+            }
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -47,11 +109,12 @@ struct TabButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.custom("JetBrains Mono", size: 13).weight(.medium))
+                .font(.custom(userSettings.themeConfiguration.fontFamily, size: 13).weight(.medium))
                 .foregroundColor(isSelected ? .primary : .secondary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -59,18 +122,23 @@ struct TabButton: View {
         .buttonStyle(PlainButtonStyle())
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? SwiftUI.Color.accentColor.opacity(0.1) : SwiftUI.Color.clear)
+                .fill(isSelected ? userSettings.themeConfiguration.accentColor.color.opacity(0.12) : SwiftUI.Color.clear)
         )
     }
 }
 
 struct AppearanceSettings: View {
-    @ObservedObject var userSettings: UserSettings
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsGroup(title: "Theme") {
-                VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 24) {
+            // Theme Gallery
+            SettingsGroup(title: "Theme Gallery", icon: "paintpalette") {
+                ThemeGalleryView()
+            }
+            
+            SettingsGroup(title: "Theme", icon: "moon.fill") {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("Appearance")
                             .font(.custom("JetBrains Mono", size: 13))
@@ -78,8 +146,11 @@ struct AppearanceSettings: View {
                         Picker("", selection: Binding(
                             get: { userSettings.themeConfiguration.isDarkMode ? 1 : 0 },
                             set: { newValue in
-                                userSettings.themeConfiguration.isDarkMode = newValue == 1
-                                userSettings.saveSettings()
+                                if newValue == 1 {
+                                    userSettings.applyDarkTheme()
+                                } else {
+                                    userSettings.applyLightTheme()
+                                }
                             }
                         )) {
                             Text("Light").tag(0)
@@ -89,60 +160,25 @@ struct AppearanceSettings: View {
                         .frame(width: 120)
                     }
                     
-                    HStack {
-                        Text("Line Spacing")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Slider(
-                            value: Binding(
-                                get: { userSettings.themeConfiguration.lineSpacing },
-                                set: { newValue in
-                                    userSettings.themeConfiguration.lineSpacing = newValue
-                                    userSettings.saveSettings()
-                                }
-                            ),
-                            in: 1.0...2.0,
-                            step: 0.1
-                        )
-                        .frame(width: 100)
-                        Text(String(format: "%.1f", userSettings.themeConfiguration.lineSpacing))
-                            .font(.custom("JetBrains Mono", size: 11))
-                            .foregroundColor(.secondary)
-                            .frame(width: 30)
-                    }
-                    
-                    HStack {
-                        Text("Accent Color")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        ColorPicker("", selection: Binding(
-                            get: { userSettings.themeConfiguration.accentColor.color },
-                            set: { newColor in
-                                userSettings.themeConfiguration.accentColor = CodableColor(newColor)
+                    SliderRow(
+                        title: "Line Spacing",
+                        icon: "text.line.first.and.arrowtriangle.forward",
+                        value: Binding(
+                            get: { userSettings.themeConfiguration.lineSpacing },
+                            set: { newValue in
+                                userSettings.themeConfiguration.lineSpacing = newValue
                                 userSettings.saveSettings()
                             }
-                        ))
-                        .frame(width: 30)
-                    }
-                    
-                    HStack {
-                        Text("Background")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        ColorPicker("", selection: Binding(
-                            get: { userSettings.themeConfiguration.backgroundColor.color },
-                            set: { newColor in
-                                userSettings.themeConfiguration.backgroundColor = CodableColor(newColor)
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .frame(width: 30)
-                    }
+                        ),
+                        range: 1.0...2.0,
+                        step: 0.1,
+                        suffix: ""
+                    )
                 }
             }
             
-            SettingsGroup(title: "Typography") {
-                VStack(alignment: .leading, spacing: 12) {
+            SettingsGroup(title: "Typography", icon: "textformat") {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("Font")
                             .font(.custom("JetBrains Mono", size: 13))
@@ -179,7 +215,7 @@ struct AppearanceSettings: View {
                         )
                         .frame(width: 100)
                         Text("\(Int(userSettings.themeConfiguration.fontSize))")
-                            .font(.custom("JetBrains Mono", size: 11))
+                            .font(.custom("JetBrains Mono", size: 12))
                             .foregroundColor(.secondary)
                             .frame(width: 20)
                     }
@@ -201,24 +237,10 @@ struct AppearanceSettings: View {
                         )
                         .frame(width: 100)
                         Text("\(Int(userSettings.themeConfiguration.padding))")
-                            .font(.custom("JetBrains Mono", size: 11))
+                            .font(.custom("JetBrains Mono", size: 12))
                             .foregroundColor(.secondary)
                             .frame(width: 20)
                     }
-                    
-                    SliderRow(
-                        title: "Line Spacing",
-                        value: Binding(
-                            get: { userSettings.themeConfiguration.lineSpacing },
-                            set: { newValue in
-                                userSettings.themeConfiguration.lineSpacing = newValue
-                                userSettings.saveSettings()
-                            }
-                        ),
-                        range: 1.0...2.0,
-                        step: 0.1,
-                        suffix: ""
-                    )
                 }
             }
         }
@@ -226,12 +248,12 @@ struct AppearanceSettings: View {
 }
 
 struct TerminalSettings: View {
-    @ObservedObject var userSettings: UserSettings
+    @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsGroup(title: "Behavior") {
-                VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 24) {
+            SettingsGroup(title: "Behavior", icon: "gear") {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("Enable autocompletion")
                             .font(.custom("JetBrains Mono", size: 13))
@@ -304,8 +326,8 @@ struct TerminalSettings: View {
                 }
             }
             
-            SettingsGroup(title: "Formatting") {
-                VStack(alignment: .leading, spacing: 12) {
+            SettingsGroup(title: "Formatting", icon: "text.justify") {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Text("Tab size")
                             .font(.custom("JetBrains Mono", size: 13))
@@ -332,51 +354,72 @@ struct TerminalSettings: View {
 
 struct SettingsGroup<Content: View>: View {
     let title: String
+    let icon: String?
     let content: Content
+    @EnvironmentObject private var userSettings: UserSettings
     
-    init(title: String, @ViewBuilder content: () -> Content) {
+    init(title: String, icon: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.icon = icon
         self.content = content()
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.custom("JetBrains Mono", size: 14).weight(.semibold))
-                .foregroundColor(.primary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                }
+                Text(title)
+                    .font(.custom(userSettings.themeConfiguration.fontFamily, size: 15).weight(.semibold))
+                    .foregroundColor(.primary)
+            }
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 content
             }
-            .padding(.leading, 8)
+            .padding(.leading, icon != nil ? 24 : 0)
         }
-        .background(SwiftUI.Color(NSColor.controlBackgroundColor))
-        .cornerRadius(8)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    userSettings.themeConfiguration.isDarkMode ?
+                    SwiftUI.Color.white.opacity(0.04) : SwiftUI.Color.black.opacity(0.03)
+                )
+        )
+        .cornerRadius(12)
     }
 }
 
 
 struct SliderRow: View {
     let title: String
+    let icon: String?
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double
     let suffix: String
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(.custom("JetBrains Mono", size: 13))
                 Spacer()
-                Text("\(Int(value))\(suffix)")
-                    .font(.system(size: 13))
+                Text(String(format: "%.1f", value) + suffix)
+                    .font(.custom("JetBrains Mono", size: 12))
                     .foregroundColor(.secondary)
-                    .frame(width: 40, alignment: .trailing)
             }
             
             Slider(value: $value, in: range, step: step)
-                .accentColor(.accentColor)
         }
     }
 }
@@ -384,5 +427,7 @@ struct SliderRow: View {
 
 #Preview {
     NativeSettingsView()
-        .frame(width: 600, height: 500)
+        .environmentObject(UserSettings())
+        .frame(width: 650, height: 550)
 }
+
