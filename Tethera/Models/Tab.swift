@@ -4,12 +4,13 @@ import Combine
 
 /// Represents a terminal tab with its own session and view model
 @MainActor
-class Tab: ObservableObject, Identifiable, Transferable {
+class Tab: ObservableObject, Identifiable {
     let id = UUID()
     @Published var title: String
     @Published var viewModel: BlockTerminalViewModel
     @Published var isActive: Bool = false
     @Published var isCustomTitle: Bool = false
+    @Published var isSettingsTab: Bool = false
     
     init(title: String = "Terminal") {
         self.title = title
@@ -18,7 +19,7 @@ class Tab: ObservableObject, Identifiable, Transferable {
         // Auto-update title when blocks change (only if not custom)
         viewModel.objectWillChange.sink { [weak self] in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                if self?.isCustomTitle == false {
+                if self?.isCustomTitle == false && self?.isSettingsTab == false {
                     self?.updateTitle()
                 }
             }
@@ -29,6 +30,8 @@ class Tab: ObservableObject, Identifiable, Transferable {
     
     /// Update tab title based on current working directory or last command
     func updateTitle() {
+        // Do not auto-update for Settings tab
+        if isSettingsTab { return }
         
         // Try to get the last command first
         if let lastBlock = viewModel.blocks.last, !lastBlock.input.isEmpty {
@@ -64,8 +67,5 @@ class Tab: ObservableObject, Identifiable, Transferable {
         updateTitle()
     }
     
-    // MARK: - Transferable
-    static var transferRepresentation: some TransferRepresentation {
-        ProxyRepresentation(exporting: \.id.uuidString)
-    }
 }
+

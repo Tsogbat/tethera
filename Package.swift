@@ -20,6 +20,10 @@ let package = Package(
             name: "Tethera",
             dependencies: ["SwiftTerm"],
             path: "Tethera",
+            exclude: [
+                "Info.plist",
+                "Preview Content"
+            ],
             resources: [
                 .process("Core/Shaders.metal"),
                 .process("Assets.xcassets"),

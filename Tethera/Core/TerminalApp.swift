@@ -3,16 +3,18 @@ import SwiftUI
 @main
 struct TerminalApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var userSettings = UserSettings()
     
     var body: some Scene {
         WindowGroup {
             TabbedTerminalView()
+                .environmentObject(userSettings)
         }
         .windowStyle(HiddenTitleBarWindowStyle())
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
-                    SettingsWindowController.shared.showSettings()
+                    NotificationCenter.default.post(name: .openSettingsTab, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }

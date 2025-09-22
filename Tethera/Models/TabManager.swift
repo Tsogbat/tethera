@@ -95,4 +95,17 @@ class TabManager: ObservableObject {
         }
     }
     
+    /// Open Settings tab or focus if already open
+    func openSettingsTab() {
+        if let existing = tabs.first(where: { $0.isSettingsTab }) {
+            setActiveTab(existing.id)
+            return
+        }
+        let settingsTab = Tab(title: "Settings")
+        settingsTab.isSettingsTab = true
+        tabs.append(settingsTab)
+        setActiveTab(settingsTab.id)
+    }
+    
 }
+

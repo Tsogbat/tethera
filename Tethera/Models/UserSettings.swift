@@ -48,6 +48,13 @@ struct DeveloperSettings: Codable, Equatable {
     var showMinimap: Bool = false
 }
 
+// MARK: - Theme Preset Model
+struct ThemePreset: Identifiable, Codable, Equatable {
+    let id: String
+    let name: String
+    let configuration: ThemeConfiguration
+}
+
 // MARK: - Codable Color Wrapper
 struct CodableColor: Codable, Equatable {
     let red: Double
@@ -83,6 +90,7 @@ struct CodableColor: Codable, Equatable {
 class UserSettings: ObservableObject, @unchecked Sendable {
     @Published var themeConfiguration = ThemeConfiguration()
     @Published var developerSettings = DeveloperSettings()
+    @Published var selectedThemeId: String? = nil
     
     
     private let userDefaults = UserDefaults.standard
@@ -98,6 +106,8 @@ class UserSettings: ObservableObject, @unchecked Sendable {
         if let themeData = try? JSONEncoder().encode(themeConfiguration) {
             userDefaults.set(themeData, forKey: "TetheraThemeConfiguration")
         }
+        // Save selected theme id
+        userDefaults.set(selectedThemeId, forKey: "TetheraSelectedThemeId")
         
         // Save developer settings
         if let devData = try? JSONEncoder().encode(developerSettings) {
@@ -114,6 +124,10 @@ class UserSettings: ObservableObject, @unchecked Sendable {
            let theme = try? JSONDecoder().decode(ThemeConfiguration.self, from: themeData) {
             themeConfiguration = theme
         }
+        // Load selected theme id
+        if let themeId = userDefaults.string(forKey: "TetheraSelectedThemeId") {
+            selectedThemeId = themeId
+        }
         
         // Load developer settings
         if let devData = userDefaults.data(forKey: "TetheraDeveloperSettings"),
@@ -125,17 +139,26 @@ class UserSettings: ObservableObject, @unchecked Sendable {
     // MARK: - Theme Presets
     func applyLightTheme() {
         themeConfiguration = ThemeConfiguration.defaultLight
+        selectedThemeId = "tethera-light"
         saveSettings()
     }
     
     func applyDarkTheme() {
         themeConfiguration = ThemeConfiguration.defaultDark
+        selectedThemeId = "tethera-dark"
+        saveSettings()
+    }
+    
+    func applyPreset(_ preset: ThemePreset) {
+        themeConfiguration = preset.configuration
+        selectedThemeId = preset.id
         saveSettings()
     }
     
     func resetToDefaults() {
         themeConfiguration = ThemeConfiguration()
         developerSettings = DeveloperSettings()
+        selectedThemeId = nil
         saveSettings()
     }
     
@@ -161,5 +184,11 @@ class UserSettings: ObservableObject, @unchecked Sendable {
         "Courier New",
         "Source Code Pro",
         "Fira Code"
+    ]
+    
+    // MARK: - Built-in Theme Presets
+    static let presets: [ThemePreset] = [
+        ThemePreset(id: "tethera-dark", name: "Tethera Dark", configuration: .defaultDark),
+        ThemePreset(id: "tethera-light", name: "Tethera Light", configuration: .defaultLight)
     ]
 }

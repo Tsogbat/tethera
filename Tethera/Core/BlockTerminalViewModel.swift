@@ -13,6 +13,11 @@ class BlockTerminalViewModel: ObservableObject {
     private var userSettings = UserSettings()
     @Published var paletteActions: [String] = ["New Tab", "Split Pane", "Settings"]
     
+    // Command history
+    @Published var commandHistory: [String] = []
+    private var historyIndex: Int? = nil
+    private var historyDraft: String = ""
+    
     init() {
         // Initialize theme from user settings
         self.theme = TerminalTheme(from: userSettings.themeConfiguration)
@@ -47,6 +52,12 @@ class BlockTerminalViewModel: ObservableObject {
     /// Run a shell command and append a new block with the result
     func runShellCommand(_ input: String) {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Push to history (avoid consecutive duplicates)
+        if !trimmed.isEmpty {
+            if commandHistory.last != trimmed { commandHistory.append(trimmed) }
+            historyIndex = nil
+            historyDraft = ""
+        }
         if trimmed == "clear" {
             blocks.removeAll()
             return
@@ -82,6 +93,32 @@ class BlockTerminalViewModel: ObservableObject {
         }
         let output = Self.runCommandSync(input, in: workingDirectory)
         addBlock(input: input, output: output, success: nil)
+    }
+
+    // MARK: - History Navigation
+    func historyPrevious(currentInput: String) -> String? {
+        guard !commandHistory.isEmpty else { return nil }
+        if historyIndex == nil {
+            historyDraft = currentInput
+            historyIndex = commandHistory.count - 1
+        } else if let idx = historyIndex, idx > 0 {
+            historyIndex = idx - 1
+        }
+        if let idx = historyIndex { return commandHistory[idx] }
+        return nil
+    }
+    
+    func historyNext() -> String? {
+        guard let idx = historyIndex else { return nil }
+        if idx < commandHistory.count - 1 {
+            historyIndex = idx + 1
+            return commandHistory[historyIndex!] 
+        } else {
+            historyIndex = nil
+            let draft = historyDraft
+            historyDraft = ""
+            return draft
+        }
     }
 
     /// Synchronously run a shell command and return its output

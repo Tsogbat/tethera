@@ -9,10 +9,12 @@ class SplitPaneManager: ObservableObject {
     @Published var dropTarget: SplitPane?
     @Published var dropOrientation: SplitOrientation = .horizontal
     @Published var activePane: SplitPane?
+    @Published var isSplit: Bool = false
     
     init(initialTab: Tab) {
         self.rootPane = SplitPane(tab: initialTab)
         self.activePane = self.rootPane
+        self.isSplit = false
         
         // Listen for tab closure notifications
         NotificationCenter.default.addObserver(
@@ -21,7 +23,9 @@ class SplitPaneManager: ObservableObject {
             queue: .main
         ) { [weak self] notification in
             if let tabId = notification.userInfo?["tabId"] as? UUID {
-                self?.handleTabClosure(tabId)
+                Task { @MainActor in
+                    self?.handleTabClosure(tabId)
+                }
             }
         }
     }
@@ -47,7 +51,10 @@ class SplitPaneManager: ObservableObject {
     
     /// Split a pane with a new tab
     func splitPane(_ pane: SplitPane, with tab: Tab, orientation: SplitOrientation) {
-        pane.split(with: tab, orientation: orientation)
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.9, blendDuration: 0.1)) {
+            pane.split(with: tab, orientation: orientation)
+            isSplit = rootPane.children.count > 0
+        }
     }
     
     /// Remove a tab from the pane system
@@ -59,7 +66,10 @@ class SplitPaneManager: ObservableObject {
             return
         }
         
-        pane.remove()
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.9, blendDuration: 0.1)) {
+            pane.remove()
+            isSplit = rootPane.children.count > 0
+        }
     }
     
     /// Get all leaf panes (panes that contain tabs)
@@ -81,13 +91,17 @@ class SplitPaneManager: ObservableObject {
     
     /// Handle tab drop onto a pane
     func handleTabDrop(_ tab: Tab, onto targetPane: SplitPane, orientation: SplitOrientation) {
+        // Prevent splitting with Settings tab
+        if tab.isSettingsTab { return }
         // Remove tab from its current pane if it exists
-        if findPane(containing: tab) != nil {
-            removeTab(tab)
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.9, blendDuration: 0.1)) {
+            if findPane(containing: tab) != nil {
+                removeTab(tab)
+            }
+            // Split the target pane with the dropped tab
+            splitPane(targetPane, with: tab, orientation: orientation)
+            isSplit = rootPane.children.count > 0
         }
-        
-        // Split the target pane with the dropped tab
-        splitPane(targetPane, with: tab, orientation: orientation)
     }
     
     /// Update split ratio for a pane
@@ -107,6 +121,8 @@ class SplitPaneManager: ObservableObject {
             // Reset to single pane with the first available tab
             rootPane = SplitPane(tab: rootPane.tab ?? Tab())
             activePane = rootPane
+            isSplit = false
         }
     }
 }
+
