@@ -214,6 +214,70 @@ class UserSettings: ObservableObject, @unchecked Sendable {
             fontSize: 14.0,
             lineSpacing: 1.2,
             padding: 8.0
+        )),
+        ThemePreset(id: "nord", name: "Nord", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(SwiftUI.Color(red: 0.180, green: 0.204, blue: 0.251)), // Polar Night
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.282, green: 0.310, blue: 0.361)), // Snow Storm contrast
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.153, green: 0.169, blue: 0.204)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.529, green: 0.745, blue: 0.831)), // Frost
+            textColor: CodableColor(SwiftUI.Color(red: 0.925, green: 0.933, blue: 0.949)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
+        )),
+
+        ThemePreset(id: "gruvbox-dark", name: "Gruvbox Dark", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(SwiftUI.Color(red: 0.251, green: 0.212, blue: 0.165)), // Dark background
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.400, green: 0.325, blue: 0.239)),
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.157, green: 0.141, blue: 0.110)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.800, green: 0.600, blue: 0.000)), // Yellow
+            textColor: CodableColor(SwiftUI.Color(red: 0.933, green: 0.910, blue: 0.835)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
+        )),
+
+        ThemePreset(id: "monokai", name: "Monokai", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(SwiftUI.Color(red: 0.192, green: 0.204, blue: 0.169)), // Background
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.275, green: 0.290, blue: 0.243)),
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.118, green: 0.118, blue: 0.118)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.980, green: 0.910, blue: 0.310)), // Yellow
+            textColor: CodableColor(SwiftUI.Color(red: 0.933, green: 0.933, blue: 0.933)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
+        )),
+
+        ThemePreset(id: "one-dark", name: "One Dark", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(SwiftUI.Color(red: 0.173, green: 0.212, blue: 0.247)),
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.259, green: 0.298, blue: 0.341)),
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.153, green: 0.173, blue: 0.204)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.600, green: 0.753, blue: 0.478)), // Green
+            textColor: CodableColor(SwiftUI.Color(red: 0.898, green: 0.898, blue: 0.898)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
+        )),
+
+        ThemePreset(id: "catppuccin-mocha", name: "Catppuccin Mocha", configuration: ThemeConfiguration(
+            isDarkMode: true,
+            primaryColor: CodableColor(SwiftUI.Color(red: 0.172, green: 0.145, blue: 0.200)),
+            secondaryColor: CodableColor(SwiftUI.Color(red: 0.286, green: 0.251, blue: 0.353)),
+            backgroundColor: CodableColor(SwiftUI.Color(red: 0.106, green: 0.086, blue: 0.133)),
+            accentColor: CodableColor(SwiftUI.Color(red: 0.757, green: 0.510, blue: 0.922)), // Lavender
+            textColor: CodableColor(SwiftUI.Color(red: 0.925, green: 0.925, blue: 0.949)),
+            fontFamily: "JetBrains Mono",
+            fontSize: 14.0,
+            lineSpacing: 1.2,
+            padding: 8.0
         ))
     ]
 }
