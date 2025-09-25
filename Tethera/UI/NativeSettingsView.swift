@@ -49,18 +49,20 @@ struct NativeSettingsView: View {
 
 struct ThemeGalleryView: View {
     @EnvironmentObject private var userSettings: UserSettings
-    private let columns = [
-        GridItem(.adaptive(minimum: 140, maximum: 200), spacing: 16)
-    ]
     
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 16) {
-            ForEach(UserSettings.presets) { preset in
-                ThemeTile(preset: preset, isSelected: userSettings.selectedThemeId == preset.id) {
-                    userSettings.applyPreset(preset)
+        ScrollView(.horizontal, showsIndicators: true) {
+            HStack(spacing: 16) {
+                ForEach(UserSettings.presets) { preset in
+                    ThemeTile(preset: preset, isSelected: userSettings.selectedThemeId == preset.id) {
+                        userSettings.applyPreset(preset)
+                    }
+                    .frame(width: 150)
                 }
             }
+            .padding(.horizontal, 2)
         }
+        .frame(height: 120)
     }
 }
 
@@ -78,9 +80,11 @@ struct ThemeTile: View {
                         .frame(height: 90)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(isSelected ? preset.configuration.accentColor.color : SwiftUI.Color.gray.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                                .stroke(
+                                    isSelected ? preset.configuration.accentColor.color : SwiftUI.Color.gray.opacity(0.2),
+                                    lineWidth: isSelected ? 2 : 1
+                                )
                         )
-                    
                     HStack(spacing: 6) {
                         Text("Aa")
                             .font(.system(size: 14, weight: .semibold))
@@ -99,6 +103,8 @@ struct ThemeTile: View {
                 Text(preset.name)
                     .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                     .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
         .buttonStyle(PlainButtonStyle())
