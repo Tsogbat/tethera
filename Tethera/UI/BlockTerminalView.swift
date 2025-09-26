@@ -26,14 +26,14 @@ struct BlockTerminalView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.fill")
                             .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: max(10, CGFloat(userSettings.themeConfiguration.fontSize) - 4), weight: .medium))
                         Text(viewModel.displayWorkingDirectory)
                             .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
                             .foregroundColor(userSettings.themeConfiguration.textColor.color)
                             .lineLimit(1)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
                     .background(
                         (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white : SwiftUI.Color.black).opacity(0.05)
                     )
@@ -43,6 +43,16 @@ struct BlockTerminalView: View {
                 }
                 .padding(.top, 20)
                 .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+                .overlay(
+                    Rectangle()
+                        .fill(
+                            userSettings.themeConfiguration.isDarkMode ?
+                                SwiftUI.Color.white.opacity(0.08) : SwiftUI.Color.black.opacity(0.06)
+                        )
+                        .frame(height: 1),
+                    alignment: .bottom
+                )
 
                 // Terminal blocks with proper safe area handling
                 ScrollViewReader { scrollProxy in
@@ -366,6 +376,10 @@ struct TerminalBlockView: View {
                 if let workingDir = block.workingDirectory {
                     let displayPath = workingDir.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ? 
                         "~\(String(workingDir.dropFirst(FileManager.default.homeDirectoryForCurrentUser.path.count)))" : workingDir
+                    Rectangle()
+                        .fill(userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.black.opacity(0.10))
+                        .frame(width: 1, height: 14)
+                        .padding(.horizontal, 6)
                     Text(displayPath)
                         .font(getFont(size: max(11, CGFloat(userSettings.themeConfiguration.fontSize - 2))))
                         .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.7))

@@ -143,11 +143,9 @@ struct TabView: View {
             alignment: .bottom
         )
         .contentShape(Rectangle())
-        .highPriorityGesture(
-            TapGesture(count: 1).onEnded {
-                if !isEditing { onSelect() }
-            }
-        )
+        .onTapGesture {
+            if !isEditing { onSelect() }
+        }
         .onHover { hovering in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8, blendDuration: 0.05)) {
                 isHovered = hovering
