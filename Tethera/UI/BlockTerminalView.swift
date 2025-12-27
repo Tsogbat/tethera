@@ -21,27 +21,39 @@ struct BlockTerminalView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header with working directory
+                // Header with working directory - Liquid Glass Style
                 HStack {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         Image(systemName: "folder.fill")
-                            .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                            .foregroundStyle(userSettings.themeConfiguration.accentColor.color)
                             .font(.system(size: 14, weight: .medium))
                         Text(viewModel.displayWorkingDirectory)
                             .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color)
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
                     .background(
-                        (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white : SwiftUI.Color.black).opacity(0.05)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.15), .white.opacity(0.05)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
                     )
-                    .cornerRadius(8)
+                    .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
                     
                     Spacer()
                 }
-                .padding(.top, 20)
+                .padding(.top, 16)
                 .padding(.horizontal, 20)
 
                 // Terminal blocks with proper safe area handling
@@ -97,23 +109,21 @@ struct BlockTerminalView: View {
                         }
                     }
                     
-                    Divider()
-                        .background(
-                            (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.1) : SwiftUI.Color.black.opacity(0.06))
-                        )
-                    
-                    HStack(spacing: 16) {
+                    // Liquid Glass Input Area
+                    HStack(spacing: 14) {
                         HStack(spacing: 12) {
+                            // Chevron with glow effect
                             Image(systemName: "chevron.right")
-                                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                                .foregroundStyle(userSettings.themeConfiguration.accentColor.color)
                                 .font(.system(size: 14, weight: .semibold))
+                                .shadow(color: userSettings.themeConfiguration.accentColor.color.opacity(0.4), radius: 4)
                             
                             ZStack(alignment: .leading) {
                                 TextField("", text: $commandInput)
                                     .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
                                     .textFieldStyle(PlainTextFieldStyle())
-                                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
-                                    .accentColor(userSettings.themeConfiguration.accentColor.color)
+                                    .foregroundStyle(.primary)
+                                    .tint(userSettings.themeConfiguration.accentColor.color)
                                     .focused($isInputFocused)
                                     .onAppear { 
                                         if isActivePane {
@@ -137,7 +147,7 @@ struct BlockTerminalView: View {
                                         }
                                     }
                                     .onChange(of: commandInput) { _, newValue in
-                                        hasUsedArrowKeys = false // Reset arrow key state when typing
+                                        hasUsedArrowKeys = false
                                         if isInputFocused {
                                             autocompleteEngine.getSuggestions(for: newValue, in: viewModel.workingDirectory)
                                         }
@@ -152,7 +162,7 @@ struct BlockTerminalView: View {
                                         handleKeyPress(keyPress)
                                     }
                                 
-                                // Inline completion preview - fixed spacing
+                                // Inline completion preview
                                 if !autocompleteEngine.inlineCompletion.isEmpty && autocompleteEngine.inlineCompletion.hasPrefix(commandInput) {
                                     HStack(spacing: 0) {
                                         Text(commandInput)
@@ -160,43 +170,57 @@ struct BlockTerminalView: View {
                                             .foregroundColor(.clear)
                                         Text(String(autocompleteEngine.inlineCompletion.dropFirst(commandInput.count)))
                                             .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.4))
+                                            .foregroundStyle(.secondary.opacity(0.5))
                                         Spacer()
                                     }
                                     .allowsHitTesting(false)
                                 }
                             }
-                                .overlay(
-                                    Group {
-                                        if commandInput.isEmpty && autocompleteEngine.inlineCompletion.isEmpty {
-                                            HStack {
-                                                Text("Enter command...")
-                                                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                                                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
-                                                    .padding(.leading, 12)
-                                                Spacer()
-                                            }
+                            .overlay(
+                                Group {
+                                    if commandInput.isEmpty && autocompleteEngine.inlineCompletion.isEmpty {
+                                        HStack {
+                                            Text("Enter command...")
+                                                .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                                                .foregroundStyle(.secondary.opacity(0.5))
+                                            Spacer()
                                         }
                                     }
-                                )
+                                }
+                            )
                         }
                         
+                        // Submit button with glass effect
                         Button(action: submitCommand) {
                             Image(systemName: "arrow.right.circle.fill")
-                                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                                .font(.system(size: 20))
+                                .font(.system(size: 22))
+                                .foregroundStyle(userSettings.themeConfiguration.accentColor.color)
+                                .shadow(color: userSettings.themeConfiguration.accentColor.color.opacity(0.3), radius: 6)
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(.plain)
                         .disabled(commandInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .opacity(commandInput.isEmpty ? 0.5 : 1)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
                     .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(
-                                (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white : SwiftUI.Color.black).opacity(0.05)
-                            )
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: 14)
+                                .strokeBorder(
+                                    LinearGradient(
+                                        colors: [.white.opacity(0.2), .white.opacity(0.05)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ),
+                                    lineWidth: 1
+                                )
+                        }
                     )
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -4)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
             }
         }
@@ -346,13 +370,15 @@ struct BlockTerminalView: View {
 struct TerminalBlockView: View {
     let block: TerminalBlock
     @EnvironmentObject private var userSettings: UserSettings
+    @State private var isExpanded: Bool = true
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Command input
+            // Command input with status indicator
             HStack(spacing: 8) {
-                Image(systemName: "chevron.right")
-                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                // Status indicator (Stage 2: Exit code visualization)
+                Image(systemName: block.statusIcon)
+                    .foregroundColor(block.statusColor)
                     .font(.system(size: 12, weight: .semibold))
                 
                 Text(block.input)
@@ -362,45 +388,100 @@ struct TerminalBlockView: View {
                 
                 Spacer()
                 
-                // Working directory indicator
-                if let workingDir = block.workingDirectory {
-                    let displayPath = workingDir.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ? 
-                        "~\(String(workingDir.dropFirst(FileManager.default.homeDirectoryForCurrentUser.path.count)))" : workingDir
-                    Text(displayPath)
-                        .font(getFont(size: max(11, CGFloat(userSettings.themeConfiguration.fontSize - 2))))
-                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.7))
-                        .lineLimit(1)
+                // Metadata badges (Stage 2: Enhanced block info)
+                HStack(spacing: 8) {
+                    // Duration badge
+                    if let duration = block.formattedDuration {
+                        Text(duration)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(userSettings.themeConfiguration.textColor.color.opacity(0.08))
+                            )
+                    }
+                    
+                    // Category badge
+                    CategoryBadge(category: block.category)
+                        .environmentObject(userSettings)
+                    
+                    // Working directory indicator
+                    if let workingDir = block.workingDirectory {
+                        let displayPath = workingDir.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ? 
+                            "~\(String(workingDir.dropFirst(FileManager.default.homeDirectoryForCurrentUser.path.count)))" : workingDir
+                        Text(displayPath)
+                            .font(getFont(size: max(11, CGFloat(userSettings.themeConfiguration.fontSize - 2))))
+                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+                            .lineLimit(1)
+                    }
+                    
+                    // Collapse/Expand button for long output (Stage 3: Block summaries)
+                    if block.output.count > 200 {
+                        Button(action: { isExpanded.toggle() }) {
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
                 }
             }
             
-            // Command output
+            // Command output (collapsible for Stage 3)
             if !block.output.isEmpty {
-                Text(block.output)
-                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
-                    .textSelection(.enabled)
-                    .padding(.leading, 20)
+                VStack(alignment: .leading, spacing: 4) {
+                    if isExpanded {
+                        Text(block.output)
+                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
+                            .textSelection(.enabled)
+                    } else {
+                        // Show summary when collapsed (Stage 3: Block summaries)
+                        HStack {
+                            Text(block.autoSummary)
+                                .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize - 1)))
+                                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
+                                .italic()
+                            
+                            Spacer()
+                            
+                            Text("Click to expand")
+                                .font(.system(size: 10))
+                                .foregroundColor(userSettings.themeConfiguration.accentColor.color.opacity(0.7))
+                        }
+                        .onTapGesture { isExpanded = true }
+                    }
+                }
+                .padding(.leading, 20)
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    userSettings.themeConfiguration.isDarkMode ?
-                        SwiftUI.Color.white.opacity(0.05) :
-                        SwiftUI.Color.black.opacity(0.04)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(
-                            userSettings.themeConfiguration.isDarkMode ?
-                                SwiftUI.Color.white.opacity(0.10) :
-                                SwiftUI.Color.black.opacity(0.08),
-                            lineWidth: 1
-                        )
-                )
+            ZStack {
+                // Liquid glass background
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+                
+                // Gradient border with status color accent
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                block.statusColor.opacity(0.4),
+                                .white.opacity(0.1),
+                                block.statusColor.opacity(0.2)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
         )
-        .shadow(color: SwiftUI.Color.black.opacity(userSettings.themeConfiguration.isDarkMode ? 0.2 : 0.08), radius: 4, x: 0, y: 2)
+        .shadow(color: block.statusColor.opacity(0.15), radius: 8, x: 0, y: 4)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
     }
     
     private func getFont(size: CGFloat) -> Font {
@@ -412,5 +493,59 @@ struct TerminalBlockView: View {
             return .custom(family, size: size)
         }
         return .system(size: size, design: .monospaced)
+    }
+}
+
+// MARK: - Category Badge (Stage 2: Command categorization UI)
+struct CategoryBadge: View {
+    let category: CommandCategory
+    @EnvironmentObject private var userSettings: UserSettings
+    
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: categoryIcon)
+                .font(.system(size: 8))
+            Text(category.rawValue)
+                .font(.system(size: 9, weight: .medium))
+        }
+        .foregroundColor(categoryColor.opacity(0.8))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(categoryColor.opacity(0.1))
+            }
+        )
+    }
+    
+    private var categoryIcon: String {
+        switch category {
+        case .fileOperation: return "doc"
+        case .navigation: return "folder"
+        case .gitOperation: return "arrow.triangle.branch"
+        case .packageManager: return "shippingbox"
+        case .process: return "gear"
+        case .networkOperation: return "network"
+        case .development: return "hammer"
+        case .shell: return "terminal"
+        case .unknown: return "questionmark"
+        }
+    }
+    
+    private var categoryColor: SwiftUI.Color {
+        switch category {
+        case .fileOperation: return .blue
+        case .navigation: return .orange
+        case .gitOperation: return .purple
+        case .packageManager: return .green
+        case .process: return .red
+        case .networkOperation: return .cyan
+        case .development: return .yellow
+        case .shell: return .gray
+        case .unknown: return .gray
+        }
     }
 }

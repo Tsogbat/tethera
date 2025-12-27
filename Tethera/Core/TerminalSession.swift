@@ -170,7 +170,7 @@ class TerminalSession: ObservableObject {
         writeQueue.async { [weak self] in
             guard let self = self else { return }
             _ = data.withUnsafeBytes { bytes in
-                unistd.write(self.masterFD, bytes.baseAddress, data.count)
+                Darwin.write(self.masterFD, bytes.baseAddress, data.count)
             }
         }
     }

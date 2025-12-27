@@ -18,6 +18,9 @@ struct NativeSettingsView: View {
                 TabButton(title: "Terminal", isSelected: selectedTab == 1) {
                     selectedTab = 1
                 }
+                TabButton(title: "AI", isSelected: selectedTab == 2) {
+                    selectedTab = 2
+                }
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -31,8 +34,10 @@ struct NativeSettingsView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if selectedTab == 0 {
                         AppearanceSettings()
-                    } else {
+                    } else if selectedTab == 1 {
                         TerminalSettings()
+                    } else {
+                        AISettingsView()
                     }
                 }
                 .padding(20)
@@ -426,6 +431,205 @@ struct SliderRow: View {
             }
             
             Slider(value: $value, in: range, step: step)
+        }
+    }
+}
+
+// MARK: - AI Settings View (Stage 2-6: AI Layer Configuration)
+
+struct AISettingsView: View {
+    @EnvironmentObject private var userSettings: UserSettings
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Master Toggle
+            SettingsGroup(title: "AI Assistant", icon: "brain") {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Enable AI Features")
+                                .font(.custom("JetBrains Mono", size: 13))
+                            Text("AI never auto-executes commands")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { userSettings.aiSettings.isEnabled },
+                            set: { newValue in
+                                userSettings.aiSettings.isEnabled = newValue
+                                userSettings.saveSettings()
+                            }
+                        ))
+                        .toggleStyle(SwitchToggleStyle())
+                    }
+                    
+                    if userSettings.aiSettings.isEnabled {
+                        Divider()
+                        
+                        // Provider Selection
+                        HStack {
+                            HStack(spacing: 8) {
+                                Image(systemName: userSettings.aiSettings.provider.icon)
+                                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                                Text("AI Provider")
+                                    .font(.custom("JetBrains Mono", size: 13))
+                            }
+                            Spacer()
+                            Picker("", selection: Binding(
+                                get: { userSettings.aiSettings.provider },
+                                set: { newValue in
+                                    userSettings.aiSettings.provider = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )) {
+                                ForEach(AIProvider.allCases, id: \.self) { provider in
+                                    Text(provider.displayName).tag(provider)
+                                }
+                            }
+                            .pickerStyle(MenuPickerStyle())
+                            .frame(width: 150)
+                        }
+                    }
+                }
+            }
+            
+            if userSettings.aiSettings.isEnabled {
+                // Features
+                SettingsGroup(title: "Features", icon: "sparkles") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        NativeToggleRow(
+                            title: "Inline Command Help",
+                            description: "Show explanations for commands",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.showInlineHelp },
+                                set: { newValue in
+                                    userSettings.aiSettings.showInlineHelp = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                        
+                        NativeToggleRow(
+                            title: "Error Explanations",
+                            description: "Explain command failures",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.showErrorExplanations },
+                                set: { newValue in
+                                    userSettings.aiSettings.showErrorExplanations = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                        
+                        NativeToggleRow(
+                            title: "Block Summaries",
+                            description: "Auto-summarize long output",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.enableBlockSummaries },
+                                set: { newValue in
+                                    userSettings.aiSettings.enableBlockSummaries = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                        
+                        NativeToggleRow(
+                            title: "Command Generation",
+                            description: "Generate commands from prompts",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.enableCommandGeneration },
+                                set: { newValue in
+                                    userSettings.aiSettings.enableCommandGeneration = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                    }
+                }
+                
+                // Safety & Privacy
+                SettingsGroup(title: "Safety & Privacy", icon: "shield.fill") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        NativeToggleRow(
+                            title: "Offline Fallback",
+                            description: "Use man pages when offline",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.enableOfflineFallback },
+                                set: { newValue in
+                                    userSettings.aiSettings.enableOfflineFallback = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                        
+                        NativeToggleRow(
+                            title: "Allow Network Calls",
+                            description: "Enable AI API requests",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.allowNetworkCalls },
+                                set: { newValue in
+                                    userSettings.aiSettings.allowNetworkCalls = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                        
+                        Divider()
+                        
+                        NativeToggleRow(
+                            title: "Warn on Destructive Commands",
+                            description: "Alert before rm, sudo, kill, etc.",
+                            isOn: Binding(
+                                get: { userSettings.aiSettings.warnOnDestructiveOps },
+                                set: { newValue in
+                                    userSettings.aiSettings.warnOnDestructiveOps = newValue
+                                    userSettings.saveSettings()
+                                }
+                            )
+                        )
+                    }
+                }
+                
+                // Safety Notice
+                HStack(spacing: 12) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.blue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("AI Safety Rules")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("AI never auto-executes commands. You always see and confirm before execution.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(SwiftUI.Color.blue.opacity(0.1))
+                )
+            }
+        }
+    }
+}
+
+struct NativeToggleRow: View {
+    let title: String
+    let description: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.custom("JetBrains Mono", size: 13))
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .toggleStyle(SwitchToggleStyle())
         }
     }
 }

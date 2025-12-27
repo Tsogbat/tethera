@@ -10,7 +10,8 @@ struct TerminalApp: App {
             TabbedTerminalView()
                 .environmentObject(userSettings)
         }
-        .windowStyle(HiddenTitleBarWindowStyle())
+        // Don't hide title bar - we need traffic lights visible
+        .windowStyle(.automatic)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
@@ -20,29 +21,36 @@ struct TerminalApp: App {
             }
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 900, height: 600)
+        .defaultSize(width: 960, height: 640)
     }
 }
 
-// Add NSApplicationDelegate to handle app activation
+// MARK: - App Delegate for window configuration
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Bring the app to front and activate it
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         
-        // Make sure the window comes to front
-        if let window = NSApp.windows.first {
-            window.makeKeyAndOrderFront(nil)
-            window.orderFrontRegardless()
-            
-            // Set window properties for better appearance
-            window.backgroundColor = NSColor(red: 0.06, green: 0.07, blue: 0.10, alpha: 1.0)
-            // Restrict window dragging to explicit drag areas (e.g., the tab bar)
-            window.isMovableByWindowBackground = false
-            window.titlebarAppearsTransparent = true
-            window.titlebarSeparatorStyle = .none
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.configureWindow()
         }
+    }
+    
+    private func configureWindow() {
+        guard let window = NSApp.windows.first else { return }
+        
+        window.makeKeyAndOrderFront(nil)
+        
+        // Make titlebar transparent so tabs blend with it
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.backgroundColor = NSColor(red: 0.11, green: 0.11, blue: 0.13, alpha: 1.0)
+        
+        // Allow content to extend into titlebar area
+        window.styleMask.insert(.fullSizeContentView)
+        
+        window.minSize = NSSize(width: 600, height: 400)
+        window.isMovableByWindowBackground = false
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

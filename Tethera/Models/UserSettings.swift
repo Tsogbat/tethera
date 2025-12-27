@@ -48,12 +48,70 @@ struct DeveloperSettings: Codable, Equatable {
     var showMinimap: Bool = false
 }
 
+// MARK: - AI Settings (Stage 2-6: AI Layer Configuration)
+struct AISettings: Codable, Equatable {
+    /// Master toggle for AI features (Stage 2: AI opt-in)
+    var isEnabled: Bool = false
+    
+    /// Selected AI provider (Stage 2: Local model toggle)
+    var provider: AIProvider = .none
+    
+    /// Whether AI can make network calls (Stage 2: No network without approval)
+    var allowNetworkCalls: Bool = false
+    
+    /// Enable offline fallback using man pages (Stage 2: Offline capability)
+    var enableOfflineFallback: Bool = true
+    
+    /// Show inline command help (Stage 2: Inline Command Help)
+    var showInlineHelp: Bool = true
+    
+    /// Show error explanations (Stage 2: Error Explanation)
+    var showErrorExplanations: Bool = true
+    
+    /// Enable command generation (Stage 3: Generate Commands with Guardrails)
+    var enableCommandGeneration: Bool = false
+    
+    /// Enable block summaries (Stage 3: Block Summaries)
+    var enableBlockSummaries: Bool = true
+    
+    /// Enable history semantic search (Stage 3: History Semantic Search)
+    var enableSemanticSearch: Bool = false
+    
+    /// Warn before destructive operations (Stage 7: Safety Rule 4)
+    var warnOnDestructiveOps: Bool = true
+    
+    /// List of commands that require extra confirmation
+    var destructiveCommands: [String] = ["rm", "sudo", "rmdir", "kill", "killall"]
+}
+
+/// AI Provider options (Stage 2: Local model toggle)
+enum AIProvider: String, Codable, CaseIterable {
+    case none = "Disabled"
+    case claude = "Claude"
+    case openai = "OpenAI"
+    case gemini = "Gemini"
+    case local = "Local (Ollama)"
+    
+    var displayName: String { rawValue }
+    
+    var icon: String {
+        switch self {
+        case .none: return "xmark.circle"
+        case .claude: return "brain"
+        case .openai: return "sparkles"
+        case .gemini: return "star"
+        case .local: return "desktopcomputer"
+        }
+    }
+}
+
 // MARK: - Theme Preset Model
 struct ThemePreset: Identifiable, Codable, Equatable {
     let id: String
     let name: String
     let configuration: ThemeConfiguration
 }
+
 
 // MARK: - Codable Color Wrapper
 struct CodableColor: Codable, Equatable {
@@ -90,6 +148,7 @@ struct CodableColor: Codable, Equatable {
 class UserSettings: ObservableObject, @unchecked Sendable {
     @Published var themeConfiguration = ThemeConfiguration()
     @Published var developerSettings = DeveloperSettings()
+    @Published var aiSettings = AISettings() // Stage 2-6: AI Layer Configuration
     @Published var selectedThemeId: String? = nil
     
     
@@ -114,6 +173,11 @@ class UserSettings: ObservableObject, @unchecked Sendable {
             userDefaults.set(devData, forKey: "TetheraDeveloperSettings")
         }
         
+        // Save AI settings (Stage 2-6)
+        if let aiData = try? JSONEncoder().encode(aiSettings) {
+            userDefaults.set(aiData, forKey: "TetheraAISettings")
+        }
+        
         // Notify other components that settings have changed
         NotificationCenter.default.post(name: NSNotification.Name("SettingsChanged"), object: nil)
     }
@@ -133,6 +197,12 @@ class UserSettings: ObservableObject, @unchecked Sendable {
         if let devData = userDefaults.data(forKey: "TetheraDeveloperSettings"),
            let dev = try? JSONDecoder().decode(DeveloperSettings.self, from: devData) {
             developerSettings = dev
+        }
+        
+        // Load AI settings (Stage 2-6)
+        if let aiData = userDefaults.data(forKey: "TetheraAISettings"),
+           let ai = try? JSONDecoder().decode(AISettings.self, from: aiData) {
+            aiSettings = ai
         }
     }
     

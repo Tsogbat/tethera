@@ -13,10 +13,14 @@ class BlockTerminalViewModel: ObservableObject {
     private var userSettings = UserSettings()
     @Published var paletteActions: [String] = ["New Tab", "Split Pane", "Settings"]
     
-    // Command history
+    // Command history with persistence (Stage 1: History metadata)
     @Published var commandHistory: [String] = []
     private var historyIndex: Int? = nil
     private var historyDraft: String = ""
+    
+    // Persistent history storage key
+    private static let historyKey = "TetheraCommandHistory"
+    private static let maxHistorySize = 500
     
     init() {
         // Initialize theme from user settings
@@ -24,6 +28,9 @@ class BlockTerminalViewModel: ObservableObject {
         
         // Load the JetBrains Mono font
         FontLoader.shared.loadJetBrainsMono()
+        
+        // Load persisted command history (Stage 1: History persistence)
+        loadHistory()
         
         // Demo block so UI is not blank
         blocks.append(TerminalBlock.example)
@@ -40,59 +47,104 @@ class BlockTerminalViewModel: ObservableObject {
         }
     }
     
+    // Note: History is saved immediately on each command via saveHistory()
+    
     private func updateTheme() {
         theme = TerminalTheme(from: userSettings.themeConfiguration)
     }
+    
+    // MARK: - History Persistence (Stage 1)
+    
+    private func loadHistory() {
+        if let savedHistory = UserDefaults.standard.stringArray(forKey: Self.historyKey) {
+            commandHistory = savedHistory
+        }
+    }
+    
+    private static func saveHistoryToDefaults(_ history: [String]) {
+        // Keep only the last N entries
+        let trimmed = Array(history.suffix(maxHistorySize))
+        UserDefaults.standard.set(trimmed, forKey: historyKey)
+    }
+    
+    private func saveHistory() {
+        Self.saveHistoryToDefaults(commandHistory)
+    }
 
-    func addBlock(input: String, output: String, success: Bool? = nil) {
-        let block = TerminalBlock(input: input, output: output, timestamp: Date(), workingDirectory: workingDirectory, success: success)
+    func addBlock(input: String, output: String, success: Bool? = nil, exitCode: Int32? = nil, durationMs: Int64? = nil) {
+        let block = TerminalBlock(
+            input: input,
+            output: output,
+            timestamp: Date(),
+            workingDirectory: workingDirectory,
+            success: success ?? (exitCode == 0),
+            exitCode: exitCode,
+            durationMs: durationMs
+        )
         blocks.append(block)
     }
 
     /// Run a shell command and append a new block with the result
     func runShellCommand(_ input: String) {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        
         // Push to history (avoid consecutive duplicates)
         if !trimmed.isEmpty {
-            if commandHistory.last != trimmed { commandHistory.append(trimmed) }
+            if commandHistory.last != trimmed { 
+                commandHistory.append(trimmed)
+                saveHistory()
+            }
             historyIndex = nil
             historyDraft = ""
         }
+        
+        // Built-in commands
         if trimmed == "clear" {
             blocks.removeAll()
             return
         }
+        
         if trimmed.hasPrefix("cd ") || trimmed == "cd" {
-            let path = trimmed == "cd" ? "" : String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-            let newDir: String
-            
-            if path.isEmpty || path == "~" {
-                // cd with no arguments or cd ~ goes to home directory
-                newDir = FileManager.default.homeDirectoryForCurrentUser.path
-            } else if path.hasPrefix("/") {
-                // Absolute path
-                newDir = path
-            } else if path.hasPrefix("~/") {
-                // Home directory relative path
-                let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-                newDir = homePath + String(path.dropFirst(1))
-            } else {
-                // Relative path - use NSString.standardizingPath to resolve .. and .
-                let tentativePath = (workingDirectory as NSString).appendingPathComponent(path)
-                newDir = (tentativePath as NSString).standardizingPath
-            }
-            
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: newDir, isDirectory: &isDir), isDir.boolValue {
-                workingDirectory = newDir
-                addBlock(input: input, output: "", success: true)
-            } else {
-                addBlock(input: input, output: "cd: no such directory: \(path)", success: false)
-            }
+            handleCdCommand(trimmed)
             return
         }
-        let output = Self.runCommandSync(input, in: workingDirectory)
-        addBlock(input: input, output: output, success: nil)
+        
+        // Execute external command with timing (Stage 2: Exit code capture)
+        let result = Self.runCommandSyncWithMetadata(trimmed, in: workingDirectory)
+        addBlock(
+            input: trimmed,
+            output: result.output,
+            success: result.exitCode == 0,
+            exitCode: result.exitCode,
+            durationMs: result.durationMs
+        )
+    }
+    
+    /// Handle cd command separately
+    private func handleCdCommand(_ input: String) {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = trimmed == "cd" ? "" : String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        let newDir: String
+        
+        if path.isEmpty || path == "~" {
+            newDir = FileManager.default.homeDirectoryForCurrentUser.path
+        } else if path.hasPrefix("/") {
+            newDir = path
+        } else if path.hasPrefix("~/") {
+            let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+            newDir = homePath + String(path.dropFirst(1))
+        } else {
+            let tentativePath = (workingDirectory as NSString).appendingPathComponent(path)
+            newDir = (tentativePath as NSString).standardizingPath
+        }
+        
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: newDir, isDirectory: &isDir), isDir.boolValue {
+            workingDirectory = newDir
+            addBlock(input: input, output: "", success: true, exitCode: 0, durationMs: 0)
+        } else {
+            addBlock(input: input, output: "cd: no such directory: \(path)", success: false, exitCode: 1, durationMs: 0)
+        }
     }
 
     // MARK: - History Navigation
@@ -123,6 +175,21 @@ class BlockTerminalViewModel: ObservableObject {
 
     /// Synchronously run a shell command and return its output
     static func runCommandSync(_ command: String, in directory: String) -> String {
+        let result = runCommandSyncWithMetadata(command, in: directory)
+        return result.output
+    }
+    
+    /// Command execution result with metadata (Stage 2: Enhanced command tracking)
+    struct CommandResult {
+        let output: String
+        let exitCode: Int32
+        let durationMs: Int64
+    }
+    
+    /// Synchronously run a shell command and return output with metadata
+    static func runCommandSyncWithMetadata(_ command: String, in directory: String) -> CommandResult {
+        let startTime = DispatchTime.now()
+        
         let process = Process()
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -130,14 +197,24 @@ class BlockTerminalViewModel: ObservableObject {
         process.launchPath = "/bin/bash"
         process.arguments = ["-c", command]
         process.currentDirectoryPath = directory
+        
         do {
             try process.run()
         } catch {
-            return "Error: \(error.localizedDescription)"
+            let endTime = DispatchTime.now()
+            let durationMs = Int64((endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000)
+            return CommandResult(output: "Error: \(error.localizedDescription)", exitCode: -1, durationMs: durationMs)
         }
+        
         process.waitUntilExit()
+        
+        let endTime = DispatchTime.now()
+        let durationMs = Int64((endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000)
+        
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+        let output = String(data: data, encoding: .utf8) ?? ""
+        
+        return CommandResult(output: output, exitCode: process.terminationStatus, durationMs: durationMs)
     }
 
 

@@ -9,7 +9,6 @@ struct TabbedTerminalView: View {
     
     init() {
         let tm = TabManager()
-        // Ensure SplitPaneManager starts with the same active tab
         let manager = SplitPaneManager(initialTab: tm.tabs.first ?? Tab())
         self._tabManager = StateObject(wrappedValue: tm)
         self._splitPaneManager = StateObject(wrappedValue: manager)
@@ -17,17 +16,8 @@ struct TabbedTerminalView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Tab bar - draggable area for window
-            TabBarView(
-                tabManager: tabManager, 
-                splitPaneManager: splitPaneManager,
-                onTabSplit: { showSplitView = true }
-            )
-            .background(userSettings.themeConfiguration.backgroundColor.color)
-            
-            // Content area - show either single tab or split view
+            // Content area
             if let activeTab = tabManager.activeTab, activeTab.isSettingsTab {
-                // Show Settings inline as a tab content
                 NativeSettingsView()
             } else if showSplitView {
                 SplitPaneView(
@@ -37,7 +27,6 @@ struct TabbedTerminalView: View {
                     onSplit: { showSplitView = true }
                 )
             } else {
-                // Show active tab content directly, but still accept drops to initiate split view
                 RootDroppableSinglePane(
                     splitPaneManager: splitPaneManager,
                     tabManager: tabManager,
@@ -46,6 +35,15 @@ struct TabbedTerminalView: View {
             }
         }
         .background(userSettings.themeConfiguration.backgroundColor.color)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                TabBarContent(
+                    tabManager: tabManager,
+                    splitPaneManager: splitPaneManager,
+                    onTabSplit: { showSplitView = true }
+                )
+            }
+        }
         .preferredColorScheme(userSettings.themeConfiguration.isDarkMode ? .dark : .light)
         .onAppear {
             // Set up keyboard shortcut handling
@@ -70,52 +68,6 @@ struct TabbedTerminalView: View {
                     tabManager.openSettingsTab()
                 }
             }
-        }
-    }
-}
-
-// MARK: - Window Drag Area
-
-struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-        return view
-    }
-    
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // Enable window dragging for this view
-        DispatchQueue.main.async {
-            if let window = nsView.window {
-                nsView.addGestureRecognizer(NSPanGestureRecognizer(target: WindowDragHandler(window: window), action: #selector(WindowDragHandler.handlePan(_:))))
-            }
-        }
-    }
-}
-
-class WindowDragHandler: NSObject {
-    weak var window: NSWindow?
-    
-    init(window: NSWindow) {
-        self.window = window
-        super.init()
-    }
-    
-    @objc func handlePan(_ gesture: NSPanGestureRecognizer) {
-        guard let window = window else { return }
-        
-        switch gesture.state {
-        case .began:
-            window.performDrag(with: NSEvent())
-        case .changed:
-            let translation = gesture.translation(in: gesture.view)
-            let currentLocation = window.frame.origin
-            let newLocation = NSPoint(x: currentLocation.x + translation.x, y: currentLocation.y - translation.y)
-            window.setFrameOrigin(newLocation)
-            gesture.setTranslation(.zero, in: gesture.view)
-        default:
-            break
         }
     }
 }
