@@ -22,7 +22,7 @@ class CommandHistoryManager: ObservableObject {
         let timestamp: Date
         let workingDirectory: String
         let success: Bool?
-        let executionDuration: TimeInterval?
+        let durationMs: Int64?
         let tabId: UUID?
         
         init(from block: TerminalBlock, tabId: UUID? = nil) {
@@ -32,18 +32,18 @@ class CommandHistoryManager: ObservableObject {
             self.timestamp = block.timestamp
             self.workingDirectory = block.workingDirectory ?? "~"
             self.success = block.success
-            self.executionDuration = block.executionDuration
+            self.durationMs = block.durationMs
             self.tabId = tabId
         }
         
-        init(id: UUID = UUID(), command: String, output: String, timestamp: Date, workingDirectory: String, success: Bool?, executionDuration: TimeInterval?, tabId: UUID?) {
+        init(id: UUID = UUID(), command: String, output: String, timestamp: Date, workingDirectory: String, success: Bool?, durationMs: Int64?, tabId: UUID?) {
             self.id = id
             self.command = command
             self.output = output
             self.timestamp = timestamp
             self.workingDirectory = workingDirectory
             self.success = success
-            self.executionDuration = executionDuration
+            self.durationMs = durationMs
             self.tabId = tabId
         }
     }
