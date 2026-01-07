@@ -47,7 +47,7 @@ deps:
 # Show project structure
 structure:
 	@echo "Project Structure:"
-	@find Terminal -name "*.swift" -o -name "*.metal" | sort
+	@find Tethera -name "*.swift" -o -name "*.metal" | sort
 
 # Help
 help:

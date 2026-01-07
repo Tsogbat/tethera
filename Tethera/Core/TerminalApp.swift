@@ -19,6 +19,16 @@ struct TerminalApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            
+            // Search menu
+            CommandGroup(after: .textEditing) {
+                Button("Search History...") {
+                    Task { @MainActor in
+                        CommandHistoryManager.shared.openSearch()
+                    }
+                }
+                .keyboardShortcut("f", modifiers: .command)
+            }
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 960, height: 640)

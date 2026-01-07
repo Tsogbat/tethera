@@ -143,34 +143,14 @@ struct AppearanceSettings: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Theme Gallery
+            // Theme Gallery - primary way to change appearance
             SettingsGroup(title: "Theme Gallery", icon: "paintpalette") {
                 ThemeGalleryView()
             }
             
-            SettingsGroup(title: "Theme", icon: "moon.fill") {
+            // Line Spacing setting (moved out of removed Theme section)
+            SettingsGroup(title: "Text Display", icon: "text.alignleft") {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Appearance")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Picker("", selection: Binding(
-                            get: { userSettings.themeConfiguration.isDarkMode ? 1 : 0 },
-                            set: { newValue in
-                                if newValue == 1 {
-                                    userSettings.applyDarkTheme()
-                                } else {
-                                    userSettings.applyLightTheme()
-                                }
-                            }
-                        )) {
-                            Text("Light").tag(0)
-                            Text("Dark").tag(1)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .frame(width: 120)
-                    }
-                    
                     SliderRow(
                         title: "Line Spacing",
                         icon: "text.line.first.and.arrowtriangle.forward",
