@@ -10,8 +10,7 @@ struct TerminalApp: App {
             TabbedTerminalView()
                 .environmentObject(userSettings)
         }
-        // Don't hide title bar - we need traffic lights visible
-        .windowStyle(.automatic)
+        .windowStyle(HiddenTitleBarWindowStyle())
         .commands {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
@@ -51,13 +50,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         window.makeKeyAndOrderFront(nil)
         
-        // Make titlebar transparent so tabs blend with it
+        // Full transparent title bar - no text, no background
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.backgroundColor = NSColor(red: 0.11, green: 0.11, blue: 0.13, alpha: 1.0)
+        window.title = "" // Remove title text completely
         
-        // Allow content to extend into titlebar area
+        // Make titlebar separator invisible
+        window.titlebarSeparatorStyle = .none
+        
+        // Allow full content under title bar
         window.styleMask.insert(.fullSizeContentView)
+        
+        // Keep traffic lights visible
+        window.standardWindowButton(.closeButton)?.isHidden = false
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+        window.standardWindowButton(.zoomButton)?.isHidden = false
         
         window.minSize = NSSize(width: 600, height: 400)
         window.isMovableByWindowBackground = false

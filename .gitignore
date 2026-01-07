@@ -148,6 +148,7 @@ test_terminal.sh
 # Note: The following files SHOULD be committed:
 # - icon.png (source icon file)
 RELEASE_GUIDE.md 
+ROADMAP.md
 # - # - All source code and configuration files
 # - Package.swift, Makefile, etc.
 

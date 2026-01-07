@@ -16,6 +16,13 @@ struct TabbedTerminalView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            // Tab bar at top with space for traffic lights
+            TabBarContent(
+                tabManager: tabManager,
+                splitPaneManager: splitPaneManager,
+                onTabSplit: { showSplitView = true }
+            )
+            
             // Content area
             if let activeTab = tabManager.activeTab, activeTab.isSettingsTab {
                 NativeSettingsView()
@@ -34,16 +41,8 @@ struct TabbedTerminalView: View {
                 )
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(userSettings.themeConfiguration.backgroundColor.color)
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                TabBarContent(
-                    tabManager: tabManager,
-                    splitPaneManager: splitPaneManager,
-                    onTabSplit: { showSplitView = true }
-                )
-            }
-        }
         .preferredColorScheme(userSettings.themeConfiguration.isDarkMode ? .dark : .light)
         .onAppear {
             // Set up keyboard shortcut handling
