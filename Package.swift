@@ -27,7 +27,8 @@ let package = Package(
             resources: [
                 .process("Core/Shaders.metal"),
                 .process("Assets.xcassets"),
-                .process("Fonts") 
+                .process("Fonts"),
+                .copy("Resources/shell")
             ]
         )
     ]

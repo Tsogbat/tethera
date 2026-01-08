@@ -3,7 +3,7 @@ import SwiftUI
 import CoreText
 
 @MainActor
-class BlockTerminalViewModel: ObservableObject {
+class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     @Published var workingDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path {
         didSet { _displayWorkingDirectory = nil } // Invalidate cache
     }
@@ -20,22 +20,28 @@ class BlockTerminalViewModel: ObservableObject {
     private var historyIndex: Int? = nil
     private var historyDraft: String = ""
     
+    // PTY session for persistent shell
+    private var terminalSession: TerminalSession?
+    private var pendingCommand: String = ""
+    private var currentBlockOutput = ""
+    
     // Cached values for performance
     private var _displayWorkingDirectory: String?
     private static var _cachedFont: Font?
     private static let maxHistorySize = 500
     
     init() {
-        // Initialize theme - use shared UserSettings when available via EnvironmentObject
+        // Initialize theme
         self.theme = TerminalTheme.defaultTheme
         
-        // Load command history (fonts loaded at app startup, not here)
+        // Load command history
         if let saved = UserDefaults.standard.stringArray(forKey: "command_history") {
             commandHistory = saved
         }
         
-        // Demo block so UI is not blank
-        blocks.append(TerminalBlock.example)
+        // Initialize PTY session
+        terminalSession = TerminalSession()
+        terminalSession?.blockDelegate = self
         
         // Listen for settings changes
         NotificationCenter.default.addObserver(
@@ -51,7 +57,44 @@ class BlockTerminalViewModel: ObservableObject {
         }
     }
     
-    // MARK: - History Management (Async Save)
+    // MARK: - TerminalBlockDelegate
+    
+    nonisolated func terminalDidStartPrompt() {
+        Task { @MainActor in
+            self.isRunningCommand = false
+        }
+    }
+    
+    nonisolated func terminalDidStartCommand() {
+        Task { @MainActor in
+            self.isRunningCommand = true
+            self.currentBlockOutput = ""
+        }
+    }
+    
+    nonisolated func terminalDidReceiveOutput(_ output: String) {
+        Task { @MainActor in
+            self.currentBlockOutput += output
+        }
+    }
+    
+    nonisolated func terminalDidEndCommand(exitCode: Int) {
+        Task { @MainActor in
+            let block = TerminalBlock(
+                input: self.pendingCommand,
+                output: self.currentBlockOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+                timestamp: Date(),
+                workingDirectory: self.workingDirectory,
+                success: exitCode == 0
+            )
+            self.blocks.append(block)
+            CommandHistoryManager.shared.addEntry(from: block)
+            
+            self.pendingCommand = ""
+            self.currentBlockOutput = ""
+            self.isRunningCommand = false
+        }
+    }
     
     private func saveHistoryAsync() {
         let history = Array(commandHistory.suffix(Self.maxHistorySize))
@@ -96,20 +139,26 @@ class BlockTerminalViewModel: ObservableObject {
             return
         }
         
-        // Handle cd command (instant, no async needed)
-        if trimmed.hasPrefix("cd ") || trimmed == "cd" {
-            handleCdCommand(trimmed, originalInput: input)
-            return
-        }
+        // Store pending command for block creation in delegate
+        pendingCommand = trimmed
         
-        // External commands - run async
+        // Send command to PTY session
+        if let session = terminalSession {
+            session.write(trimmed + "\n")
+        } else {
+            // Fallback to one-off Process if PTY not available
+            fallbackRunCommand(trimmed, originalInput: input)
+        }
+    }
+    
+    private func fallbackRunCommand(_ command: String, originalInput: String) {
         isRunningCommand = true
         let directory = workingDirectory
         
         Task.detached(priority: .userInitiated) {
-            let output = Self.runCommand(trimmed, in: directory)
+            let output = Self.runCommand(command, in: directory)
             await MainActor.run {
-                self.addBlock(input: input, output: output, success: nil)
+                self.addBlock(input: originalInput, output: output, success: nil)
                 self.isRunningCommand = false
             }
         }
