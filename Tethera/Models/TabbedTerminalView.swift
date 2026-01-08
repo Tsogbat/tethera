@@ -26,8 +26,12 @@ struct TabbedTerminalView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Tab bar at top
-            TabBarContent(tabManager: tabManager)
+            // Tab bar at top - pass split state for indicators
+            TabBarContent(
+                tabManager: tabManager,
+                splitTabIds: [splitState.leftTabId, splitState.rightTabId].compactMap { $0 },
+                activeSplitTabId: splitState.isActive ? (splitState.focusedPane == 0 ? splitState.leftTabId : splitState.rightTabId) : nil
+            )
             
             // Content area
             GeometryReader { geo in
@@ -68,7 +72,14 @@ struct TabbedTerminalView: View {
             let isInSplit = newId == splitState.leftTabId || newId == splitState.rightTabId
             
             if splitState.isActive {
-                if !isInSplit {
+                if isInSplit {
+                    // Update focused pane to match clicked tab
+                    if newId == splitState.leftTabId {
+                        splitState.focusedPane = 0
+                    } else if newId == splitState.rightTabId {
+                        splitState.focusedPane = 1
+                    }
+                } else {
                     // User clicked a tab outside the split - hide split but keep tab IDs
                     withAnimation(.easeInOut(duration: 0.2)) {
                         splitState.isActive = false
@@ -78,15 +89,34 @@ struct TabbedTerminalView: View {
             } else {
                 // Not currently in split mode - check if clicked tab is in saved split
                 if isInSplit && splitState.leftTabId != nil && splitState.rightTabId != nil {
-                    // Restore split view
+                    // Restore split view and set focused pane
                     withAnimation(.easeInOut(duration: 0.2)) {
                         splitState.isActive = true
+                        splitState.focusedPane = (newId == splitState.leftTabId) ? 0 : 1
                     }
                 }
             }
         }
         .onAppear {
             setupKeyboardShortcuts()
+            setupTabCloseHandler()
+        }
+    }
+    
+    // MARK: - Handle Tab Closure
+    private func setupTabCloseHandler() {
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("TabClosed"), object: nil, queue: .main) { notification in
+            guard let tabId = notification.userInfo?["tabId"] as? UUID else { return }
+            Task { @MainActor in
+                // Clear split state if closed tab was in split
+                if tabId == splitState.leftTabId || tabId == splitState.rightTabId {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        splitState.isActive = false
+                        splitState.leftTabId = nil
+                        splitState.rightTabId = nil
+                    }
+                }
+            }
         }
     }
     

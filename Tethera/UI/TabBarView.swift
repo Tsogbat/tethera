@@ -4,6 +4,8 @@ import AppKit
 // MARK: - Tab Bar (Chrome Style)
 struct TabBarContent: View {
     @ObservedObject var tabManager: TabManager
+    var splitTabIds: [UUID] = []
+    var activeSplitTabId: UUID? = nil
     @EnvironmentObject private var userSettings: UserSettings
     @State private var draggedTab: Tab?
     
@@ -16,11 +18,13 @@ struct TabBarContent: View {
                         ChromeTabView(
                             tab: tab,
                             isActive: tab.id == tabManager.activeTabId,
+                            isInSplit: splitTabIds.contains(tab.id),
+                            isActiveSplitPane: tab.id == activeSplitTabId,
                             onSelect: { tabManager.setActiveTab(tab.id) },
                             onClose: { tabManager.closeTab(tab.id) },
                             onRename: { newName in tabManager.renameTab(tab.id, to: newName) }
                         )
-                        .id("\(tab.id)-\(tab.id == tabManager.activeTabId)")
+                        .id("\(tab.id)-\(tab.id == tabManager.activeTabId)-\(splitTabIds.contains(tab.id))-\(tab.id == activeSplitTabId)")
                         .onDrag {
                             draggedTab = tab
                             return NSItemProvider(object: tab.id.uuidString as NSString)
@@ -54,6 +58,8 @@ struct TabBarContent: View {
 struct ChromeTabView: View {
     @ObservedObject var tab: Tab
     let isActive: Bool
+    var isInSplit: Bool = false
+    var isActiveSplitPane: Bool = false
     let onSelect: () -> Void
     let onClose: () -> Void
     let onRename: (String) -> Void
@@ -66,10 +72,19 @@ struct ChromeTabView: View {
     
     var body: some View {
         HStack(spacing: 8) {
+            // Split indicator dot
+            if isInSplit {
+                Circle()
+                    .fill(isActiveSplitPane
+                        ? userSettings.themeConfiguration.accentColor.color
+                        : userSettings.themeConfiguration.textColor.color.opacity(0.4))
+                    .frame(width: 6, height: 6)
+            }
+            
             // Icon
             Image(systemName: tab.isSettingsTab ? "gearshape.fill" : "terminal.fill")
                 .font(.system(size: 11))
-                .foregroundColor(isActive
+                .foregroundColor(isActive || isActiveSplitPane
                     ? userSettings.themeConfiguration.accentColor.color
                     : userSettings.themeConfiguration.textColor.color.opacity(0.5))
             
@@ -114,28 +129,39 @@ struct ChromeTabView: View {
         .padding(.vertical, 8)
         .background(
             ZStack {
-                // Glass background for active/hovered tabs
-                if isActive || isHovered {
+                // Glass background for active/hovered/split tabs
+                if isActive || isHovered || isActiveSplitPane {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.ultraThinMaterial)
                     
-                    // Gradient border
+                    // Gradient border - accent for active split pane
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(isActive ? 0.2 : 0.08),
-                                    .white.opacity(isActive ? 0.08 : 0.02)
+                                    (isActiveSplitPane ? userSettings.themeConfiguration.accentColor.color : .white).opacity(isActive || isActiveSplitPane ? 0.3 : 0.08),
+                                    (isActiveSplitPane ? userSettings.themeConfiguration.accentColor.color : .white).opacity(isActive || isActiveSplitPane ? 0.1 : 0.02)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: isActive ? 1.5 : 1
+                            lineWidth: isActive || isActiveSplitPane ? 1.5 : 1
                         )
+                }
+                
+                // Subtle underline for inactive split tabs
+                if isInSplit && !isActiveSplitPane && !isActive && !isHovered {
+                    VStack {
+                        Spacer()
+                        Rectangle()
+                            .fill(userSettings.themeConfiguration.textColor.color.opacity(0.2))
+                            .frame(height: 2)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         )
-        .shadow(color: isActive ? .black.opacity(0.08) : .clear, radius: 4, x: 0, y: 2)
+        .shadow(color: isActive || isActiveSplitPane ? userSettings.themeConfiguration.accentColor.color.opacity(0.15) : .clear, radius: 6, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditing { onSelect() }
