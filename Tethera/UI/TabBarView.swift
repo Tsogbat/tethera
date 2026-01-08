@@ -4,27 +4,35 @@ import AppKit
 // MARK: - Tab Bar (Chrome Style)
 struct TabBarContent: View {
     @ObservedObject var tabManager: TabManager
-    var splitTabIds: [UUID] = []
-    var activeSplitTabId: UUID? = nil
+    var splitGroups: [SplitGroup] = []
+    var activeSplitGroupId: UUID? = nil
     @EnvironmentObject private var userSettings: UserSettings
     @State private var draggedTab: Tab?
     
+    // Helper to find split group for a tab
+    private func splitGroup(for tabId: UUID) -> SplitGroup? {
+        splitGroups.first { $0.contains(tabId) }
+    }
+    
     var body: some View {
         HStack(spacing: 0) {
-            // Scrollable tabs area
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
                     ForEach(tabManager.tabs) { tab in
+                        let group = splitGroup(for: tab.id)
+                        let isActiveSplitPane = group?.id == activeSplitGroupId && 
+                            (group?.focusedPane == 0 ? group?.leftTabId : group?.rightTabId) == tab.id
+                        
                         ChromeTabView(
                             tab: tab,
                             isActive: tab.id == tabManager.activeTabId,
-                            isInSplit: splitTabIds.contains(tab.id),
-                            isActiveSplitPane: tab.id == activeSplitTabId,
+                            splitGroupColor: group?.color,
+                            isActiveSplitPane: isActiveSplitPane,
                             onSelect: { tabManager.setActiveTab(tab.id) },
                             onClose: { tabManager.closeTab(tab.id) },
                             onRename: { newName in tabManager.renameTab(tab.id, to: newName) }
                         )
-                        .id("\(tab.id)-\(tab.id == tabManager.activeTabId)-\(splitTabIds.contains(tab.id))-\(tab.id == activeSplitTabId)")
+                        .id("\(tab.id)-\(tab.id == tabManager.activeTabId)-\(group?.id.uuidString ?? "none")")
                         .onDrag {
                             draggedTab = tab
                             return NSItemProvider(object: tab.id.uuidString as NSString)
@@ -36,7 +44,6 @@ struct TabBarContent: View {
                         ))
                     }
                     
-                    // New tab button
                     Button(action: { tabManager.createNewTab() }) {
                         Image(systemName: "plus")
                             .font(.system(size: 11, weight: .medium))
@@ -58,7 +65,7 @@ struct TabBarContent: View {
 struct ChromeTabView: View {
     @ObservedObject var tab: Tab
     let isActive: Bool
-    var isInSplit: Bool = false
+    var splitGroupColor: SwiftUI.Color? = nil  // Color if in a split group
     var isActiveSplitPane: Bool = false
     let onSelect: () -> Void
     let onClose: () -> Void
@@ -70,23 +77,26 @@ struct ChromeTabView: View {
     @State private var editingName = ""
     @FocusState private var isTextFieldFocused: Bool
     
+    private var isInSplit: Bool { splitGroupColor != nil }
+    
     var body: some View {
-        HStack(spacing: 8) {
-            // Split indicator dot
-            if isInSplit {
-                Circle()
-                    .fill(isActiveSplitPane
-                        ? userSettings.themeConfiguration.accentColor.color
-                        : userSettings.themeConfiguration.textColor.color.opacity(0.4))
-                    .frame(width: 6, height: 6)
+        HStack(spacing: 0) {
+            // Colored left border for split groups
+            if let color = splitGroupColor {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isActiveSplitPane ? color : color.opacity(0.5))
+                    .frame(width: 3)
+                    .padding(.vertical, 4)
+                    .padding(.trailing, 8)
             }
             
-            // Icon
-            Image(systemName: tab.isSettingsTab ? "gearshape.fill" : "terminal.fill")
-                .font(.system(size: 11))
-                .foregroundColor(isActive || isActiveSplitPane
-                    ? userSettings.themeConfiguration.accentColor.color
-                    : userSettings.themeConfiguration.textColor.color.opacity(0.5))
+            HStack(spacing: 8) {
+                // Icon
+                Image(systemName: tab.isSettingsTab ? "gearshape.fill" : "terminal.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(isActive || isActiveSplitPane
+                        ? (splitGroupColor ?? userSettings.themeConfiguration.accentColor.color)
+                        : userSettings.themeConfiguration.textColor.color.opacity(0.5))
             
             // Title
             if isEditing {
@@ -124,23 +134,23 @@ struct ChromeTabView: View {
                 }
                 .buttonStyle(.plain)
             }
+            }  // Close inner HStack
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
             ZStack {
-                // Glass background for active/hovered/split tabs
                 if isActive || isHovered || isActiveSplitPane {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.ultraThinMaterial)
                     
-                    // Gradient border - accent for active split pane
+                    // Border with split group color
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    (isActiveSplitPane ? userSettings.themeConfiguration.accentColor.color : .white).opacity(isActive || isActiveSplitPane ? 0.3 : 0.08),
-                                    (isActiveSplitPane ? userSettings.themeConfiguration.accentColor.color : .white).opacity(isActive || isActiveSplitPane ? 0.1 : 0.02)
+                                    (splitGroupColor ?? .white).opacity(isActive || isActiveSplitPane ? 0.4 : 0.08),
+                                    (splitGroupColor ?? .white).opacity(isActive || isActiveSplitPane ? 0.15 : 0.02)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -154,14 +164,14 @@ struct ChromeTabView: View {
                     VStack {
                         Spacer()
                         Rectangle()
-                            .fill(userSettings.themeConfiguration.textColor.color.opacity(0.2))
+                            .fill(splitGroupColor ?? userSettings.themeConfiguration.textColor.color.opacity(0.2))
                             .frame(height: 2)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
         )
-        .shadow(color: isActive || isActiveSplitPane ? userSettings.themeConfiguration.accentColor.color.opacity(0.15) : .clear, radius: 6, x: 0, y: 2)
+        .shadow(color: isActiveSplitPane ? (splitGroupColor ?? .clear).opacity(0.2) : (isActive ? .black.opacity(0.08) : .clear), radius: 6, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditing { onSelect() }
