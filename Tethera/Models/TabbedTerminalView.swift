@@ -113,10 +113,22 @@ struct TabbedTerminalView: View {
         NotificationCenter.default.addObserver(forName: NSNotification.Name("TabClosed"), object: nil, queue: .main) { notification in
             guard let tabId = notification.userInfo?["tabId"] as? UUID else { return }
             Task { @MainActor in
-                // Remove any split groups containing this tab
                 withAnimation(.easeInOut(duration: 0.2)) {
                     splitGroups.removeAll { $0.contains(tabId) }
                     if let activeId = activeSplitGroupId, !splitGroups.contains(where: { $0.id == activeId }) {
+                        activeSplitGroupId = nil
+                    }
+                }
+            }
+        }
+        
+        // Handle close split group (X button on grouped tab)
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("CloseSplitGroup"), object: nil, queue: .main) { notification in
+            guard let groupId = notification.userInfo?["groupId"] as? UUID else { return }
+            Task { @MainActor in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    splitGroups.removeAll { $0.id == groupId }
+                    if activeSplitGroupId == groupId {
                         activeSplitGroupId = nil
                     }
                 }
