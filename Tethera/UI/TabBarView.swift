@@ -1,17 +1,15 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Tab Bar (Under Traffic Lights)
+// MARK: - Tab Bar (Chrome Style)
 struct TabBarContent: View {
     @ObservedObject var tabManager: TabManager
-    @ObservedObject var splitPaneManager: SplitPaneManager
     @EnvironmentObject private var userSettings: UserSettings
-    let onTabSplit: () -> Void
     @State private var draggedTab: Tab?
     
     var body: some View {
         HStack(spacing: 0) {
-            // Scrollable tabs area - starts from left edge
+            // Scrollable tabs area
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 2) {
                     ForEach(tabManager.tabs) { tab in
@@ -22,6 +20,7 @@ struct TabBarContent: View {
                             onClose: { tabManager.closeTab(tab.id) },
                             onRename: { newName in tabManager.renameTab(tab.id, to: newName) }
                         )
+                        .id("\(tab.id)-\(tab.id == tabManager.activeTabId)")
                         .onDrag {
                             draggedTab = tab
                             return NSItemProvider(object: tab.id.uuidString as NSString)
@@ -44,13 +43,14 @@ struct TabBarContent: View {
                 }
                 .padding(.horizontal, 12)
             }
+            .id(tabManager.activeTabId)
         }
         .frame(height: 38)
         .background(userSettings.themeConfiguration.backgroundColor.color)
     }
 }
 
-// MARK: - Individual Tab (Terminal Block Style)
+// MARK: - Individual Tab (Chrome Style)
 struct ChromeTabView: View {
     @ObservedObject var tab: Tab
     let isActive: Bool
@@ -69,7 +69,7 @@ struct ChromeTabView: View {
             // Icon
             Image(systemName: tab.isSettingsTab ? "gearshape.fill" : "terminal.fill")
                 .font(.system(size: 11))
-                .foregroundColor(isActive 
+                .foregroundColor(isActive
                     ? userSettings.themeConfiguration.accentColor.color
                     : userSettings.themeConfiguration.textColor.color.opacity(0.5))
             
@@ -113,23 +113,23 @@ struct ChromeTabView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.ultraThinMaterial)
                     
-                    // Gradient border like terminal blocks
+                    // Gradient border
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(isActive ? 0.15 : 0.08),
-                                    .white.opacity(isActive ? 0.05 : 0.02)
+                                    .white.opacity(isActive ? 0.2 : 0.08),
+                                    .white.opacity(isActive ? 0.08 : 0.02)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1
+                            lineWidth: isActive ? 1.5 : 1
                         )
                 }
             }
         )
-        .shadow(color: isActive ? .black.opacity(0.06) : .clear, radius: 4, x: 0, y: 2)
+        .shadow(color: isActive ? .black.opacity(0.08) : .clear, radius: 4, x: 0, y: 2)
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditing { onSelect() }
@@ -229,23 +229,7 @@ class DraggableView: NSView {
 }
 
 #Preview {
-    TabBarContent(
-        tabManager: TabManager(),
-        splitPaneManager: SplitPaneManager(initialTab: Tab()),
-        onTabSplit: {}
-    )
-    .environmentObject(UserSettings())
-    .frame(width: 600, height: 40)
-}
-
-
-#Preview {
-    TabBarContent(
-        tabManager: TabManager(),
-        splitPaneManager: SplitPaneManager(initialTab: Tab()),
-        onTabSplit: {}
-    )
-    .environmentObject(UserSettings())
-    .padding()
-    .background(SwiftUI.Color(red: 0.1, green: 0.1, blue: 0.12))
+    TabBarContent(tabManager: TabManager())
+        .environmentObject(UserSettings())
+        .frame(width: 600, height: 40)
 }
