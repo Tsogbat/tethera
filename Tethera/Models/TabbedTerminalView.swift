@@ -58,17 +58,30 @@ struct TabbedTerminalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(userSettings.themeConfiguration.backgroundColor.color)
         .preferredColorScheme(userSettings.themeConfiguration.isDarkMode ? .dark : .light)
-        // Exit split when clicking a tab that's not in the split
+        // Handle tab switching with split view
         .onChange(of: tabManager.activeTabId) { _, newActiveId in
-            guard splitState.isActive, let newId = newActiveId else { return }
+            guard let newId = newActiveId else { return }
+            
+            // Always clear drop indicator on tab change
+            dropEdge = nil
+            
             let isInSplit = newId == splitState.leftTabId || newId == splitState.rightTabId
-            if !isInSplit {
-                // User clicked a tab outside the split - exit split mode
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    splitState.isActive = false
-                    splitState.leftTabId = nil
-                    splitState.rightTabId = nil
-                    dropEdge = nil  // Clear any drop indicator
+            
+            if splitState.isActive {
+                if !isInSplit {
+                    // User clicked a tab outside the split - hide split but keep tab IDs
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        splitState.isActive = false
+                        // DON'T clear leftTabId/rightTabId - preserve split for later
+                    }
+                }
+            } else {
+                // Not currently in split mode - check if clicked tab is in saved split
+                if isInSplit && splitState.leftTabId != nil && splitState.rightTabId != nil {
+                    // Restore split view
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        splitState.isActive = true
+                    }
                 }
             }
         }

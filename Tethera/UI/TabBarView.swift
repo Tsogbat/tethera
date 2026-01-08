@@ -82,6 +82,12 @@ struct ChromeTabView: View {
                     .focused($isTextFieldFocused)
                     .onSubmit { finishEditing() }
                     .onExitCommand { cancelEditing() }
+                    .onChange(of: isTextFieldFocused) { _, focused in
+                        // Save when focus is lost (clicking outside)
+                        if !focused && isEditing {
+                            finishEditing()
+                        }
+                    }
             } else {
                 Text(tab.title)
                     .font(.system(size: 12, weight: isActive ? .medium : .regular))
@@ -157,13 +163,23 @@ struct ChromeTabView: View {
     }
     
     private func finishEditing() {
+        isTextFieldFocused = false  // Release focus
         let trimmed = editingName.trimmingCharacters(in: .whitespaces)
         if !trimmed.isEmpty { onRename(trimmed) }
         isEditing = false
+        
+        // Reset window first responder to allow terminal to receive keyboard input
+        DispatchQueue.main.async {
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
     }
     
     private func cancelEditing() {
+        isTextFieldFocused = false
         isEditing = false
+        DispatchQueue.main.async {
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        }
     }
 }
 
