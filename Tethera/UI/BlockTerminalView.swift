@@ -61,8 +61,17 @@ struct BlockTerminalView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
                             ForEach(viewModel.blocks) { block in
-                                TerminalBlockView(block: block)
-                                    .id(block.id)
+                                TerminalBlockView(
+                                    block: block,
+                                    onRerun: { command in
+                                        viewModel.runShellCommand(command)
+                                    },
+                                    onEdit: { command in
+                                        commandInput = command
+                                        isInputFocused = true
+                                    }
+                                )
+                                .id(block.id)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -369,8 +378,18 @@ struct BlockTerminalView: View {
 // Separate view for terminal blocks for better organization
 struct TerminalBlockView: View {
     let block: TerminalBlock
+    let onRerun: ((String) -> Void)?
+    let onEdit: ((String) -> Void)?
     @EnvironmentObject private var userSettings: UserSettings
     @State private var isExpanded: Bool = true
+    @State private var isHovered: Bool = false
+    @State private var showCopied: Bool = false
+    
+    init(block: TerminalBlock, onRerun: ((String) -> Void)? = nil, onEdit: ((String) -> Void)? = nil) {
+        self.block = block
+        self.onRerun = onRerun
+        self.onEdit = onEdit
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -387,6 +406,28 @@ struct TerminalBlockView: View {
                     .textSelection(.enabled)
                 
                 Spacer()
+                
+                // Action bar (visible on hover)
+                if isHovered {
+                    HStack(spacing: 4) {
+                        BlockActionButton(icon: "arrow.clockwise", tooltip: "Rerun") {
+                            onRerun?(block.input)
+                        }
+                        
+                        BlockActionButton(icon: "pencil", tooltip: "Edit") {
+                            onEdit?(block.input)
+                        }
+                        
+                        BlockActionButton(icon: "doc.on.doc", tooltip: "Copy Command") {
+                            copyToClipboard(block.input)
+                        }
+                        
+                        BlockActionButton(icon: "doc.on.doc.fill", tooltip: "Copy All") {
+                            copyToClipboard("\(block.input)\n\(block.output)")
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
                 
                 // Metadata badges (Stage 2: Enhanced block info)
                 HStack(spacing: 8) {
@@ -407,17 +448,7 @@ struct TerminalBlockView: View {
                     CategoryBadge(category: block.category)
                         .environmentObject(userSettings)
                     
-                    // Working directory indicator
-                    if let workingDir = block.workingDirectory {
-                        let displayPath = workingDir.hasPrefix(FileManager.default.homeDirectoryForCurrentUser.path) ? 
-                            "~\(String(workingDir.dropFirst(FileManager.default.homeDirectoryForCurrentUser.path.count)))" : workingDir
-                        Text(displayPath)
-                            .font(getFont(size: max(11, CGFloat(userSettings.themeConfiguration.fontSize - 2))))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                            .lineLimit(1)
-                    }
-                    
-                    // Collapse/Expand button for long output (Stage 3: Block summaries)
+                    // Collapse/Expand button for long output
                     if block.output.count > 200 {
                         Button(action: { isExpanded.toggle() }) {
                             Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -429,7 +460,7 @@ struct TerminalBlockView: View {
                 }
             }
             
-            // Command output (collapsible for Stage 3)
+            // Command output (collapsible)
             if !block.output.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     if isExpanded {
@@ -438,7 +469,7 @@ struct TerminalBlockView: View {
                             .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
                             .textSelection(.enabled)
                     } else {
-                        // Show summary when collapsed (Stage 3: Block summaries)
+                        // Show summary when collapsed
                         HStack {
                             Text(block.autoSummary)
                                 .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize - 1)))
@@ -456,6 +487,14 @@ struct TerminalBlockView: View {
                 }
                 .padding(.leading, 20)
             }
+            
+            // Copied indicator
+            if showCopied {
+                Text("Copied!")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.green)
+                    .transition(.opacity)
+            }
         }
         .padding(16)
         .background(
@@ -469,19 +508,38 @@ struct TerminalBlockView: View {
                     .strokeBorder(
                         LinearGradient(
                             colors: [
-                                block.statusColor.opacity(0.4),
+                                block.statusColor.opacity(isHovered ? 0.6 : 0.4),
                                 .white.opacity(0.1),
-                                block.statusColor.opacity(0.2)
+                                block.statusColor.opacity(isHovered ? 0.4 : 0.2)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 1
+                        lineWidth: isHovered ? 1.5 : 1
                     )
             }
         )
-        .shadow(color: block.statusColor.opacity(0.15), radius: 8, x: 0, y: 4)
+        .shadow(color: block.statusColor.opacity(isHovered ? 0.25 : 0.15), radius: isHovered ? 12 : 8, x: 0, y: 4)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
+    }
+    
+    private func copyToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        
+        withAnimation {
+            showCopied = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopied = false
+            }
+        }
     }
     
     private func getFont(size: CGFloat) -> Font {
@@ -493,6 +551,37 @@ struct TerminalBlockView: View {
             return .custom(family, size: size)
         }
         return .system(size: size, design: .monospaced)
+    }
+}
+
+// MARK: - Block Action Button
+struct BlockActionButton: View {
+    let icon: String
+    let tooltip: String
+    let action: () -> Void
+    @EnvironmentObject private var userSettings: UserSettings
+    @State private var isHovered: Bool = false
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(isHovered 
+                    ? userSettings.themeConfiguration.accentColor.color
+                    : userSettings.themeConfiguration.textColor.color.opacity(0.6))
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isHovered 
+                            ? userSettings.themeConfiguration.accentColor.color.opacity(0.15)
+                            : SwiftUI.Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(tooltip)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
 
