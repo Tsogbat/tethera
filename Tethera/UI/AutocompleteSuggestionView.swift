@@ -27,11 +27,8 @@ struct AutocompleteSuggestionView: View {
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AutocompleteKeyDown"))) { notification in
-                if let keyCode = notification.object as? UInt16 {
-                    handleKeyDown(keyCode: keyCode)
-                }
-            }
+            // Note: Arrow key handling is done in BlockTerminalView.handleKeyPress
+            // Do NOT add NotificationCenter listener here to avoid double-handling
         }
     }
     

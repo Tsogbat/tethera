@@ -37,6 +37,9 @@ struct TerminalApp: App {
 // MARK: - App Delegate for window configuration
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Load fonts once at startup (not in each ViewModel)
+        FontLoader.shared.loadJetBrainsMono()
+        
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         

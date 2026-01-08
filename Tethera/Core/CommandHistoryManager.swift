@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Manages extensive command history with search functionality
+/// Manages extensive command history with optimized search functionality
 @MainActor
 class CommandHistoryManager: ObservableObject {
     static let shared = CommandHistoryManager()
@@ -13,9 +13,11 @@ class CommandHistoryManager: ObservableObject {
     @Published var isSearching: Bool = false
     
     private let maxHistorySize = 10000
+    private let maxSearchResults = 50
     private let historyFileURL: URL
+    private var searchDebounceTask: Task<Void, Never>?
     
-    struct HistoryEntry: Identifiable, Codable, Equatable {
+    struct HistoryEntry: Identifiable, Codable, Equatable, Hashable {
         let id: UUID
         let command: String
         let output: String
@@ -46,18 +48,22 @@ class CommandHistoryManager: ObservableObject {
             self.durationMs = durationMs
             self.tabId = tabId
         }
+        
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+        }
     }
     
     private init() {
-        // Store history in Application Support
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let tetheraDir = appSupport.appendingPathComponent("Tethera", isDirectory: true)
-        
-        // Create directory if needed
         try? FileManager.default.createDirectory(at: tetheraDir, withIntermediateDirectories: true)
-        
         historyFileURL = tetheraDir.appendingPathComponent("command_history.json")
-        load()
+        
+        // Load history on background thread
+        Task.detached(priority: .utility) {
+            await self.loadAsync()
+        }
     }
     
     // MARK: - History Management
@@ -71,21 +77,24 @@ class CommandHistoryManager: ObservableObject {
             allEntries.removeFirst(allEntries.count - maxHistorySize)
         }
         
-        // Auto-save periodically
+        // Auto-save periodically on background
         if allEntries.count % 10 == 0 {
-            save()
+            saveAsync()
         }
     }
     
     func clearHistory() {
         allEntries.removeAll()
-        save()
+        saveAsync()
     }
     
-    // MARK: - Search
+    // MARK: - Debounced Search (150ms delay)
     
     func search(query: String) {
         searchQuery = query
+        
+        // Cancel previous debounce
+        searchDebounceTask?.cancel()
         
         guard !query.isEmpty else {
             searchResults = []
@@ -93,15 +102,41 @@ class CommandHistoryManager: ObservableObject {
             return
         }
         
+        // Debounce: wait 150ms before searching
+        searchDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 150_000_000) // 150ms
+            guard !Task.isCancelled else { return }
+            await performSearch(query: query)
+        }
+    }
+    
+    private func performSearch(query: String) async {
         let lowercasedQuery = query.lowercased()
+        let entries = allEntries
+        let maxResults = maxSearchResults
         
-        // Fuzzy search: match command or output containing query terms
-        searchResults = allEntries.filter { entry in
-            entry.command.lowercased().contains(lowercasedQuery) ||
-            entry.output.lowercased().contains(lowercasedQuery)
-        }.reversed() // Most recent first
+        // Search on background thread with early termination
+        let results = await Task.detached(priority: .userInitiated) {
+            var found: [HistoryEntry] = []
+            found.reserveCapacity(maxResults)
+            
+            // Search from end (most recent first)
+            for i in stride(from: entries.count - 1, through: 0, by: -1) {
+                if found.count >= maxResults { break } // Early termination
+                
+                let entry = entries[i]
+                if entry.command.lowercased().contains(lowercasedQuery) ||
+                   entry.output.lowercased().contains(lowercasedQuery) {
+                    found.append(entry)
+                }
+            }
+            return found
+        }.value
         
-        selectedResultIndex = 0
+        await MainActor.run {
+            self.searchResults = results
+            self.selectedResultIndex = 0
+        }
     }
     
     func selectNextResult() {
@@ -130,28 +165,36 @@ class CommandHistoryManager: ObservableObject {
     
     func closeSearch() {
         isSearching = false
+        searchDebounceTask?.cancel()
     }
     
-    // MARK: - Persistence
+    // MARK: - Async Persistence
     
-    func save() {
-        do {
-            let data = try JSONEncoder().encode(allEntries)
-            try data.write(to: historyFileURL, options: .atomic)
-        } catch {
-            print("Failed to save command history: \(error)")
+    private func saveAsync() {
+        let entries = allEntries
+        let url = historyFileURL
+        
+        Task.detached(priority: .utility) {
+            do {
+                let data = try JSONEncoder().encode(entries)
+                try data.write(to: url, options: .atomic)
+            } catch {
+                print("Failed to save command history: \(error)")
+            }
         }
     }
     
-    func load() {
+    private func loadAsync() async {
         guard FileManager.default.fileExists(atPath: historyFileURL.path) else { return }
         
         do {
             let data = try Data(contentsOf: historyFileURL)
-            allEntries = try JSONDecoder().decode([HistoryEntry].self, from: data)
+            let entries = try JSONDecoder().decode([HistoryEntry].self, from: data)
+            await MainActor.run {
+                self.allEntries = entries
+            }
         } catch {
             print("Failed to load command history: \(error)")
-            allEntries = []
         }
     }
 }

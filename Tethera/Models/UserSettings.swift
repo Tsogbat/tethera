@@ -146,6 +146,9 @@ struct CodableColor: Codable, Equatable {
 // MARK: - User Settings Manager
 @MainActor
 class UserSettings: ObservableObject, @unchecked Sendable {
+    /// Shared singleton instance for consistent access
+    static let shared = UserSettings()
+    
     @Published var themeConfiguration = ThemeConfiguration()
     @Published var developerSettings = DeveloperSettings()
     @Published var aiSettings = AISettings() // Stage 2-6: AI Layer Configuration

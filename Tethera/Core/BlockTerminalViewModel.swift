@@ -4,32 +4,32 @@ import CoreText
 
 @MainActor
 class BlockTerminalViewModel: ObservableObject {
-    @Published var workingDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
+    @Published var workingDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path {
+        didSet { _displayWorkingDirectory = nil } // Invalidate cache
+    }
     @Published var blocks: [TerminalBlock] = []
     @Published var selectedBlockID: UUID? = nil
     @Published var isPalettePresented: Bool = false
     @Published var isSettingsPresented: Bool = false
     @Published var theme: TerminalTheme
-    private var userSettings = UserSettings()
+    @Published var isRunningCommand: Bool = false // Loading state
     @Published var paletteActions: [String] = ["New Tab", "Split Pane", "Settings"]
     
-    // Command history with persistence (Stage 1: History metadata)
+    // Command history with persistence
     @Published var commandHistory: [String] = []
     private var historyIndex: Int? = nil
     private var historyDraft: String = ""
     
-    // Persistent history storage key
-    private static let historyKey = "TetheraCommandHistory"
+    // Cached values for performance
+    private var _displayWorkingDirectory: String?
+    private static var _cachedFont: Font?
     private static let maxHistorySize = 500
     
     init() {
-        // Initialize theme from user settings
-        self.theme = TerminalTheme(from: userSettings.themeConfiguration)
+        // Initialize theme - use shared UserSettings when available via EnvironmentObject
+        self.theme = TerminalTheme.defaultTheme
         
-        // Load the JetBrains Mono font
-        FontLoader.shared.loadJetBrainsMono()
-        
-        // Load persisted command history from UserDefaults
+        // Load command history (fonts loaded at app startup, not here)
         if let saved = UserDefaults.standard.stringArray(forKey: "command_history") {
             commandHistory = saved
         }
@@ -42,84 +42,106 @@ class BlockTerminalViewModel: ObservableObject {
             forName: NSNotification.Name("SettingsChanged"),
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             Task { @MainActor in
-                self?.updateTheme()
+                if let settings = notification.object as? UserSettings {
+                    self?.theme = TerminalTheme(from: settings.themeConfiguration)
+                }
             }
         }
     }
     
-    private func saveHistory() {
-        let trimmed = Array(commandHistory.suffix(500))
-        UserDefaults.standard.set(trimmed, forKey: "command_history")
+    // MARK: - History Management (Async Save)
+    
+    private func saveHistoryAsync() {
+        let history = Array(commandHistory.suffix(Self.maxHistorySize))
+        Task.detached(priority: .utility) {
+            UserDefaults.standard.set(history, forKey: "command_history")
+        }
     }
     
-    private func updateTheme() {
-        theme = TerminalTheme(from: userSettings.themeConfiguration)
-    }
-
+    // MARK: - Block Management
+    
     func addBlock(input: String, output: String, success: Bool? = nil) {
-        let block = TerminalBlock(input: input, output: output, timestamp: Date(), workingDirectory: workingDirectory, success: success)
+        let block = TerminalBlock(
+            input: input,
+            output: output,
+            timestamp: Date(),
+            workingDirectory: workingDirectory,
+            success: success
+        )
         blocks.append(block)
         
-        // Add to global history for search
+        // Add to global history (async internally)
         CommandHistoryManager.shared.addEntry(from: block)
     }
 
-    /// Run a shell command and append a new block with the result
+    // MARK: - Async Command Execution (Non-blocking)
+    
     func runShellCommand(_ input: String) {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         
         // Push to history (avoid consecutive duplicates)
-        if !trimmed.isEmpty {
-            if commandHistory.last != trimmed { 
-                commandHistory.append(trimmed)
-                saveHistory()
-            }
-            historyIndex = nil
-            historyDraft = ""
+        if commandHistory.last != trimmed {
+            commandHistory.append(trimmed)
+            saveHistoryAsync()
         }
+        historyIndex = nil
+        historyDraft = ""
         
-        // Built-in commands
+        // Built-in commands (instant)
         if trimmed == "clear" {
             blocks.removeAll()
             return
         }
         
+        // Handle cd command (instant, no async needed)
         if trimmed.hasPrefix("cd ") || trimmed == "cd" {
-            let path = trimmed == "cd" ? "" : String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-            let newDir: String
-            
-            if path.isEmpty || path == "~" {
-                // cd with no arguments or cd ~ goes to home directory
-                newDir = FileManager.default.homeDirectoryForCurrentUser.path
-            } else if path.hasPrefix("/") {
-                // Absolute path
-                newDir = path
-            } else if path.hasPrefix("~/") {
-                // Home directory relative path
-                let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-                newDir = homePath + String(path.dropFirst(1))
-            } else {
-                // Relative path - use NSString.standardizingPath to resolve .. and .
-                let tentativePath = (workingDirectory as NSString).appendingPathComponent(path)
-                newDir = (tentativePath as NSString).standardizingPath
-            }
-            
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: newDir, isDirectory: &isDir), isDir.boolValue {
-                workingDirectory = newDir
-                addBlock(input: input, output: "", success: true)
-            } else {
-                addBlock(input: input, output: "cd: no such directory: \(path)", success: false)
-            }
+            handleCdCommand(trimmed, originalInput: input)
             return
         }
-        let output = Self.runCommandSync(input, in: workingDirectory)
-        addBlock(input: input, output: output, success: nil)
+        
+        // External commands - run async
+        isRunningCommand = true
+        let directory = workingDirectory
+        
+        Task.detached(priority: .userInitiated) {
+            let output = Self.runCommand(trimmed, in: directory)
+            await MainActor.run {
+                self.addBlock(input: input, output: output, success: nil)
+                self.isRunningCommand = false
+            }
+        }
+    }
+    
+    private func handleCdCommand(_ trimmed: String, originalInput: String) {
+        let path = trimmed == "cd" ? "" : String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        
+        let newDir: String
+        if path.isEmpty || path == "~" {
+            newDir = home
+        } else if path.hasPrefix("/") {
+            newDir = path
+        } else if path.hasPrefix("~/") {
+            newDir = home + String(path.dropFirst(1))
+        } else {
+            let tentative = (workingDirectory as NSString).appendingPathComponent(path)
+            newDir = (tentative as NSString).standardizingPath
+        }
+        
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: newDir, isDirectory: &isDir), isDir.boolValue {
+            workingDirectory = newDir
+            addBlock(input: originalInput, output: "", success: true)
+        } else {
+            addBlock(input: originalInput, output: "cd: no such directory: \(path)", success: false)
+        }
     }
 
     // MARK: - History Navigation
+    
     func historyPrevious(currentInput: String) -> String? {
         guard !commandHistory.isEmpty else { return nil }
         if historyIndex == nil {
@@ -128,15 +150,14 @@ class BlockTerminalViewModel: ObservableObject {
         } else if let idx = historyIndex, idx > 0 {
             historyIndex = idx - 1
         }
-        if let idx = historyIndex { return commandHistory[idx] }
-        return nil
+        return historyIndex.map { commandHistory[$0] }
     }
     
     func historyNext() -> String? {
         guard let idx = historyIndex else { return nil }
         if idx < commandHistory.count - 1 {
             historyIndex = idx + 1
-            return commandHistory[historyIndex!] 
+            return commandHistory[historyIndex!]
         } else {
             historyIndex = nil
             let draft = historyDraft
@@ -145,8 +166,9 @@ class BlockTerminalViewModel: ObservableObject {
         }
     }
 
-    /// Synchronously run a shell command and return its output
-    static func runCommandSync(_ command: String, in directory: String) -> String {
+    // MARK: - Command Execution (Background Thread - nonisolated)
+    
+    nonisolated private static func runCommand(_ command: String, in directory: String) -> String {
         let process = Process()
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -165,31 +187,40 @@ class BlockTerminalViewModel: ObservableObject {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8) ?? ""
     }
-
-
     
-    /// Get a shortened working directory for display
+    // MARK: - Cached Properties
+    
+    /// Cached display working directory (computed once, invalidated on change)
     var displayWorkingDirectory: String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        if workingDirectory.hasPrefix(home) {
-            let relativePath = String(workingDirectory.dropFirst(home.count))
-            if relativePath.isEmpty {
-                return "~"
-            } else {
-                return "~\(relativePath)"
-            }
+        if let cached = _displayWorkingDirectory {
+            return cached
         }
-        return workingDirectory
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let result: String
+        if workingDirectory.hasPrefix(home) {
+            let relative = String(workingDirectory.dropFirst(home.count))
+            result = relative.isEmpty ? "~" : "~\(relative)"
+        } else {
+            result = workingDirectory
+        }
+        _displayWorkingDirectory = result
+        return result
     }
     
-    /// Get the appropriate font for the current system
+    /// Cached terminal font (computed once per app lifecycle)
     func getTerminalFont() -> Font {
-        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
-            return .custom("JetBrainsMono-Medium", size: 15)
-        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
-            return .custom("JetBrainsMono-Regular", size: 15)
-        } else {
-            return .system(.body, design: .monospaced)
+        if let cached = Self._cachedFont {
+            return cached
         }
+        let font: Font
+        if FontLoader.shared.isFontAvailable("JetBrainsMono-Medium") {
+            font = .custom("JetBrainsMono-Medium", size: 15)
+        } else if FontLoader.shared.isFontAvailable("JetBrainsMono-Regular") {
+            font = .custom("JetBrainsMono-Regular", size: 15)
+        } else {
+            font = .system(.body, design: .monospaced)
+        }
+        Self._cachedFont = font
+        return font
     }
 }
