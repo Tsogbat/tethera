@@ -24,6 +24,7 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     private var terminalSession: TerminalSession?
     private var pendingCommand: String = ""
     private var currentBlockOutput = ""
+    private var commandStartTime: Date?
     
     // Cached values for performance
     private var _displayWorkingDirectory: String?
@@ -69,6 +70,7 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
         Task { @MainActor in
             self.isRunningCommand = true
             self.currentBlockOutput = ""
+            self.commandStartTime = Date()
         }
     }
     
@@ -80,18 +82,27 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     
     nonisolated func terminalDidEndCommand(exitCode: Int) {
         Task { @MainActor in
+            // Calculate duration in milliseconds
+            var durationMs: Int64? = nil
+            if let startTime = self.commandStartTime {
+                durationMs = Int64(Date().timeIntervalSince(startTime) * 1000)
+            }
+            
             let block = TerminalBlock(
                 input: self.pendingCommand,
                 output: self.currentBlockOutput.trimmingCharacters(in: .whitespacesAndNewlines),
                 timestamp: Date(),
                 workingDirectory: self.workingDirectory,
-                success: exitCode == 0
+                success: exitCode == 0,
+                exitCode: Int32(exitCode),
+                durationMs: durationMs
             )
             self.blocks.append(block)
             CommandHistoryManager.shared.addEntry(from: block)
             
             self.pendingCommand = ""
             self.currentBlockOutput = ""
+            self.commandStartTime = nil
             self.isRunningCommand = false
         }
     }

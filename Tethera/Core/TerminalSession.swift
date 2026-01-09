@@ -323,7 +323,6 @@ class TerminalSession: ObservableObject {
         let parts = params.split(separator: ";", maxSplits: 1)
         guard let marker = parts.first else { return }
         
-        print("[OSC] Marker: \(marker), buffered output length: \(outputBuffer.count)")
         
         switch marker {
         case "A": // Prompt start - clear buffer, notify delegate
@@ -346,7 +345,7 @@ class TerminalSession: ObservableObject {
             if skipNextCommand {
                 skipNextCommand = false
                 outputBuffer = ""
-                print("[OSC] Skipping injection command output")
+                // print("[OSC] Skipping injection command output")
                 return
             }
             
@@ -369,7 +368,7 @@ class TerminalSession: ObservableObject {
             if parts.count > 1, let code = Int(parts[1]) {
                 exitCode = code
             }
-            print("[OSC] Command end with exit code: \(exitCode), output: \(cleanedOutput.prefix(100))...")
+            // print("[OSC] Command end with exit code: \(exitCode), output: \(cleanedOutput.prefix(100))...")
             
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }

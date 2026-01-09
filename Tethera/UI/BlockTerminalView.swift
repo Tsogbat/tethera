@@ -391,8 +391,36 @@ struct TerminalBlockView: View {
         self.onEdit = onEdit
     }
     
+    // Shortened directory path like ~/projects
+    private var displayDirectory: String {
+        guard let dir = block.workingDirectory else { return "~" }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if dir.hasPrefix(home) {
+            let relative = String(dir.dropFirst(home.count))
+            return relative.isEmpty ? "~" : "~\(relative)"
+        }
+        return dir
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            // Warp-style header: directory and duration
+            HStack(spacing: 8) {
+                // Directory path
+                Text(displayDirectory)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+                
+                // Execution duration
+                if let duration = block.formattedDuration {
+                    Text("(\(duration))")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.4))
+                }
+                
+                Spacer()
+            }
+            
             // Command input with status indicator
             HStack(spacing: 8) {
                 // Status indicator (Stage 2: Exit code visualization)
@@ -402,7 +430,7 @@ struct TerminalBlockView: View {
                 
                 Text(block.input)
                     .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
+                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
                     .textSelection(.enabled)
                 
                 Spacer()
