@@ -19,7 +19,7 @@ struct AutocompleteSuggestionView: View {
                 .padding(.vertical, 8)
             }
             .scrollIndicators(.hidden)
-            .frame(maxHeight: 200) // Limit height to make it scrollable
+            .frame(minHeight: CGFloat(min(suggestions.count, 10) * 44 + 16), maxHeight: 400)
             .background(suggestionBackground)
             .shadow(color: (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.black : SwiftUI.Color.gray).opacity(0.25), radius: 8, x: 0, y: 4)
             .onChange(of: selectedIndex) { _, newIndex in
@@ -73,12 +73,12 @@ struct AutocompleteSuggestionView: View {
         RoundedRectangle(cornerRadius: 10)
             .fill(
                 userSettings.themeConfiguration.isDarkMode ?
-                SwiftUI.Color.white.opacity(0.06) : SwiftUI.Color.black.opacity(0.04)
+                SwiftUI.Color(red: 0.15, green: 0.15, blue: 0.18) : SwiftUI.Color(red: 0.95, green: 0.95, blue: 0.97)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.white.opacity(0.12) : SwiftUI.Color.black.opacity(0.08)),
+                        userSettings.themeConfiguration.accentColor.color.opacity(0.3),
                         lineWidth: 1
                     )
             )

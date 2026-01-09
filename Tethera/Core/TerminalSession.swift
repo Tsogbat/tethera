@@ -7,6 +7,7 @@ protocol TerminalBlockDelegate: AnyObject {
     func terminalDidStartCommand()
     func terminalDidReceiveOutput(_ output: String)
     func terminalDidEndCommand(exitCode: Int)
+    func terminalDidUpdateWorkingDirectory(_ directory: String)
 }
 
 // MARK: - OSC Parser State
@@ -316,6 +317,19 @@ class TerminalSession: ObservableObject {
     }
     
     private func handleOSCSequence(_ content: String) {
+        // Handle OSC 7 (working directory notification)
+        // Format: 7;file://hostname/path
+        if content.hasPrefix("7;") {
+            let urlString = String(content.dropFirst(2))
+            if let url = URL(string: urlString), url.scheme == "file" {
+                let directory = url.path
+                DispatchQueue.main.async { [weak self] in
+                    self?.blockDelegate?.terminalDidUpdateWorkingDirectory(directory)
+                }
+            }
+            return
+        }
+        
         // Parse OSC 133 semantic prompts
         guard content.hasPrefix("133;") else { return }
         

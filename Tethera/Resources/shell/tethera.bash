@@ -19,6 +19,8 @@ __tethera_output_start() {
 __tethera_command_end() {
     local exit_code=$?
     printf '\033]133;D;%d\007' "$exit_code"
+    # Send OSC 7 with current working directory for directory tracking
+    printf '\033]7;file://%s%s\007' "$(hostname)" "$(pwd)"
     return $exit_code
 }
 

@@ -22,17 +22,316 @@ class AutocompleteEngine: ObservableObject {
     
     private let commonCommands = [
         "ls", "cd", "pwd", "mkdir", "rmdir", "rm", "cp", "mv", "cat", "less", "more",
-        "grep", "find", "which", "man", "clear", "exit", "history",
-        "chmod", "chown", "touch", "file", "tar", "curl", "wget", "ssh", "scp",
-        "git", "npm", "node", "python", "python3", "pip", "brew", "make", "swift",
-        "vim", "nano", "code", "open", "pbcopy", "pbpaste", "echo", "export"
+        "grep", "find", "which", "man", "clear", "exit", "history", "head", "tail", "wc",
+        "chmod", "chown", "touch", "file", "tar", "curl", "wget", "ssh", "scp", "rsync",
+        "git", "npm", "node", "yarn", "pnpm", "python", "python3", "pip", "pip3", "brew", "make", "swift",
+        "vim", "nano", "code", "open", "pbcopy", "pbpaste", "echo", "export", "source",
+        "docker", "kubectl", "cargo", "go", "ruby", "gem", "pip3"
     ]
     
-    private let commandSubcommands: [String: [String]] = [
-        "git": ["status", "add", "commit", "push", "pull", "clone", "branch", "checkout", "merge", "log", "diff", "stash", "reset"],
-        "npm": ["install", "start", "run", "test", "build", "init", "update", "uninstall"],
-        "docker": ["run", "build", "pull", "push", "ps", "images", "stop", "start", "rm"],
-        "brew": ["install", "uninstall", "update", "upgrade", "list", "search", "info"],
+    /// Comprehensive command completions with flags, subcommands, and descriptions
+    private let commandCompletions: [String: [(text: String, desc: String)]] = [
+        // File system commands
+        "ls": [
+            ("-la", "List all with details"),
+            ("-l", "Long format"),
+            ("-a", "Show hidden files"),
+            ("-lh", "Human readable sizes"),
+            ("-R", "Recursive listing"),
+            ("-t", "Sort by time"),
+            ("-S", "Sort by size"),
+            ("-1", "One file per line"),
+        ],
+        "cd": [
+            ("..", "Parent directory"),
+            ("~", "Home directory"),
+            ("-", "Previous directory"),
+            ("/", "Root directory"),
+        ],
+        "mkdir": [
+            ("-p", "Create parents"),
+            ("-v", "Verbose output"),
+        ],
+        "rm": [
+            ("-rf", "Force recursive delete"),
+            ("-r", "Recursive delete"),
+            ("-f", "Force delete"),
+            ("-i", "Interactive mode"),
+            ("-v", "Verbose output"),
+        ],
+        "cp": [
+            ("-r", "Recursive copy"),
+            ("-v", "Verbose output"),
+            ("-i", "Interactive mode"),
+            ("-n", "No overwrite"),
+            ("-a", "Archive mode"),
+        ],
+        "mv": [
+            ("-v", "Verbose output"),
+            ("-i", "Interactive mode"),
+            ("-n", "No overwrite"),
+        ],
+        "chmod": [
+            ("+x", "Add execute"),
+            ("755", "rwxr-xr-x"),
+            ("644", "rw-r--r--"),
+            ("-R", "Recursive"),
+        ],
+        "cat": [
+            ("-n", "Number lines"),
+            ("-b", "Number non-blank"),
+        ],
+        "grep": [
+            ("-r", "Recursive search"),
+            ("-i", "Case insensitive"),
+            ("-n", "Show line numbers"),
+            ("-v", "Invert match"),
+            ("-l", "List files only"),
+            ("-c", "Count matches"),
+            ("-E", "Extended regex"),
+            ("--color", "Colorize output"),
+        ],
+        "find": [
+            ("-name", "Match filename"),
+            ("-type f", "Find files"),
+            ("-type d", "Find directories"),
+            ("-mtime", "Modified time"),
+            ("-size", "By file size"),
+            ("-exec", "Execute command"),
+        ],
+        "tar": [
+            ("-xvf", "Extract verbose"),
+            ("-cvf", "Create verbose"),
+            ("-xzf", "Extract gzip"),
+            ("-czf", "Create gzip"),
+            ("-tvf", "List contents"),
+        ],
+        "curl": [
+            ("-X GET", "GET request"),
+            ("-X POST", "POST request"),
+            ("-H", "Add header"),
+            ("-d", "POST data"),
+            ("-o", "Output to file"),
+            ("-O", "Save as remote name"),
+            ("-L", "Follow redirects"),
+            ("-v", "Verbose output"),
+            ("-s", "Silent mode"),
+        ],
+        "ssh": [
+            ("-i", "Identity file"),
+            ("-p", "Port number"),
+            ("-v", "Verbose mode"),
+            ("-L", "Local port forward"),
+            ("-R", "Remote port forward"),
+        ],
+        "rsync": [
+            ("-avz", "Archive verbose compressed"),
+            ("-r", "Recursive"),
+            ("--progress", "Show progress"),
+            ("--delete", "Delete extra files"),
+            ("-n", "Dry run"),
+        ],
+        
+        // Git
+        "git": [
+            ("status", "Show status"),
+            ("add", "Stage changes"),
+            ("add .", "Stage all"),
+            ("commit", "Commit changes"),
+            ("commit -m", "Commit with message"),
+            ("push", "Push to remote"),
+            ("push origin", "Push to origin"),
+            ("pull", "Pull from remote"),
+            ("clone", "Clone repository"),
+            ("checkout", "Switch branch"),
+            ("checkout -b", "Create branch"),
+            ("branch", "List branches"),
+            ("branch -d", "Delete branch"),
+            ("merge", "Merge branch"),
+            ("log", "Show history"),
+            ("log --oneline", "Compact log"),
+            ("diff", "Show changes"),
+            ("stash", "Stash changes"),
+            ("stash pop", "Apply stash"),
+            ("reset", "Reset changes"),
+            ("reset --hard", "Hard reset"),
+            ("fetch", "Fetch remote"),
+            ("remote -v", "List remotes"),
+            ("rebase", "Rebase branch"),
+            ("cherry-pick", "Cherry pick"),
+        ],
+        
+        // Package managers
+        "npm": [
+            ("install", "Install packages"),
+            ("install --save-dev", "Install as dev"),
+            ("uninstall", "Remove package"),
+            ("start", "Run start script"),
+            ("run", "Run script"),
+            ("run dev", "Run dev script"),
+            ("run build", "Build project"),
+            ("test", "Run tests"),
+            ("init", "Initialize project"),
+            ("init -y", "Init with defaults"),
+            ("update", "Update packages"),
+            ("outdated", "Check outdated"),
+            ("audit", "Security audit"),
+            ("ci", "Clean install"),
+            ("publish", "Publish package"),
+        ],
+        "yarn": [
+            ("install", "Install packages"),
+            ("add", "Add package"),
+            ("add -D", "Add as dev"),
+            ("remove", "Remove package"),
+            ("dev", "Run dev"),
+            ("build", "Build project"),
+            ("start", "Start project"),
+            ("test", "Run tests"),
+        ],
+        "pip": [
+            ("install", "Install package"),
+            ("install -r requirements.txt", "Install from requirements"),
+            ("install --upgrade", "Upgrade package"),
+            ("uninstall", "Remove package"),
+            ("freeze", "List packages"),
+            ("list", "Show installed"),
+            ("show", "Package info"),
+            ("search", "Search packages"),
+        ],
+        "pip3": [
+            ("install", "Install package"),
+            ("install -r requirements.txt", "Install from requirements"),
+            ("install --upgrade", "Upgrade package"),
+            ("uninstall", "Remove package"),
+            ("freeze", "List packages"),
+            ("list", "Show installed"),
+        ],
+        "brew": [
+            ("install", "Install package"),
+            ("uninstall", "Remove package"),
+            ("update", "Update Homebrew"),
+            ("upgrade", "Upgrade packages"),
+            ("list", "List installed"),
+            ("search", "Search packages"),
+            ("info", "Package info"),
+            ("services", "Manage services"),
+            ("services list", "List services"),
+            ("services start", "Start service"),
+            ("services stop", "Stop service"),
+            ("doctor", "Check issues"),
+            ("cleanup", "Remove old versions"),
+            ("cask install", "Install app"),
+        ],
+        
+        // Python
+        "python": [
+            ("-m venv venv", "Create virtualenv"),
+            ("-m pip install", "Install with pip"),
+            ("-m http.server", "Start HTTP server"),
+            ("-c", "Run command"),
+            ("-i", "Interactive mode"),
+            ("--version", "Show version"),
+        ],
+        "python3": [
+            ("-m venv venv", "Create virtualenv"),
+            ("-m pip install", "Install with pip"),
+            ("-m http.server", "Start HTTP server"),
+            ("-c", "Run command"),
+            ("-i", "Interactive mode"),
+            ("--version", "Show version"),
+        ],
+        
+        // Docker
+        "docker": [
+            ("run", "Run container"),
+            ("run -it", "Interactive container"),
+            ("run -d", "Detached container"),
+            ("build", "Build image"),
+            ("build -t", "Build with tag"),
+            ("ps", "List containers"),
+            ("ps -a", "List all containers"),
+            ("images", "List images"),
+            ("pull", "Pull image"),
+            ("push", "Push image"),
+            ("stop", "Stop container"),
+            ("rm", "Remove container"),
+            ("rmi", "Remove image"),
+            ("exec -it", "Execute in container"),
+            ("logs", "View logs"),
+            ("logs -f", "Follow logs"),
+            ("compose up", "Start compose"),
+            ("compose down", "Stop compose"),
+            ("compose build", "Build compose"),
+        ],
+        
+        // Node/JS
+        "node": [
+            ("--version", "Show version"),
+            ("-e", "Evaluate code"),
+            ("--inspect", "Debug mode"),
+        ],
+        
+        // Cargo/Rust
+        "cargo": [
+            ("build", "Build project"),
+            ("build --release", "Release build"),
+            ("run", "Run project"),
+            ("test", "Run tests"),
+            ("new", "New project"),
+            ("init", "Init in directory"),
+            ("add", "Add dependency"),
+            ("update", "Update deps"),
+            ("clippy", "Lint code"),
+            ("fmt", "Format code"),
+        ],
+        
+        // Go
+        "go": [
+            ("run", "Run program"),
+            ("build", "Build binary"),
+            ("test", "Run tests"),
+            ("mod init", "Init module"),
+            ("mod tidy", "Clean deps"),
+            ("get", "Get package"),
+            ("fmt", "Format code"),
+            ("vet", "Check code"),
+        ],
+        
+        // Swift
+        "swift": [
+            ("build", "Build package"),
+            ("run", "Run package"),
+            ("test", "Run tests"),
+            ("package init", "Init package"),
+            ("package update", "Update deps"),
+        ],
+        
+        // Make
+        "make": [
+            ("all", "Build all"),
+            ("clean", "Clean build"),
+            ("install", "Install"),
+            ("test", "Run tests"),
+            ("build", "Build target"),
+            ("run", "Run target"),
+        ],
+        
+        // System
+        "open": [
+            (".", "Open current dir"),
+            ("-a", "Open with app"),
+        ],
+        "code": [
+            (".", "Open current dir"),
+            ("-n", "New window"),
+            ("-r", "Reuse window"),
+        ],
+        "man": [
+            ("ls", "ls manual"),
+            ("grep", "grep manual"),
+            ("find", "find manual"),
+        ],
     ]
     
     private let fileManager = FileManager.default
@@ -41,14 +340,14 @@ class AutocompleteEngine: ObservableObject {
     
     /// Update inline ghost text based on current input
     /// Called on every keystroke
-    func updateInlineCompletion(for input: String, history: [String]) {
+    func updateInlineCompletion(for input: String, history: [String], workingDirectory: String = "") {
         guard !input.isEmpty else {
             DispatchQueue.main.async { self.inlineCompletion = "" }
             return
         }
         
-        // Priority 1: Match from command history
-        if let historyMatch = findHistoryMatch(input: input, history: history) {
+        // Priority 1: Match from command history (context-aware)
+        if let historyMatch = findHistoryMatch(input: input, history: history, workingDirectory: workingDirectory) {
             DispatchQueue.main.async { self.inlineCompletion = historyMatch }
             return
         }
@@ -65,8 +364,8 @@ class AutocompleteEngine: ObservableObject {
         
         // Priority 3: Command subcommands (e.g., "git " -> "git status")
         if components.count == 2, let cmd = components.first, components.last?.isEmpty == true {
-            if let subcommands = commandSubcommands[String(cmd).lowercased()], let first = subcommands.first {
-                DispatchQueue.main.async { self.inlineCompletion = input + first }
+            if let completions = commandCompletions[String(cmd).lowercased()], let first = completions.first {
+                DispatchQueue.main.async { self.inlineCompletion = input + first.text }
                 return
             }
         }
@@ -74,13 +373,32 @@ class AutocompleteEngine: ObservableObject {
         DispatchQueue.main.async { self.inlineCompletion = "" }
     }
     
-    private func findHistoryMatch(input: String, history: [String]) -> String? {
-        // Find most recent history entry that starts with input
+    private func findHistoryMatch(input: String, history: [String], workingDirectory: String) -> String? {
         let lowercaseInput = input.lowercased()
+        let currentDirName = (workingDirectory as NSString).lastPathComponent.lowercased()
+        let parentDirName = ((workingDirectory as NSString).deletingLastPathComponent as NSString).lastPathComponent.lowercased()
+        
         for entry in history.reversed() {
-            if entry.lowercased().hasPrefix(lowercaseInput) && entry.lowercased() != lowercaseInput {
-                return entry
+            let lowercaseEntry = entry.lowercased()
+            
+            // Skip if doesn't match prefix
+            guard lowercaseEntry.hasPrefix(lowercaseInput) && lowercaseEntry != lowercaseInput else { continue }
+            
+            // Context filter: skip cd commands that would navigate to current directory
+            if lowercaseEntry.hasPrefix("cd ") {
+                let target = String(lowercaseEntry.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                
+                // Skip if target is current directory name
+                if target == currentDirName { continue }
+                
+                // Skip if target ends with current directory (e.g., "projects/tethera" when in tethera)
+                if target.hasSuffix("/\(currentDirName)") { continue }
+                
+                // Skip if target is parent directory reference and we're at a path containing it
+                if target.contains(parentDirName) && target.hasSuffix(currentDirName) { continue }
             }
+            
+            return entry
         }
         return nil
     }
@@ -185,17 +503,20 @@ class AutocompleteEngine: ObservableObject {
                 .prefix(15)
                 .map { AutocompleteSuggestion(text: $0, type: .command, description: "Command") }
         } else {
-            // Suggest paths/files
-            suggestions = getPathSuggestions(prefix: lastComponent, workingDirectory: workingDirectory)
-            
-            // Also suggest subcommands
+            // Get the command (first word)
             let cmd = String(components.first ?? "").lowercased()
-            if let subcommands = commandSubcommands[cmd] {
-                let subcmdSuggestions = subcommands
-                    .filter { $0.hasPrefix(lastComponent.lowercased()) }
-                    .map { AutocompleteSuggestion(text: $0, type: .command, description: "Subcommand") }
-                suggestions.insert(contentsOf: subcmdSuggestions, at: 0)
+            
+            // First: suggest command completions (flags, subcommands) - these go on top
+            if let completions = commandCompletions[cmd] {
+                let cmdSuggestions = completions
+                    .filter { lastComponent.isEmpty || $0.text.lowercased().hasPrefix(lastComponent.lowercased()) }
+                    .map { AutocompleteSuggestion(text: $0.text, type: .command, description: $0.desc) }
+                suggestions.append(contentsOf: cmdSuggestions)
             }
+            
+            // Then: suggest paths/files (below flags)
+            let pathSuggestions = getPathSuggestions(prefix: lastComponent, workingDirectory: workingDirectory)
+            suggestions.append(contentsOf: pathSuggestions)
         }
         
         return Array(suggestions.prefix(20))

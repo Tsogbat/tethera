@@ -90,33 +90,6 @@ struct BlockTerminalView: View {
 
                 // Modern command input area
                 VStack(spacing: 0) {
-                    // Autocomplete dropdown overlay (Tab to show) - positioned directly above input
-                    if autocompleteEngine.isDropdownVisible && !autocompleteEngine.dropdownSuggestions.isEmpty {
-                        HStack {
-                            AutocompleteSuggestionView(
-                                suggestions: autocompleteEngine.dropdownSuggestions,
-                                onSuggestionSelected: { suggestion in
-                                    commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
-                                    if suggestion.type == .directory {
-                                        // Don't close dropdown - refresh for directory traversal
-                                        autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
-                                    } else {
-                                        autocompleteEngine.hideDropdown()
-                                        if suggestion.type == .command {
-                                            commandInput += " "
-                                        }
-                                    }
-                                },
-                                onArrowNavigation: { _ in },
-                                selectedIndex: $autocompleteEngine.selectedIndex
-                            )
-                            .frame(maxWidth: 350)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 4)
-                    }
-                    
                     // Liquid Glass Input Area
                     HStack(spacing: 14) {
                         HStack(spacing: 12) {
@@ -157,10 +130,11 @@ struct BlockTerminalView: View {
                                     .onChange(of: commandInput) { _, newValue in
                                         hasUsedArrowKeys = false
                                         if isInputFocused {
-                                            // Update inline ghost completion
+                                            // Update inline ghost completion (context-aware)
                                             autocompleteEngine.updateInlineCompletion(
                                                 for: newValue,
-                                                history: CommandHistoryManager.shared.allEntries.map { $0.command }
+                                                history: CommandHistoryManager.shared.allEntries.map { $0.command },
+                                                workingDirectory: viewModel.workingDirectory
                                             )
                                             // Hide dropdown when typing (user can press Tab to reopen)
                                             if autocompleteEngine.isDropdownVisible {
@@ -235,6 +209,33 @@ struct BlockTerminalView: View {
                     .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -4)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
+                    // Floating dropdown overlay - appears above input bar
+                    .overlay(alignment: .bottom) {
+                        if autocompleteEngine.isDropdownVisible && !autocompleteEngine.dropdownSuggestions.isEmpty {
+                            VStack(spacing: 0) {
+                                AutocompleteSuggestionView(
+                                    suggestions: autocompleteEngine.dropdownSuggestions,
+                                    onSuggestionSelected: { suggestion in
+                                        commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
+                                        if suggestion.type == .directory {
+                                            autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
+                                        } else {
+                                            autocompleteEngine.hideDropdown()
+                                            if suggestion.type == .command {
+                                                commandInput += " "
+                                            }
+                                        }
+                                    },
+                                    onArrowNavigation: { _ in },
+                                    selectedIndex: $autocompleteEngine.selectedIndex
+                                )
+                                .frame(maxWidth: 320, alignment: .leading)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 40) // Align with text after chevron
+                            .offset(y: -72) // Raise higher above input bar
+                        }
+                    }
                 }
             }
         }

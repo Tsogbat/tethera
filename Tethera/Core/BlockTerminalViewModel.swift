@@ -107,6 +107,18 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
         }
     }
     
+    nonisolated func terminalDidUpdateWorkingDirectory(_ directory: String) {
+        Task { @MainActor in
+            // Only update if directory actually changed and exists
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: directory, isDirectory: &isDir), isDir.boolValue {
+                if self.workingDirectory != directory {
+                    self.workingDirectory = directory
+                }
+            }
+        }
+    }
+    
     private func saveHistoryAsync() {
         let history = Array(commandHistory.suffix(Self.maxHistorySize))
         Task.detached(priority: .utility) {
