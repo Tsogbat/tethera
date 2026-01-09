@@ -27,6 +27,25 @@ struct TerminalApp: App {
                     }
                 }
                 .keyboardShortcut("f", modifiers: .command)
+                
+                Divider()
+                
+                Button("Increase Font Size") {
+                    let newSize = min(32, userSettings.themeConfiguration.fontSize + 1)
+                    userSettings.themeConfiguration.fontSize = newSize
+                }
+                .keyboardShortcut("+", modifiers: .command)
+                
+                Button("Decrease Font Size") {
+                    let newSize = max(10, userSettings.themeConfiguration.fontSize - 1)
+                    userSettings.themeConfiguration.fontSize = newSize
+                }
+                .keyboardShortcut("-", modifiers: .command)
+                
+                Button("Reset Font Size") {
+                    userSettings.themeConfiguration.fontSize = 14
+                }
+                .keyboardShortcut("0", modifiers: .command)
             }
         }
         .windowResizability(.contentSize)
