@@ -492,8 +492,8 @@ struct TerminalBlockView: View {
             if !block.output.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     if isExpanded {
-                        Text(block.output)
-                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                        Text(formatOutputForDisplay(block.output))
+                            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize), weight: .regular, design: .monospaced))
                             .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
                             .textSelection(.enabled)
                     } else {
@@ -554,6 +554,112 @@ struct TerminalBlockView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
+    }
+    
+    /// Format output for display with proper column alignment like Warp
+    private func formatOutputForDisplay(_ output: String) -> String {
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+        
+        // Check if this looks like columnar output (multiple items on lines separated by tabs/spaces)
+        if looksLikeColumnarOutput(output) {
+            return formatColumnarOutput(output)
+        }
+        
+        // Otherwise just expand tabs normally
+        return expandTabs(output, tabWidth: 8)
+    }
+    
+    /// Detect if output looks like ls-style columnar data (tab-separated short filenames)
+    /// Very conservative - only true for tab-separated short items, never for prose
+    private func looksLikeColumnarOutput(_ output: String) -> Bool {
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: true)
+        guard lines.count > 0 && lines.count <= 10 else { return false }
+        
+        var tabLineCount = 0
+        for line in lines {
+            // Must have tabs - space-separated text is likely prose
+            guard line.contains("\t") else { continue }
+            
+            // Split by tabs and check if items look like filenames (short, no sentences)
+            let items = line.split(separator: "\t")
+            
+            // Each item should be short (filename-like, not prose)
+            let allShort = items.allSatisfy { item in
+                let trimmed = item.trimmingCharacters(in: .whitespaces)
+                return trimmed.count <= 30 && !trimmed.contains(": ")
+            }
+            
+            if allShort && items.count >= 2 {
+                tabLineCount += 1
+            }
+        }
+        
+        // Only format as columns if most lines are tab-separated short items
+        return tabLineCount > 0 && tabLineCount >= lines.count / 2
+    }
+    
+    /// Format columnar output with even column widths
+    private func formatColumnarOutput(_ output: String) -> String {
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var formattedLines: [String] = []
+        
+        for line in lines {
+            if line.isEmpty {
+                formattedLines.append("")
+                continue
+            }
+            
+            // Split by tabs or multiple spaces
+            let items = line.split(whereSeparator: { $0 == "\t" || $0.isWhitespace })
+                .map(String.init)
+                .filter { !$0.isEmpty }
+            
+            if items.count <= 1 {
+                formattedLines.append(line)
+                continue
+            }
+            
+            // Find the appropriate column width (longest item + padding)
+            let maxItemLen = items.map { $0.count }.max() ?? 0
+            let columnWidth = ((maxItemLen / 8) + 1) * 8 // Round up to next 8-char boundary
+            let minColumnWidth = max(16, columnWidth) // At least 16 chars
+            
+            // Format items into evenly-spaced columns
+            var formattedLine = ""
+            for (index, item) in items.enumerated() {
+                if index > 0 {
+                    // Pad to column width
+                    let currentLen = formattedLine.count % minColumnWidth
+                    let padding = minColumnWidth - currentLen
+                    formattedLine += String(repeating: " ", count: max(2, padding))
+                }
+                formattedLine += item
+            }
+            formattedLines.append(formattedLine)
+        }
+        
+        return formattedLines.joined(separator: "\n")
+    }
+    
+    /// Simple tab expansion
+    private func expandTabs(_ text: String, tabWidth: Int) -> String {
+        var result = ""
+        var column = 0
+        
+        for char in text {
+            if char == "\t" {
+                let spacesToAdd = tabWidth - (column % tabWidth)
+                result += String(repeating: " ", count: spacesToAdd)
+                column += spacesToAdd
+            } else if char == "\n" {
+                result.append(char)
+                column = 0
+            } else {
+                result.append(char)
+                column += 1
+            }
+        }
+        return result
     }
     
     private func copyToClipboard(_ text: String) {
