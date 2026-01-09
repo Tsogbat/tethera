@@ -15,6 +15,9 @@ enum OSCParserState {
     case escape           // After ESC
     case oscStart         // After ESC ]
     case oscContent       // Reading OSC content
+    case oscST            // OSC ST terminator (ESC \)
+    case csi              // CSI sequence (ESC [) - ANSI codes
+    case charSet          // Character set (ESC ( or ESC ))
 }
 
 class TerminalSession: ObservableObject {
@@ -31,6 +34,9 @@ class TerminalSession: ObservableObject {
     private var oscState: OSCParserState = .normal
     private var oscBuffer = ""
     private var outputBuffer = ""
+    
+    // Skip the first command (shell integration injection)
+    private var skipNextCommand = true
     
     private var masterFD: Int32 = -1
     private var slaveFD: Int32 = -1
@@ -186,7 +192,9 @@ class TerminalSession: ObservableObject {
         }
         
         if let path = scriptPath {
-            let sourceCmd = "source '\(path)'\n"
+            // Source silently: redirect output and clear line
+            // The \\r\\033[K clears the current line after sourcing
+            let sourceCmd = "source '\(path)' >/dev/null 2>&1; clear\n"
             write(sourceCmd)
             print("Injected shell integration: \(path)")
         } else {
@@ -248,26 +256,29 @@ class TerminalSession: ObservableObject {
         }
     }
     
-    // MARK: - OSC 133 Parser
+    // MARK: - OSC 133 Parser (also strips ANSI/CSI sequences)
     private func parseOSCByte(_ byte: UInt8) {
-        let char = Character(UnicodeScalar(byte))
-        
         switch oscState {
         case .normal:
             if byte == 0x1B { // ESC
                 oscState = .escape
-            } else {
-                outputBuffer.append(char)
+            } else if byte >= 0x20 && byte < 0x7F { // Printable ASCII
+                outputBuffer.append(Character(UnicodeScalar(byte)))
+            } else if byte == 0x0A || byte == 0x0D || byte == 0x09 { // LF, CR, TAB
+                outputBuffer.append(Character(UnicodeScalar(byte)))
             }
+            // Ignore other control characters
             
         case .escape:
-            if byte == 0x5D { // ]
+            if byte == 0x5D { // ] - OSC sequence
                 oscState = .oscStart
                 oscBuffer = ""
+            } else if byte == 0x5B { // [ - CSI sequence (ANSI codes)
+                oscState = .csi
+            } else if byte == 0x28 || byte == 0x29 { // ( or ) - character set
+                oscState = .charSet
             } else {
-                // Not an OSC sequence, add ESC + this char to output
-                outputBuffer.append("\u{1B}")
-                outputBuffer.append(char)
+                // Single-char escape sequence, return to normal
                 oscState = .normal
             }
             
@@ -276,13 +287,31 @@ class TerminalSession: ObservableObject {
                 handleOSCSequence(oscBuffer)
                 oscBuffer = ""
                 oscState = .normal
-            } else if byte == 0x1B { // ESC (might be ST terminator)
-                // Check for ESC \ (ST) - just handle BEL for now
-                oscBuffer.append(char)
+            } else if byte == 0x1B { // ESC (might be ST terminator ESC \)
+                oscState = .oscST
             } else {
-                oscBuffer.append(char)
+                oscBuffer.append(Character(UnicodeScalar(byte)))
                 oscState = .oscContent
             }
+            
+        case .oscST:
+            // ESC \ is the String Terminator for OSC
+            if byte == 0x5C { // backslash
+                handleOSCSequence(oscBuffer)
+                oscBuffer = ""
+            }
+            oscState = .normal
+            
+        case .csi:
+            // CSI sequences end with a letter (0x40-0x7E)
+            if byte >= 0x40 && byte <= 0x7E {
+                oscState = .normal
+            }
+            // Stay in CSI state for parameters (0x30-0x3F) and intermediates (0x20-0x2F)
+            
+        case .charSet:
+            // Character set designation is single byte after ESC ( or ESC )
+            oscState = .normal
         }
     }
     
@@ -294,39 +323,69 @@ class TerminalSession: ObservableObject {
         let parts = params.split(separator: ";", maxSplits: 1)
         guard let marker = parts.first else { return }
         
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+        print("[OSC] Marker: \(marker), buffered output length: \(outputBuffer.count)")
+        
+        switch marker {
+        case "A": // Prompt start - clear buffer, notify delegate
+            outputBuffer = ""
+            DispatchQueue.main.async { [weak self] in
+                self?.blockDelegate?.terminalDidStartPrompt()
+            }
             
-            switch marker {
-            case "A": // Prompt start
-                self.flushOutputBuffer()
-                self.blockDelegate?.terminalDidStartPrompt()
-                
-            case "B": // Command start (user pressed Enter)
-                self.blockDelegate?.terminalDidStartCommand()
-                
-            case "C": // Output start
-                self.outputBuffer = "" // Clear buffer for new output
-                
-            case "D": // Command end
-                self.flushOutputBuffer()
-                var exitCode = 0
-                if parts.count > 1, let code = Int(parts[1]) {
-                    exitCode = code
+        case "B": // Command start - clear any prompt text that was captured
+            outputBuffer = ""
+            DispatchQueue.main.async { [weak self] in
+                self?.blockDelegate?.terminalDidStartCommand()
+            }
+            
+        case "C": // Output start - actual command output begins now
+            outputBuffer = ""
+            
+        case "D": // Command end - send captured output
+            // Skip the first command (shell integration injection)
+            if skipNextCommand {
+                skipNextCommand = false
+                outputBuffer = ""
+                print("[OSC] Skipping injection command output")
+                return
+            }
+            
+            let capturedOutput = outputBuffer
+            outputBuffer = ""
+            
+            // Clean output: remove % prompt markers and trim
+            var cleanedOutput = capturedOutput
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            // Remove trailing % (zsh prompt marker)
+            while cleanedOutput.hasSuffix("%") {
+                cleanedOutput = String(cleanedOutput.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            // Remove leading % 
+            while cleanedOutput.hasPrefix("%") {
+                cleanedOutput = String(cleanedOutput.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            
+            var exitCode = 0
+            if parts.count > 1, let code = Int(parts[1]) {
+                exitCode = code
+            }
+            print("[OSC] Command end with exit code: \(exitCode), output: \(cleanedOutput.prefix(100))...")
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                if !cleanedOutput.isEmpty {
+                    self.blockDelegate?.terminalDidReceiveOutput(cleanedOutput)
                 }
                 self.blockDelegate?.terminalDidEndCommand(exitCode: exitCode)
-                
-            default:
-                break
             }
+            
+        default:
+            break
         }
     }
     
     private func flushOutputBuffer() {
-        guard !outputBuffer.isEmpty else { return }
-        let output = outputBuffer
-        outputBuffer = ""
-        blockDelegate?.terminalDidReceiveOutput(output)
+        // Not used - see handleOSCSequence
     }
     
     private func handleCancel() {
