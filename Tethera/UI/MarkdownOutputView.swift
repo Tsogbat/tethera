@@ -97,76 +97,135 @@ struct MarkdownOutputView: View {
     private func renderElement(_ element: MarkdownElement) -> some View {
         switch element {
         case .header1(let text):
-            Text(renderInline(text))
-                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 6), weight: .bold))
-                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(renderInline(text))
+                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 8), weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [userSettings.themeConfiguration.accentColor.color, userSettings.themeConfiguration.accentColor.color.opacity(0.7)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                // Subtle underline
+                Rectangle()
+                    .fill(userSettings.themeConfiguration.accentColor.color.opacity(0.3))
+                    .frame(height: 2)
+                    .frame(maxWidth: 200)
+            }
+            .padding(.top, 16)
+            .padding(.bottom, 8)
             
         case .header2(let text):
-            Text(renderInline(text))
-                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 3), weight: .semibold))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color)
-                .padding(.top, 6)
-                .padding(.bottom, 2)
+            HStack(spacing: 10) {
+                Rectangle()
+                    .fill(userSettings.themeConfiguration.accentColor.color)
+                    .frame(width: 3)
+                Text(renderInline(text))
+                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 4), weight: .semibold))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 6)
             
         case .header3(let text):
             Text(renderInline(text))
-                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 1), weight: .medium))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.9))
-                .padding(.top, 4)
+                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 2), weight: .medium))
+                .foregroundColor(userSettings.themeConfiguration.accentColor.color.opacity(0.9))
+                .padding(.top, 8)
+                .padding(.bottom, 4)
             
-        case .codeBlock(let code, _):
-            Text(code)
-                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize - 1), design: .monospaced))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.9))
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(SwiftUI.Color.black.opacity(0.3))
-                )
-                .textSelection(.enabled)
+        case .codeBlock(let code, let language):
+            VStack(alignment: .leading, spacing: 0) {
+                // Language badge
+                if !language.isEmpty {
+                    Text(language.uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(userSettings.themeConfiguration.accentColor.color.opacity(0.15))
+                        )
+                        .padding(.bottom, 8)
+                }
+                
+                Text(code)
+                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize - 1), design: .monospaced))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.95))
+                    .textSelection(.enabled)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(SwiftUI.Color.black.opacity(0.4))
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [.white.opacity(0.1), .clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                }
+            )
+            .padding(.vertical, 4)
             
         case .listItem(let text):
-            HStack(alignment: .top, spacing: 8) {
-                Text("•")
-                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+            HStack(alignment: .top, spacing: 12) {
+                Circle()
+                    .fill(userSettings.themeConfiguration.accentColor.color)
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 7)
                 Text(renderInline(text))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
+                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.9))
+                    .lineSpacing(4)
             }
-            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+            .padding(.vertical, 2)
             
         case .tableRow(let text):
             let cells = parseTableCells(text)
             if cells.isEmpty || isSeparatorRow(text) {
-                // Skip separator rows (|---|---|)
                 EmptyView()
             } else {
-                HStack(spacing: 0) {
-                    ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
+                HStack(spacing: 1) {
+                    ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
                         Text(renderInline(cell.trimmingCharacters(in: .whitespaces)))
-                            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize), design: .monospaced))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
-                            .frame(minWidth: 80, alignment: .leading)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize - 1), design: .monospaced))
+                            .foregroundColor(index == 0 ? userSettings.themeConfiguration.accentColor.color : userSettings.themeConfiguration.textColor.color.opacity(0.85))
+                            .fontWeight(index == 0 ? .medium : .regular)
+                            .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Rectangle()
+                                    .fill(SwiftUI.Color.white.opacity(index == 0 ? 0.06 : 0.02))
+                            )
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(SwiftUI.Color.white.opacity(0.03))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(SwiftUI.Color.white.opacity(0.08), lineWidth: 1)
                 )
             }
             
         case .paragraph(let text):
             Text(renderInline(text))
                 .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
+                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.85))
+                .lineSpacing(4)
                 .textSelection(.enabled)
             
         case .blank:
-            Spacer().frame(height: 4)
+            Spacer().frame(height: 8)
         }
     }
     
