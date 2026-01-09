@@ -6,7 +6,7 @@ struct MarkdownOutputView: View {
     @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(parseMarkdownLines().enumerated()), id: \.offset) { _, element in
                 renderElement(element)
             }
@@ -113,8 +113,8 @@ struct MarkdownOutputView: View {
                     .frame(height: 2)
                     .frame(maxWidth: 200)
             }
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
             
         case .header2(let text):
             HStack(spacing: 10) {
@@ -125,15 +125,15 @@ struct MarkdownOutputView: View {
                     .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 4), weight: .semibold))
                     .foregroundColor(userSettings.themeConfiguration.textColor.color)
             }
-            .padding(.top, 12)
-            .padding(.bottom, 6)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
             
         case .header3(let text):
             Text(renderInline(text))
                 .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 2), weight: .medium))
                 .foregroundColor(userSettings.themeConfiguration.accentColor.color.opacity(0.9))
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+                .padding(.top, 4)
+                .padding(.bottom, 2)
             
         case .codeBlock(let code, let language):
             VStack(alignment: .leading, spacing: 0) {
@@ -156,7 +156,7 @@ struct MarkdownOutputView: View {
                     .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.95))
                     .textSelection(.enabled)
             }
-            .padding(16)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 ZStack {
@@ -175,7 +175,7 @@ struct MarkdownOutputView: View {
                         )
                 }
             )
-            .padding(.vertical, 4)
+            .padding(.vertical, 2)
             
         case .listItem(let text):
             HStack(alignment: .top, spacing: 12) {
@@ -225,7 +225,7 @@ struct MarkdownOutputView: View {
                 .textSelection(.enabled)
             
         case .blank:
-            Spacer().frame(height: 8)
+            Spacer().frame(height: 2)
         }
     }
     
