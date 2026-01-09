@@ -90,32 +90,31 @@ struct BlockTerminalView: View {
 
                 // Modern command input area
                 VStack(spacing: 0) {
-                    // Autocomplete suggestions overlay
-                    if autocompleteEngine.isShowingSuggestions && !autocompleteEngine.suggestions.isEmpty {
-                        VStack {
-                            Spacer()
-                            HStack {
-                                AutocompleteSuggestionView(
-                                    suggestions: autocompleteEngine.suggestions,
-                                    onSuggestionSelected: { suggestion in
-                                        commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
-                                        autocompleteEngine.clearSuggestions()
-                                        // Add space after completion for better UX
+                    // Autocomplete dropdown overlay (Tab to show) - positioned directly above input
+                    if autocompleteEngine.isDropdownVisible && !autocompleteEngine.dropdownSuggestions.isEmpty {
+                        HStack {
+                            AutocompleteSuggestionView(
+                                suggestions: autocompleteEngine.dropdownSuggestions,
+                                onSuggestionSelected: { suggestion in
+                                    commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
+                                    if suggestion.type == .directory {
+                                        // Don't close dropdown - refresh for directory traversal
+                                        autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
+                                    } else {
+                                        autocompleteEngine.hideDropdown()
                                         if suggestion.type == .command {
                                             commandInput += " "
                                         }
-                                    },
-                                    onArrowNavigation: { index in
-                                        autocompleteEngine.updateSelectedIndex(index, currentInput: commandInput)
-                                    },
-                                    selectedIndex: $autocompleteEngine.selectedSuggestionIndex
-                                )
-                                .frame(maxWidth: 400)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 8)
+                                    }
+                                },
+                                onArrowNavigation: { _ in },
+                                selectedIndex: $autocompleteEngine.selectedIndex
+                            )
+                            .frame(maxWidth: 350)
+                            Spacer()
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 4)
                     }
                     
                     // Liquid Glass Input Area
@@ -158,13 +157,19 @@ struct BlockTerminalView: View {
                                     .onChange(of: commandInput) { _, newValue in
                                         hasUsedArrowKeys = false
                                         if isInputFocused {
-                                            autocompleteEngine.getSuggestions(for: newValue, in: viewModel.workingDirectory)
+                                            // Update inline ghost completion
+                                            autocompleteEngine.updateInlineCompletion(
+                                                for: newValue,
+                                                history: CommandHistoryManager.shared.allEntries.map { $0.command }
+                                            )
+                                            // Hide dropdown when typing (user can press Tab to reopen)
+                                            if autocompleteEngine.isDropdownVisible {
+                                                autocompleteEngine.hideDropdown()
+                                            }
                                         }
                                     }
                                     .onSubmit { 
-                                        if autocompleteEngine.isShowingSuggestions {
-                                            autocompleteEngine.clearSuggestions()
-                                        }
+                                        autocompleteEngine.hideDropdown()
                                         submitCommand() 
                                     }
                                     .onKeyPress { keyPress in
@@ -251,77 +256,62 @@ struct BlockTerminalView: View {
     }
     
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
-        // Handle Tab for completion and directory browsing
+        // Tab: Toggle dropdown or accept inline completion
         if keyPress.key == .tab {
-            if !autocompleteEngine.inlineCompletion.isEmpty {
-                commandInput = autocompleteEngine.inlineCompletion
-                autocompleteEngine.clearSuggestions()
-                return .handled
-            } else if autocompleteEngine.isShowingSuggestions {
-                let selectedIndex = autocompleteEngine.selectedSuggestionIndex
-                if selectedIndex < autocompleteEngine.suggestions.count {
-                    let suggestion = autocompleteEngine.suggestions[selectedIndex]
-                    commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
-                    if suggestion.type == .command {
-                        commandInput += " "
-                    }
-                    autocompleteEngine.clearSuggestions()
-                }
-                return .handled
-            } else {
-                // Smart Tab behavior: directory completion or force show suggestions
-                let components = commandInput.split(separator: " ", omittingEmptySubsequences: false)
-                let shouldShowDirectories = shouldUseDirectoryCompletion(components: components)
-                
-                if shouldShowDirectories {
-                    // Force show path suggestions for directory browsing
-                    autocompleteEngine.getSuggestions(for: commandInput, in: viewModel.workingDirectory, forceShow: true)
-                } else {
-                    // Force show command suggestions
-                    autocompleteEngine.getSuggestions(for: commandInput, in: viewModel.workingDirectory, forceShow: true)
-                }
-                return .handled
-            }
-        }
-        
-        // Handle Right Arrow for instant inline completion
-        if keyPress.key == .rightArrow && !autocompleteEngine.inlineCompletion.isEmpty {
-            commandInput = autocompleteEngine.inlineCompletion
-            autocompleteEngine.clearSuggestions()
-            return .handled
-        }
-        
-        if autocompleteEngine.isShowingSuggestions {
-            switch keyPress.key {
-            case .downArrow:
-                hasUsedArrowKeys = true
-                let newIndex = min(autocompleteEngine.selectedSuggestionIndex + 1, autocompleteEngine.suggestions.count - 1)
-                autocompleteEngine.updateSelectedIndex(newIndex, currentInput: commandInput)
-                return .handled
-            case .upArrow:
-                hasUsedArrowKeys = true
-                let newIndex = max(autocompleteEngine.selectedSuggestionIndex - 1, 0)
-                autocompleteEngine.updateSelectedIndex(newIndex, currentInput: commandInput)
-                return .handled
-            case .return:
-                if hasUsedArrowKeys {
-                    let selectedIndex = autocompleteEngine.selectedSuggestionIndex
-                    if selectedIndex < autocompleteEngine.suggestions.count {
-                        let suggestion = autocompleteEngine.suggestions[selectedIndex]
-                        commandInput = autocompleteEngine.getCompletion(for: commandInput, suggestion: suggestion)
+            if autocompleteEngine.isDropdownVisible {
+                // Select current item in dropdown
+                if let suggestion = autocompleteEngine.getSelectedSuggestion() {
+                    commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
+                    if suggestion.type == .directory {
+                        // Refresh dropdown for directory traversal
+                        autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
+                    } else {
+                        autocompleteEngine.hideDropdown()
                         if suggestion.type == .command {
                             commandInput += " "
                         }
-                        autocompleteEngine.clearSuggestions()
-                        hasUsedArrowKeys = false
-                        return .handled
                     }
                 }
-                return .ignored
-            case .escape:
-                autocompleteEngine.clearSuggestions()
-                hasUsedArrowKeys = false
+            } else {
+                // Show dropdown suggestions
+                autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
+            }
+            return .handled
+        }
+        
+        // Right Arrow: Accept inline ghost completion
+        if keyPress.key == .rightArrow && !autocompleteEngine.inlineCompletion.isEmpty {
+            commandInput = autocompleteEngine.inlineCompletion
+            autocompleteEngine.clear()
+            return .handled
+        }
+        
+        // Escape: Close dropdown
+        if keyPress.key == .escape && autocompleteEngine.isDropdownVisible {
+            autocompleteEngine.hideDropdown()
+            return .handled
+        }
+        
+        // Arrow keys: Navigate dropdown or history
+        if autocompleteEngine.isDropdownVisible {
+            switch keyPress.key {
+            case .downArrow:
+                autocompleteEngine.navigateDown()
                 return .handled
+            case .upArrow:
+                autocompleteEngine.navigateUp()
+                return .handled
+            case .return:
+                // Select item from dropdown
+                if let suggestion = autocompleteEngine.getSelectedSuggestion() {
+                    commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
+                    if suggestion.type == .command {
+                        commandInput += " "
+                    }
+                    autocompleteEngine.hideDropdown()
+                    return .handled
+                }
+                return .ignored
             default:
                 break
             }
