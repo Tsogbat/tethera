@@ -384,6 +384,7 @@ struct TerminalBlockView: View {
     @State private var isExpanded: Bool = true
     @State private var isHovered: Bool = false
     @State private var showCopied: Bool = false
+    @State private var showRawOutput: Bool = false
     
     init(block: TerminalBlock, onRerun: ((String) -> Void)? = nil, onEdit: ((String) -> Void)? = nil) {
         self.block = block
@@ -453,6 +454,16 @@ struct TerminalBlockView: View {
                         BlockActionButton(icon: "doc.on.doc.fill", tooltip: "Copy All") {
                             copyToClipboard("\(block.input)\n\(block.output)")
                         }
+                        
+                        // Markdown toggle for markdown content
+                        if block.isMarkdownContent {
+                            BlockActionButton(
+                                icon: showRawOutput ? "doc.richtext" : "doc.plaintext",
+                                tooltip: showRawOutput ? "Render Markdown" : "Show Raw"
+                            ) {
+                                showRawOutput.toggle()
+                            }
+                        }
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 }
@@ -492,10 +503,16 @@ struct TerminalBlockView: View {
             if !block.output.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     if isExpanded {
-                        Text(formatOutputForDisplay(block.output))
-                            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize), weight: .regular, design: .monospaced))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
-                            .textSelection(.enabled)
+                        // Markdown toggle for markdown content
+                        if block.isMarkdownContent && !showRawOutput {
+                            MarkdownOutputView(content: block.output)
+                                .environmentObject(userSettings)
+                        } else {
+                            Text(formatOutputForDisplay(block.output))
+                                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize), weight: .regular, design: .monospaced))
+                                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.88))
+                                .textSelection(.enabled)
+                        }
                     } else {
                         // Show summary when collapsed
                         HStack {

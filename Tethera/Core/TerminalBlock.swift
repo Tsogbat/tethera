@@ -57,6 +57,16 @@ struct TerminalBlock: Identifiable, Codable {
     var summary: String?
     var isExpanded: Bool = true
     
+    /// Whether this block's output should be rendered as markdown
+    var isMarkdownContent: Bool {
+        // Check if command is reading a markdown file
+        let mdFilePattern = input.contains(".md") || input.contains(".markdown")
+        if mdFilePattern && (input.hasPrefix("cat ") || input.hasPrefix("less ") || input.hasPrefix("more ") || input.hasPrefix("bat ")) {
+            return true
+        }
+        return false
+    }
+    
     init(
         id: UUID = UUID(),
         input: String,
