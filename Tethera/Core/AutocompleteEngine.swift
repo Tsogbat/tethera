@@ -346,6 +346,18 @@ class AutocompleteEngine: ObservableObject {
             return
         }
         
+        let components = input.split(separator: " ", omittingEmptySubsequences: false)
+        
+        // Commands that take no arguments - no ghost text after command is typed
+        let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname", "ls", "ll"])
+        if components.count >= 2, let cmd = components.first {
+            let cmdStr = String(cmd).lowercased()
+            if noCompletionCommands.contains(cmdStr) {
+                DispatchQueue.main.async { self.inlineCompletion = "" }
+                return
+            }
+        }
+        
         // Priority 1: Match from command history (context-aware)
         if let historyMatch = findHistoryMatch(input: input, history: history, workingDirectory: workingDirectory) {
             DispatchQueue.main.async { self.inlineCompletion = historyMatch }
@@ -353,7 +365,6 @@ class AutocompleteEngine: ObservableObject {
         }
         
         // Priority 2: Complete command names
-        let components = input.split(separator: " ", omittingEmptySubsequences: false)
         if components.count == 1, let command = components.first {
             if let match = commonCommands.first(where: { $0.hasPrefix(String(command).lowercased()) && $0 != String(command).lowercased() }) {
                 let completion = String(match.dropFirst(command.count))
@@ -364,9 +375,13 @@ class AutocompleteEngine: ObservableObject {
         
         // Priority 3: Command subcommands (e.g., "git " -> "git status")
         if components.count == 2, let cmd = components.first, components.last?.isEmpty == true {
-            if let completions = commandCompletions[String(cmd).lowercased()], let first = completions.first {
-                DispatchQueue.main.async { self.inlineCompletion = input + first.text }
-                return
+            let cmdStr = String(cmd).lowercased()
+            // Skip if it's a standalone command
+            if !noCompletionCommands.contains(cmdStr) {
+                if let completions = commandCompletions[cmdStr], let first = completions.first {
+                    DispatchQueue.main.async { self.inlineCompletion = input + first.text }
+                    return
+                }
             }
         }
         
@@ -378,24 +393,57 @@ class AutocompleteEngine: ObservableObject {
         let currentDirName = (workingDirectory as NSString).lastPathComponent.lowercased()
         let parentDirName = ((workingDirectory as NSString).deletingLastPathComponent as NSString).lastPathComponent.lowercased()
         
+        // Command type categories
+        let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
+        let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "source"])
+        let createCommands = Set(["mkdir", "touch"]) // Target should NOT exist
+        
         for entry in history.reversed() {
             let lowercaseEntry = entry.lowercased()
             
             // Skip if doesn't match prefix
             guard lowercaseEntry.hasPrefix(lowercaseInput) && lowercaseEntry != lowercaseInput else { continue }
             
-            // Context filter: skip cd commands that would navigate to current directory
-            if lowercaseEntry.hasPrefix("cd ") {
-                let target = String(lowercaseEntry.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-                
+            // Extract command and target
+            let parts = entry.split(separator: " ", maxSplits: 1)
+            guard parts.count == 2 else { 
+                return entry // No argument, safe to suggest
+            }
+            let cmd = String(parts[0]).lowercased()
+            let target = String(parts[1]).trimmingCharacters(in: .whitespaces)
+            
+            // Build full path
+            let fullPath: String
+            if target.hasPrefix("/") {
+                fullPath = target
+            } else if target.hasPrefix("~") {
+                fullPath = NSString(string: target).expandingTildeInPath
+            } else {
+                fullPath = (workingDirectory as NSString).appendingPathComponent(target)
+            }
+            
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir)
+            
+            // Context filter: cd only to directories that exist
+            if dirOnlyCommands.contains(cmd) {
                 // Skip if target is current directory name
-                if target == currentDirName { continue }
+                if target.lowercased() == currentDirName { continue }
+                if target.lowercased().hasSuffix("/\(currentDirName)") { continue }
                 
-                // Skip if target ends with current directory (e.g., "projects/tethera" when in tethera)
-                if target.hasSuffix("/\(currentDirName)") { continue }
-                
-                // Skip if target is parent directory reference and we're at a path containing it
-                if target.contains(parentDirName) && target.hasSuffix(currentDirName) { continue }
+                // Skip if doesn't exist as directory
+                if !exists || !isDir.boolValue { continue }
+            }
+            
+            // Context filter: cat/vim only to files that exist
+            if fileOnlyCommands.contains(cmd) {
+                // Skip if doesn't exist as file
+                if !exists || isDir.boolValue { continue }
+            }
+            
+            // Context filter: mkdir/touch target should NOT exist
+            if createCommands.contains(cmd) {
+                if exists { continue }
             }
             
             return entry
@@ -406,13 +454,67 @@ class AutocompleteEngine: ObservableObject {
     // MARK: - Dropdown Suggestions (Tab Menu)
     
     /// Show dropdown suggestions when Tab is pressed
+    /// Uses real shell completions with fallback to hardcoded
     func showDropdownSuggestions(for input: String, workingDirectory: String) {
-        let suggestions = generateSuggestions(for: input, workingDirectory: workingDirectory)
+        guard !input.isEmpty else {
+            hideDropdown()
+            return
+        }
+        
+        // Extract command for filtering
+        let components = input.split(separator: " ", omittingEmptySubsequences: false)
+        let cmd = components.count > 1 ? String(components.first ?? "").lowercased() : ""
+        
+        // Command type sets for filtering
+        let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname"])
+        let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
+        let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "code", "source"])
+        
+        // Skip dropdown for standalone commands
+        if noCompletionCommands.contains(cmd) {
+            hideDropdown()
+            return
+        }
+        
+        // Generate filtered suggestions
+        let fallbackSuggestions = generateSuggestions(for: input, workingDirectory: workingDirectory)
         
         DispatchQueue.main.async {
-            self.dropdownSuggestions = suggestions
-            self.isDropdownVisible = !suggestions.isEmpty
+            self.dropdownSuggestions = fallbackSuggestions
+            self.isDropdownVisible = !fallbackSuggestions.isEmpty
             self.selectedIndex = 0
+        }
+        
+        // Then try to get real shell completions (async)
+        ShellCompletionProvider.shared.queryCompletions(for: input, workingDirectory: workingDirectory) { [weak self] shellSuggestions in
+            guard let self = self, !shellSuggestions.isEmpty else { return }
+            
+            // Filter shell suggestions based on command type
+            let filteredShell = shellSuggestions.filter { suggestion in
+                if dirOnlyCommands.contains(cmd) && suggestion.type == .file {
+                    return false // Skip files for cd
+                }
+                if fileOnlyCommands.contains(cmd) && suggestion.type == .directory {
+                    return false // Skip directories for cat
+                }
+                return true
+            }
+            
+            // Merge: shell suggestions first, then add unique fallback items
+            var merged = filteredShell
+            let shellTexts = Set(filteredShell.map { $0.text.lowercased() })
+            
+            for suggestion in fallbackSuggestions {
+                if !shellTexts.contains(suggestion.text.lowercased()) {
+                    merged.append(suggestion)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                if self.isDropdownVisible {
+                    self.dropdownSuggestions = merged // No limit - show all
+                }
+            }
         }
     }
     
@@ -494,56 +596,138 @@ class AutocompleteEngine: ObservableObject {
         let components = input.split(separator: " ", omittingEmptySubsequences: false)
         let lastComponent = String(components.last ?? "")
         
+        // Standalone commands that shouldn't appear in dropdown
+        let standaloneCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname"])
+        
         var suggestions: [AutocompleteSuggestion] = []
         
         if components.count == 1 {
-            // Suggest commands
+            // Suggest commands matching prefix - but filter out standalone commands
             suggestions = commonCommands
-                .filter { $0.hasPrefix(lastComponent.lowercased()) }
+                .filter { $0.hasPrefix(lastComponent.lowercased()) && !standaloneCommands.contains($0) }
                 .prefix(15)
                 .map { AutocompleteSuggestion(text: $0, type: .command, description: "Command") }
         } else {
-            // Get the command (first word)
             let cmd = String(components.first ?? "").lowercased()
             
-            // First: suggest command completions (flags, subcommands) - these go on top
-            if let completions = commandCompletions[cmd] {
-                let cmdSuggestions = completions
-                    .filter { lastComponent.isEmpty || $0.text.lowercased().hasPrefix(lastComponent.lowercased()) }
-                    .map { AutocompleteSuggestion(text: $0.text, type: .command, description: $0.desc) }
-                suggestions.append(contentsOf: cmdSuggestions)
+            // Commands that need NO completions at all (standalone)
+            let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname"])
+            if noCompletionCommands.contains(cmd) {
+                return [] // These commands take no arguments
             }
             
-            // Then: suggest paths/files (below flags)
-            let pathSuggestions = getPathSuggestions(prefix: lastComponent, workingDirectory: workingDirectory)
-            suggestions.append(contentsOf: pathSuggestions)
+            // Commands that primarily use flags (show more flags)
+            let flagCommands = Set(["ls", "grep", "find", "ps", "top", "chmod", "chown", "tar", "curl", "ssh", "rsync"])
+            
+            // Commands that only accept directories
+            let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
+            
+            // Commands that only accept files (not directories)
+            let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "code", "source"])
+            
+            // Commands that don't need path suggestions (they have their own completions)
+            let noPathCommands = Set(["git", "brew", "npm", "yarn", "pip", "pip3", "cargo", "docker", "kubectl", "make", "swift", "go"])
+            
+            // For cd-like commands: show directories FIRST, then shortcuts
+            if dirOnlyCommands.contains(cmd) {
+                // Add directory suggestions first
+                let pathSuggestions = getPathSuggestions(
+                    prefix: lastComponent,
+                    workingDirectory: workingDirectory,
+                    directoriesOnly: true,
+                    filesOnly: false
+                )
+                suggestions.append(contentsOf: pathSuggestions)
+                
+                // Add shortcuts (like ~, -, ..) only if no prefix typed
+                if lastComponent.isEmpty, let completions = commandCompletions[cmd] {
+                    let shortcuts = completions.map { 
+                        AutocompleteSuggestion(text: $0.text, type: .directory, description: $0.desc) 
+                    }
+                    suggestions.append(contentsOf: shortcuts)
+                }
+            } else {
+                // For other commands: flags first, then paths
+                if let completions = commandCompletions[cmd] {
+                    let flagLimit = flagCommands.contains(cmd) ? 5 : 3
+                    let cmdSuggestions = completions
+                        .filter { lastComponent.isEmpty || $0.text.lowercased().hasPrefix(lastComponent.lowercased()) }
+                        .prefix(flagLimit)
+                        .map { AutocompleteSuggestion(text: $0.text, type: .command, description: $0.desc) }
+                    suggestions.append(contentsOf: cmdSuggestions)
+                }
+                
+                // Add path suggestions for non-git-like commands
+                if !noPathCommands.contains(cmd) || !lastComponent.isEmpty {
+                    let filesOnly = fileOnlyCommands.contains(cmd)
+                    let pathSuggestions = getPathSuggestions(
+                        prefix: lastComponent,
+                        workingDirectory: workingDirectory,
+                        directoriesOnly: false,
+                        filesOnly: filesOnly
+                    )
+                    suggestions.append(contentsOf: pathSuggestions)
+                }
+            }
         }
         
-        return Array(suggestions.prefix(20))
+        return suggestions // Return all - dropdown is scrollable
     }
     
-    private func getPathSuggestions(prefix: String, workingDirectory: String) -> [AutocompleteSuggestion] {
+    private func getPathSuggestions(prefix: String, workingDirectory: String, directoriesOnly: Bool = false, filesOnly: Bool = false) -> [AutocompleteSuggestion] {
         var suggestions: [AutocompleteSuggestion] = []
+        let home = fileManager.homeDirectoryForCurrentUser.path
         
-        let searchDir: String
-        let searchPrefix: String
+        var searchDir: String
+        var searchPrefix: String
         
-        if prefix.contains("/") {
+        // Handle ~ at the start (home directory)
+        if prefix == "~" {
+            searchDir = home
+            searchPrefix = ""
+        } else if prefix.hasPrefix("~/") {
+            // ~/something - search in home subdirectory
+            let pathAfterTilde = String(prefix.dropFirst(2)) // Remove ~/
+            let parts = pathAfterTilde.split(separator: "/", omittingEmptySubsequences: false)
+            searchPrefix = String(parts.last ?? "")
+            if parts.count > 1 {
+                searchDir = home + "/" + parts.dropLast().joined(separator: "/")
+            } else {
+                searchDir = home
+            }
+        } else if prefix.contains("/") {
+            // Path with / - could be relative or absolute
             let parts = prefix.split(separator: "/", omittingEmptySubsequences: false)
             searchPrefix = String(parts.last ?? "")
+            let pathPart = parts.dropLast().joined(separator: "/")
             
             if prefix.hasPrefix("/") {
-                searchDir = "/" + parts.dropLast().joined(separator: "/")
-            } else if prefix.hasPrefix("~") {
-                let home = fileManager.homeDirectoryForCurrentUser.path
-                searchDir = home + "/" + parts.dropFirst().dropLast().joined(separator: "/")
+                // Absolute path
+                searchDir = "/" + pathPart
             } else {
-                searchDir = workingDirectory + "/" + parts.dropLast().joined(separator: "/")
+                // Relative path - try HOME first (Projects, Documents etc are typically there)
+                // then fall back to working directory
+                let tryHomeDir = (home as NSString).appendingPathComponent(pathPart)
+                let tryWorkingDir = (workingDirectory as NSString).appendingPathComponent(pathPart)
+                
+                var isDir: ObjCBool = false
+                if fileManager.fileExists(atPath: tryHomeDir, isDirectory: &isDir) && isDir.boolValue {
+                    searchDir = tryHomeDir
+                } else if fileManager.fileExists(atPath: tryWorkingDir, isDirectory: &isDir) && isDir.boolValue {
+                    searchDir = tryWorkingDir
+                } else {
+                    // Neither exists, try home
+                    searchDir = tryHomeDir
+                }
             }
         } else {
+            // Simple prefix, search in working directory
             searchDir = workingDirectory
             searchPrefix = prefix
         }
+        
+        // Normalize path
+        searchDir = (searchDir as NSString).standardizingPath
         
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: searchDir)
@@ -553,6 +737,10 @@ class AutocompleteEngine: ObservableObject {
                     let fullPath = (searchDir as NSString).appendingPathComponent(item)
                     fileManager.fileExists(atPath: fullPath, isDirectory: &isDirectory)
                     
+                    // Skip based on command requirements
+                    if directoriesOnly && !isDirectory.boolValue { continue }
+                    if filesOnly && isDirectory.boolValue { continue }
+                    
                     suggestions.append(AutocompleteSuggestion(
                         text: item,
                         type: isDirectory.boolValue ? .directory : .file,
@@ -561,7 +749,7 @@ class AutocompleteEngine: ObservableObject {
                 }
             }
         } catch {
-            // Ignore errors
+            // Directory doesn't exist or can't be read
         }
         
         return suggestions.sorted { $0.text < $1.text }
@@ -607,5 +795,152 @@ struct AutocompleteSuggestion: Identifiable, Hashable {
     
     static func == (lhs: AutocompleteSuggestion, rhs: AutocompleteSuggestion) -> Bool {
         lhs.text == rhs.text && lhs.type == rhs.type
+    }
+}
+
+// MARK: - Shell Completion Provider
+
+/// Queries the shell for real completions using zsh's completion system
+class ShellCompletionProvider {
+    static let shared = ShellCompletionProvider()
+    
+    private let completionQueue = DispatchQueue(label: "com.tethera.completion", qos: .userInitiated)
+    private var cache: [String: (completions: [String], timestamp: Date)] = [:]
+    private let cacheTimeout: TimeInterval = 30 // Cache for 30 seconds
+    
+    private init() {}
+    
+    /// Query zsh for completions (async with timeout)
+    func queryCompletions(for input: String, workingDirectory: String, timeout: TimeInterval = 0.3, completion: @escaping ([AutocompleteSuggestion]) -> Void) {
+        guard !input.isEmpty else {
+            completion([])
+            return
+        }
+        
+        // Check cache first
+        let cacheKey = "\(workingDirectory):\(input)"
+        if let cached = cache[cacheKey], Date().timeIntervalSince(cached.timestamp) < cacheTimeout {
+            let suggestions = cached.completions.map { self.parseCompletion($0, workingDirectory: workingDirectory) }
+            completion(suggestions)
+            return
+        }
+        
+        completionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let result = self.executeCompletionQuery(input: input, workingDirectory: workingDirectory)
+            
+            // Cache the result
+            self.cache[cacheKey] = (result, Date())
+            
+            let suggestions = result.map { self.parseCompletion($0, workingDirectory: workingDirectory) }
+            
+            DispatchQueue.main.async {
+                completion(suggestions)
+            }
+        }
+    }
+    
+    private func executeCompletionQuery(input: String, workingDirectory: String) -> [String] {
+        // Use zsh's capture_completions to get real completions
+        let script = """
+        cd '\(workingDirectory.replacingOccurrences(of: "'", with: "'\\''"))' 2>/dev/null
+        autoload -Uz compinit 2>/dev/null
+        compinit -C 2>/dev/null
+        
+        # Capture completions for the input
+        capture_completions() {
+            local input="$1"
+            local cmd="${input%% *}"
+            local args="${input#* }"
+            
+            # For commands with arguments, try to get subcommand completions
+            if [[ "$input" == *" "* ]]; then
+                case "$cmd" in
+                    git)
+                        if [[ "$args" == "" ]] || [[ "$args" == "$input" ]]; then
+                            git --list-cmds=main 2>/dev/null | head -20
+                        else
+                            # Get completions for git subcommands
+                            compgen -W "$(git --list-cmds=main 2>/dev/null)" -- "${args%% *}" 2>/dev/null | head -15
+                        fi
+                        ;;
+                    brew)
+                        brew commands 2>/dev/null | head -20
+                        ;;
+                    npm)
+                        echo "install\\nstart\\nrun\\ntest\\nbuild\\ninit\\npublish\\nversion\\nupdate\\naudit\\nci\\nlink\\nuninstall"
+                        ;;
+                    pip|pip3)
+                        echo "install\\nuninstall\\nfreeze\\nlist\\nshow\\nsearch\\ndownload\\nwheel\\nhash\\ncompletion\\nconfig\\ncache\\nindex\\ncheck"
+                        ;;
+                    docker)
+                        docker --help 2>/dev/null | grep -E '^  [a-z]' | awk '{print $1}' | head -20
+                        ;;
+                    cargo)
+                        echo "build\\nrun\\ntest\\ncheck\\nclean\\ndoc\\nnew\\ninit\\nadd\\nremove\\nupdate\\nsearch\\npublish\\ninstall\\nuninstall"
+                        ;;
+                    *)
+                        # For other commands, try to list files/directories
+                        ls -1 2>/dev/null | head -20
+                        ;;
+                esac
+            else
+                # Complete command names
+                compgen -c -- "$input" 2>/dev/null | sort -u | head -20
+            fi
+        }
+        
+        capture_completions '\(input.replacingOccurrences(of: "'", with: "'\\''"))'
+        """
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", script]
+        process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let output = String(data: data, encoding: .utf8) {
+                return output.components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                    .prefix(20)
+                    .map { String($0) }
+            }
+        } catch {
+            // Silently fail - caller will use fallback
+        }
+        
+        return []
+    }
+    
+    private func parseCompletion(_ completion: String, workingDirectory: String) -> AutocompleteSuggestion {
+        // Check if it's a directory
+        let fullPath = (workingDirectory as NSString).appendingPathComponent(completion)
+        var isDir: ObjCBool = false
+        
+        if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir) {
+            if isDir.boolValue {
+                return AutocompleteSuggestion(text: completion, type: .directory, description: "Directory")
+            } else {
+                return AutocompleteSuggestion(text: completion, type: .file, description: "File")
+            }
+        }
+        
+        // Default to command/subcommand
+        return AutocompleteSuggestion(text: completion, type: .command, description: "")
+    }
+    
+    /// Clear completion cache
+    func clearCache() {
+        cache.removeAll()
     }
 }

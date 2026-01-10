@@ -209,33 +209,30 @@ struct BlockTerminalView: View {
                     .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: -4)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
-                    // Floating dropdown overlay - appears above input bar
-                    .overlay(alignment: .bottom) {
+                    // Floating dropdown - positioned directly above input
+                    .overlay(alignment: .bottomLeading) {
                         if autocompleteEngine.isDropdownVisible && !autocompleteEngine.dropdownSuggestions.isEmpty {
-                            VStack(spacing: 0) {
-                                AutocompleteSuggestionView(
-                                    suggestions: autocompleteEngine.dropdownSuggestions,
-                                    onSuggestionSelected: { suggestion in
-                                        commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
-                                        if suggestion.type == .directory {
-                                            autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
-                                        } else {
-                                            autocompleteEngine.hideDropdown()
-                                            if suggestion.type == .command {
-                                                commandInput += " "
-                                            }
+                            AutocompleteSuggestionView(
+                                suggestions: autocompleteEngine.dropdownSuggestions,
+                                onSuggestionSelected: { suggestion in
+                                    commandInput = autocompleteEngine.applySuggestion(suggestion, to: commandInput)
+                                    if suggestion.type == .directory {
+                                        autocompleteEngine.showDropdownSuggestions(for: commandInput, workingDirectory: viewModel.workingDirectory)
+                                    } else {
+                                        autocompleteEngine.hideDropdown()
+                                        if suggestion.type == .command {
+                                            commandInput += " "
                                         }
-                                    },
-                                    onArrowNavigation: { _ in },
-                                    selectedIndex: $autocompleteEngine.selectedIndex
-                                )
-                                .frame(maxWidth: 320, alignment: .leading)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 40) // Align with text after chevron
-                            .offset(y: -72) // Raise higher above input bar
+                                    }
+                                },
+                                onArrowNavigation: { _ in },
+                                selectedIndex: $autocompleteEngine.selectedIndex
+                            )
+                            .frame(maxWidth: 380)
+                            .offset(x: 36, y: -56) // Position right above input bar
                         }
                     }
+                    .zIndex(100)
                 }
             }
         }

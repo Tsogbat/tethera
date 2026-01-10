@@ -7,6 +7,20 @@ struct AutocompleteSuggestionView: View {
     @Binding var selectedIndex: Int
     @EnvironmentObject private var userSettings: UserSettings
     
+    // Scale dropdown based on user's font size preference
+    private var scaleFactor: CGFloat {
+        userSettings.themeConfiguration.fontSize / 14.0
+    }
+    
+    private var rowHeight: CGFloat {
+        max(36, 32 * scaleFactor)
+    }
+    // Ideal height = 5 items, shrink if fewer, scroll if more
+    private var idealHeight: CGFloat {
+        let itemCount = min(suggestions.count, 5) // Show max 5 items without scroll
+        return CGFloat(itemCount) * rowHeight + 8 // 8 for padding
+    }
+    
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -16,47 +30,44 @@ struct AutocompleteSuggestionView: View {
                             .id(index)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
-            .scrollIndicators(.hidden)
-            .frame(minHeight: CGFloat(min(suggestions.count, 10) * 44 + 16), maxHeight: 400)
+            .scrollIndicators(suggestions.count > 5 ? .visible : .hidden)
+            .frame(height: idealHeight) // Exact height based on items
             .background(suggestionBackground)
             .shadow(color: (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.black : SwiftUI.Color.gray).opacity(0.25), radius: 8, x: 0, y: 4)
             .onChange(of: selectedIndex) { _, newIndex in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.easeInOut(duration: 0.15)) {
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
             }
-            // Note: Arrow key handling is done in BlockTerminalView.handleKeyPress
-            // Do NOT add NotificationCenter listener here to avoid double-handling
         }
     }
     
     private func suggestionRow(index: Int, suggestion: AutocompleteSuggestion) -> some View {
-        HStack(spacing: 12) {
-            // Icon
+        HStack(spacing: 8 * scaleFactor) {
             Image(systemName: suggestion.type.icon)
-                .foregroundColor(colorForType(suggestion.type))
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 16)
+                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                .font(.system(size: 11 * scaleFactor, weight: .medium))
+                .frame(width: 14 * scaleFactor)
             
-            // Suggestion text
             Text(suggestion.text)
-                .font(themeFont(size: 13))
+                .font(themeFont(size: userSettings.themeConfiguration.fontSize * 0.9))
                 .foregroundColor(userSettings.themeConfiguration.textColor.color)
                 .lineLimit(1)
             
             Spacer()
             
-            // Type description
-            Text(suggestion.description)
-                .font(themeFont(size: 11))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.65))
+            if !suggestion.description.isEmpty {
+                Text(suggestion.description)
+                    .font(themeFont(size: userSettings.themeConfiguration.fontSize * 0.7))
+                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6 * scaleFactor)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: 5)
                 .fill(index == selectedIndex ? userSettings.themeConfiguration.accentColor.color.opacity(0.18) : SwiftUI.Color.clear)
         )
         .onTapGesture {
@@ -73,46 +84,22 @@ struct AutocompleteSuggestionView: View {
         RoundedRectangle(cornerRadius: 10)
             .fill(
                 userSettings.themeConfiguration.isDarkMode ?
-                SwiftUI.Color(red: 0.15, green: 0.15, blue: 0.18) : SwiftUI.Color(red: 0.95, green: 0.95, blue: 0.97)
+                SwiftUI.Color(red: 0.10, green: 0.10, blue: 0.12) : SwiftUI.Color(red: 0.96, green: 0.96, blue: 0.98)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        userSettings.themeConfiguration.accentColor.color.opacity(0.3),
+                        LinearGradient(
+                            colors: [
+                                userSettings.themeConfiguration.accentColor.color.opacity(0.4),
+                                userSettings.themeConfiguration.accentColor.color.opacity(0.15)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
                         lineWidth: 1
                     )
             )
-    }
-    
-    private func colorForType(_ type: AutocompleteSuggestion.SuggestionType) -> SwiftUI.Color {
-        switch type {
-        case .command: return userSettings.themeConfiguration.accentColor.color
-        case .file: return userSettings.themeConfiguration.accentColor.color
-        case .directory: return userSettings.themeConfiguration.accentColor.color
-        }
-    }
-    
-    private func handleKeyDown(keyCode: UInt16) {
-        switch keyCode {
-        case 125: // Down Arrow
-            let newIndex = min(selectedIndex + 1, suggestions.count - 1)
-            selectedIndex = newIndex
-            onArrowNavigation(newIndex)
-        case 126: // Up Arrow
-            let newIndex = max(selectedIndex - 1, 0)
-            selectedIndex = newIndex
-            onArrowNavigation(newIndex)
-        case 36: // Return
-            if selectedIndex < suggestions.count {
-                onSuggestionSelected(suggestions[selectedIndex])
-            }
-        case 48: // Tab
-            if selectedIndex < suggestions.count {
-                onSuggestionSelected(suggestions[selectedIndex])
-            }
-        default:
-            break
-        }
     }
     
     private func themeFont(size: CGFloat) -> Font {
@@ -126,4 +113,3 @@ struct AutocompleteSuggestionView: View {
         return .system(size: size, design: .monospaced)
     }
 }
-
