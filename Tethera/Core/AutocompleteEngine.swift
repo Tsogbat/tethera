@@ -485,15 +485,18 @@ class AutocompleteEngine: ObservableObject {
             self.selectedIndex = 0
         }
         
-        // Then try to get real shell completions (async)
+        // Skip shell completions for directory-only commands (cd, pushd, etc)
+        // Our path resolution handles these better with home directory fallback
+        if dirOnlyCommands.contains(cmd) {
+            return
+        }
+        
+        // For other commands, try real shell completions (async)
         ShellCompletionProvider.shared.queryCompletions(for: input, workingDirectory: workingDirectory) { [weak self] shellSuggestions in
             guard let self = self, !shellSuggestions.isEmpty else { return }
             
             // Filter shell suggestions based on command type
             let filteredShell = shellSuggestions.filter { suggestion in
-                if dirOnlyCommands.contains(cmd) && suggestion.type == .file {
-                    return false // Skip files for cd
-                }
                 if fileOnlyCommands.contains(cmd) && suggestion.type == .directory {
                     return false // Skip directories for cat
                 }
@@ -512,7 +515,7 @@ class AutocompleteEngine: ObservableObject {
             
             DispatchQueue.main.async {
                 if self.isDropdownVisible {
-                    self.dropdownSuggestions = merged // No limit - show all
+                    self.dropdownSuggestions = merged
                 }
             }
         }
