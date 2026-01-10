@@ -146,11 +146,26 @@ class MetalRenderer: NSObject {
         createBuffers()
     }
     
+    // Pre-allocated vertex array to avoid per-frame allocations
+    private var vertexArray: [Vertex] = []
+    private var lastVertexCount = 0
+    
     func updateVertices(for buffer: TerminalBuffer) {
         guard needsVertexUpdate else { return }
         
-        var vertices: [Vertex] = []
+        let totalVertices = columns * rows * 4
         
+        // Resize array only if needed (terminal resized)
+        if vertexArray.count != totalVertices {
+            let defaultVertex = Vertex(
+                position: SIMD2<Float>(0, 0),
+                texCoord: SIMD2<Float>(0, 0),
+                color: SIMD4<Float>(1, 1, 1, 1)
+            )
+            vertexArray = [Vertex](repeating: defaultVertex, count: totalVertices)
+        }
+        
+        var index = 0
         for row in 0..<rows {
             for col in 0..<columns {
                 let cell = buffer.getCell(at: Position(x: col, y: row))
@@ -166,35 +181,35 @@ class MetalRenderer: NSObject {
                 // Get glyph coordinates from atlas
                 let glyph = fontAtlasData[cell?.character ?? " "] ?? FontGlyph(x: 0, y: 0, width: 1, height: 1)
                 
-                // Create quad vertices
-                let positions: [SIMD2<Float>] = [
-                    SIMD2<Float>(x, y),
-                    SIMD2<Float>(x + width, y),
-                    SIMD2<Float>(x + width, y + height),
-                    SIMD2<Float>(x, y + height)
-                ]
-                
-                let texCoords: [SIMD2<Float>] = [
-                    SIMD2<Float>(glyph.x, glyph.y),
-                    SIMD2<Float>(glyph.x + glyph.width, glyph.y),
-                    SIMD2<Float>(glyph.x + glyph.width, glyph.y + glyph.height),
-                    SIMD2<Float>(glyph.x, glyph.y + glyph.height)
-                ]
-                
-                for i in 0..<4 {
-                    let vertex = Vertex(
-                        position: positions[i],
-                        texCoord: texCoords[i],
-                        color: color
-                    )
-                    vertices.append(vertex)
-                }
+                // Update quad vertices in-place
+                vertexArray[index] = Vertex(
+                    position: SIMD2<Float>(x, y),
+                    texCoord: SIMD2<Float>(glyph.x, glyph.y),
+                    color: color
+                )
+                vertexArray[index + 1] = Vertex(
+                    position: SIMD2<Float>(x + width, y),
+                    texCoord: SIMD2<Float>(glyph.x + glyph.width, glyph.y),
+                    color: color
+                )
+                vertexArray[index + 2] = Vertex(
+                    position: SIMD2<Float>(x + width, y + height),
+                    texCoord: SIMD2<Float>(glyph.x + glyph.width, glyph.y + glyph.height),
+                    color: color
+                )
+                vertexArray[index + 3] = Vertex(
+                    position: SIMD2<Float>(x, y + height),
+                    texCoord: SIMD2<Float>(glyph.x, glyph.y + glyph.height),
+                    color: color
+                )
+                index += 4
             }
         }
         
         // Update vertex buffer
-        let vertexData = vertices.withUnsafeBytes { Data($0) }
-        vertexBuffer.contents().copyMemory(from: vertexData.withUnsafeBytes { $0.baseAddress! }, byteCount: vertexData.count)
+        vertexArray.withUnsafeBytes { ptr in
+            vertexBuffer.contents().copyMemory(from: ptr.baseAddress!, byteCount: ptr.count)
+        }
         
         needsVertexUpdate = false
     }

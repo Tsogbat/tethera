@@ -5,12 +5,35 @@ struct MarkdownOutputView: View {
     let content: String
     @EnvironmentObject private var userSettings: UserSettings
     
+    // Cache parsed elements to avoid re-parsing on every render
+    @State private var cachedElements: [MarkdownElement] = []
+    @State private var cachedContent: String = ""
+    
+    private var elements: [MarkdownElement] {
+        // Return cached if content hasn't changed
+        if content == cachedContent && !cachedElements.isEmpty {
+            return cachedElements
+        }
+        return cachedElements
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(Array(parseMarkdownLines().enumerated()), id: \.offset) { _, element in
+            ForEach(Array(elements.enumerated()), id: \.offset) { _, element in
                 renderElement(element)
             }
         }
+        .onAppear {
+            parseAndCache()
+        }
+        .onChange(of: content) { _, _ in
+            parseAndCache()
+        }
+    }
+    
+    private func parseAndCache() {
+        cachedContent = content
+        cachedElements = parseMarkdownLines()
     }
     
     private func parseMarkdownLines() -> [MarkdownElement] {

@@ -18,9 +18,9 @@ class AutocompleteEngine: ObservableObject {
     /// Currently selected suggestion in dropdown
     @Published var selectedIndex = 0
     
-    // MARK: - Static Data
+    // MARK: - Static Data (Shared across all instances)
     
-    private let commonCommands = [
+    private static let commonCommands = [
         "ls", "cd", "pwd", "mkdir", "rmdir", "rm", "cp", "mv", "cat", "less", "more",
         "grep", "find", "which", "man", "clear", "exit", "history", "head", "tail", "wc",
         "chmod", "chown", "touch", "file", "tar", "curl", "wget", "ssh", "scp", "rsync",
@@ -29,8 +29,15 @@ class AutocompleteEngine: ObservableObject {
         "docker", "kubectl", "cargo", "go", "ruby", "gem", "pip3"
     ]
     
+    // Command category sets for filtering (static to avoid per-keystroke allocation)
+    private static let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname"])
+    private static let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
+    private static let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "code", "source"])
+    private static let noPathCommands = Set(["git", "brew", "npm", "yarn", "pip", "pip3", "cargo", "docker", "kubectl", "make", "swift", "go"])
+    private static let flagCommands = Set(["ls", "grep", "find", "ps", "top", "chmod", "chown", "tar", "curl", "ssh", "rsync"])
+    
     /// Comprehensive command completions with flags, subcommands, and descriptions
-    private let commandCompletions: [String: [(text: String, desc: String)]] = [
+    private static let commandCompletions: [String: [(text: String, desc: String)]] = [
         // File system commands
         "ls": [
             ("-la", "List all with details"),
@@ -349,10 +356,9 @@ class AutocompleteEngine: ObservableObject {
         let components = input.split(separator: " ", omittingEmptySubsequences: false)
         
         // Commands that take no arguments - no ghost text after command is typed
-        let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname", "ls", "ll"])
         if components.count >= 2, let cmd = components.first {
             let cmdStr = String(cmd).lowercased()
-            if noCompletionCommands.contains(cmdStr) {
+            if Self.noCompletionCommands.contains(cmdStr) {
                 DispatchQueue.main.async { self.inlineCompletion = "" }
                 return
             }
@@ -366,7 +372,7 @@ class AutocompleteEngine: ObservableObject {
         
         // Priority 2: Complete command names
         if components.count == 1, let command = components.first {
-            if let match = commonCommands.first(where: { $0.hasPrefix(String(command).lowercased()) && $0 != String(command).lowercased() }) {
+            if let match = Self.commonCommands.first(where: { $0.hasPrefix(String(command).lowercased()) && $0 != String(command).lowercased() }) {
                 let completion = String(match.dropFirst(command.count))
                 DispatchQueue.main.async { self.inlineCompletion = input + completion }
                 return
@@ -377,8 +383,8 @@ class AutocompleteEngine: ObservableObject {
         if components.count == 2, let cmd = components.first, components.last?.isEmpty == true {
             let cmdStr = String(cmd).lowercased()
             // Skip if it's a standalone command
-            if !noCompletionCommands.contains(cmdStr) {
-                if let completions = commandCompletions[cmdStr], let first = completions.first {
+            if !Self.noCompletionCommands.contains(cmdStr) {
+                if let completions = Self.commandCompletions[cmdStr], let first = completions.first {
                     DispatchQueue.main.async { self.inlineCompletion = input + first.text }
                     return
                 }
@@ -393,9 +399,7 @@ class AutocompleteEngine: ObservableObject {
         let currentDirName = (workingDirectory as NSString).lastPathComponent.lowercased()
         let parentDirName = ((workingDirectory as NSString).deletingLastPathComponent as NSString).lastPathComponent.lowercased()
         
-        // Command type categories
-        let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
-        let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "source"])
+        // Command type categories (use static sets)
         let createCommands = Set(["mkdir", "touch"]) // Target should NOT exist
         
         for entry in history.reversed() {
@@ -426,7 +430,7 @@ class AutocompleteEngine: ObservableObject {
             let exists = FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir)
             
             // Context filter: cd only to directories that exist
-            if dirOnlyCommands.contains(cmd) {
+            if Self.dirOnlyCommands.contains(cmd) {
                 // Skip if target is current directory name
                 if target.lowercased() == currentDirName { continue }
                 if target.lowercased().hasSuffix("/\(currentDirName)") { continue }
@@ -436,7 +440,7 @@ class AutocompleteEngine: ObservableObject {
             }
             
             // Context filter: cat/vim only to files that exist
-            if fileOnlyCommands.contains(cmd) {
+            if Self.fileOnlyCommands.contains(cmd) {
                 // Skip if doesn't exist as file
                 if !exists || isDir.boolValue { continue }
             }
@@ -465,13 +469,8 @@ class AutocompleteEngine: ObservableObject {
         let components = input.split(separator: " ", omittingEmptySubsequences: false)
         let cmd = components.count > 1 ? String(components.first ?? "").lowercased() : ""
         
-        // Command type sets for filtering
-        let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname"])
-        let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
-        let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "code", "source"])
-        
-        // Skip dropdown for standalone commands
-        if noCompletionCommands.contains(cmd) {
+        // Skip dropdown for standalone commands (use static sets)
+        if Self.noCompletionCommands.contains(cmd) {
             hideDropdown()
             return
         }
@@ -487,7 +486,7 @@ class AutocompleteEngine: ObservableObject {
         
         // Skip shell completions for directory-only commands (cd, pushd, etc)
         // Our path resolution handles these better with home directory fallback
-        if dirOnlyCommands.contains(cmd) {
+        if Self.dirOnlyCommands.contains(cmd) {
             return
         }
         
@@ -497,7 +496,7 @@ class AutocompleteEngine: ObservableObject {
             
             // Filter shell suggestions based on command type
             let filteredShell = shellSuggestions.filter { suggestion in
-                if fileOnlyCommands.contains(cmd) && suggestion.type == .directory {
+                if Self.fileOnlyCommands.contains(cmd) && suggestion.type == .directory {
                     return false // Skip directories for cat
                 }
                 return true
@@ -606,33 +605,20 @@ class AutocompleteEngine: ObservableObject {
         
         if components.count == 1 {
             // Suggest commands matching prefix - but filter out standalone commands
-            suggestions = commonCommands
+            suggestions = Self.commonCommands
                 .filter { $0.hasPrefix(lastComponent.lowercased()) && !standaloneCommands.contains($0) }
                 .prefix(15)
                 .map { AutocompleteSuggestion(text: $0, type: .command, description: "Command") }
         } else {
             let cmd = String(components.first ?? "").lowercased()
             
-            // Commands that need NO completions at all (standalone)
-            let noCompletionCommands = Set(["clear", "exit", "pwd", "history", "whoami", "date", "uptime", "hostname"])
-            if noCompletionCommands.contains(cmd) {
+            // Commands that need NO completions at all (standalone) - use static sets
+            if Self.noCompletionCommands.contains(cmd) {
                 return [] // These commands take no arguments
             }
             
-            // Commands that primarily use flags (show more flags)
-            let flagCommands = Set(["ls", "grep", "find", "ps", "top", "chmod", "chown", "tar", "curl", "ssh", "rsync"])
-            
-            // Commands that only accept directories
-            let dirOnlyCommands = Set(["cd", "pushd", "popd", "rmdir"])
-            
-            // Commands that only accept files (not directories)
-            let fileOnlyCommands = Set(["cat", "less", "more", "head", "tail", "nano", "vim", "vi", "code", "source"])
-            
-            // Commands that don't need path suggestions (they have their own completions)
-            let noPathCommands = Set(["git", "brew", "npm", "yarn", "pip", "pip3", "cargo", "docker", "kubectl", "make", "swift", "go"])
-            
             // For cd-like commands: show directories FIRST, then shortcuts
-            if dirOnlyCommands.contains(cmd) {
+            if Self.dirOnlyCommands.contains(cmd) {
                 // Add directory suggestions first
                 let pathSuggestions = getPathSuggestions(
                     prefix: lastComponent,
@@ -643,7 +629,7 @@ class AutocompleteEngine: ObservableObject {
                 suggestions.append(contentsOf: pathSuggestions)
                 
                 // Add shortcuts (like ~, -, ..) only if no prefix typed
-                if lastComponent.isEmpty, let completions = commandCompletions[cmd] {
+                if lastComponent.isEmpty, let completions = Self.commandCompletions[cmd] {
                     let shortcuts = completions.map { 
                         AutocompleteSuggestion(text: $0.text, type: .directory, description: $0.desc) 
                     }
@@ -651,8 +637,8 @@ class AutocompleteEngine: ObservableObject {
                 }
             } else {
                 // For other commands: flags first, then paths
-                if let completions = commandCompletions[cmd] {
-                    let flagLimit = flagCommands.contains(cmd) ? 5 : 3
+                if let completions = Self.commandCompletions[cmd] {
+                    let flagLimit = Self.flagCommands.contains(cmd) ? 5 : 3
                     let cmdSuggestions = completions
                         .filter { lastComponent.isEmpty || $0.text.lowercased().hasPrefix(lastComponent.lowercased()) }
                         .prefix(flagLimit)
@@ -661,8 +647,8 @@ class AutocompleteEngine: ObservableObject {
                 }
                 
                 // Add path suggestions for non-git-like commands
-                if !noPathCommands.contains(cmd) || !lastComponent.isEmpty {
-                    let filesOnly = fileOnlyCommands.contains(cmd)
+                if !Self.noPathCommands.contains(cmd) || !lastComponent.isEmpty {
+                    let filesOnly = Self.fileOnlyCommands.contains(cmd)
                     let pathSuggestions = getPathSuggestions(
                         prefix: lastComponent,
                         workingDirectory: workingDirectory,

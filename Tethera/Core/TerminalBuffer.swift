@@ -209,8 +209,9 @@ class TerminalLine {
         let newLine = TerminalLine(columns: columns)
         let copyCount = min(columns, cells.count)
         
-        for i in 0..<copyCount {
-            newLine.cells[i] = cells[i]
+        // Bulk copy instead of element-by-element
+        if copyCount > 0 {
+            newLine.cells.replaceSubrange(0..<copyCount, with: cells.prefix(copyCount))
         }
         
         return newLine
