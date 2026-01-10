@@ -4,7 +4,7 @@ This document describes the architecture and design of the Tethera Terminal appl
 
 ## Overview
 
-Tethera is a block-based terminal emulator built with SwiftUI for macOS. It organizes command inputs and outputs into visual blocks, providing a more structured and navigable terminal experience.
+Tethera is a block-based terminal emulator built with SwiftUI for macOS. It organizes command inputs and outputs into visual blocks, providing a more structured and navigable terminal experience. It supports rich output rendering including Markdown and features a high-performance Metal-based renderer for raw terminal sessions.
 
 ## Project Structure
 
@@ -17,11 +17,15 @@ Tethera/
 │   ├── CommandHistoryManager.swift   # Global command history and search
 │   ├── AutocompleteEngine.swift      # Command/path completion logic
 │   ├── TerminalSession.swift         # PTY session management
-│   ├── TerminalBuffer.swift          # Terminal output buffer
+│   ├── TerminalBuffer.swift          # Terminal output buffer model
+│   ├── MetalRenderer.swift           # Metal-based terminal renderer
+│   ├── Shaders.metal                 # Metal vertex/fragment shaders
 │   └── AIService.swift               # AI integration service
 │
 ├── UI/                        # SwiftUI views
 │   ├── BlockTerminalView.swift       # Main terminal block interface
+│   ├── TerminalView.swift            # Metal-backed raw terminal view
+│   ├── MarkdownOutputView.swift      # Markdown rendering component
 │   ├── TabBarView.swift              # Tab bar with drag support
 │   ├── SplitPaneView.swift           # Split view management
 │   ├── SearchOverlayView.swift       # Fuzzy search overlay
@@ -69,39 +73,39 @@ struct TerminalBlock: Identifiable {
 
 The main view model that manages:
 
-- Command execution via shell subprocess
-- Block creation and storage
-- Working directory tracking
-- Command history navigation (up/down arrows)
+- Command execution via `TerminalSession` (PTY) or fallback `Process`.
+- Block creation and storage.
+- Working directory tracking.
+- Command history navigation.
+
+### MetalRenderer & TerminalBuffer
+
+High-performance rendering system:
+
+- **TerminalBuffer**: Manages the grid of characters (cells), lines, and attributes (colors, bold, etc.). Optimized with bulk array operations.
+- **MetalRenderer**: Renders the `TerminalBuffer` to an `MTKView` using Metal.
+  - Uses a font atlas texture for glyphs.
+  - Updates a vertex buffer dynamically based on grid content.
+  - Runs custom shaders (`Shaders.metal`) for blending and coloring.
+
+### Markdown Rendering
+
+Tethera can heuristically detect and render Markdown content in command outputs:
+
+- **MarkdownDetector**: Analyzes output to detect Markdown patterns (headers, code blocks, etc.).
+- **MarkdownOutputView**: A SwiftUI view that parses and renders Markdown elements into rich native UI components (headers with gradients, code blocks with badges, tables).
 
 ### CommandHistoryManager
 
 Singleton managing global command history:
 
-- Stores all commands across all tabs
-- Persists to `~/Library/Application Support/Tethera/command_history.json`
-- Provides fuzzy search functionality
-- Supports keyboard navigation through results
-
-### TabManager
-
-Handles tab lifecycle:
-
-- Creating/closing tabs
-- Tab selection and activation
-- Tab reordering via drag-and-drop
-- Settings tab management
-
-### SplitPaneManager
-
-Manages split view state:
-
-- Tree structure of split panes
-- Horizontal/vertical splitting
-- Tab assignment to panes
-- Pane resizing
+- Stores all commands across all tabs.
+- Persists to `~/Library/Application Support/Tethera/command_history.json`.
+- Provides fuzzy search functionality.
 
 ## Data Flow
+
+### Block Mode
 
 ```
 ┌─────────────────┐
@@ -116,8 +120,8 @@ Manages split view state:
          │
          ▼
 ┌─────────────────┐
-│  Process.run()  │
-│  (shell exec)   │
+│ TerminalSession │
+│     (PTY)       │
 └────────┬────────┘
          │
          ▼
@@ -127,48 +131,55 @@ Manages split view state:
 └────────┬────────┘
          │
          ▼
+┌─────────────────┐       ┌────────────────────┐
+│ BlockTerminal   │──────▶│ MarkdownOutputView │
+│     View        │       │ (if MD detected)   │
+└─────────────────┘       └────────────────────┘
+```
+
+### Raw/Metal Mode (Background/Under-the-hood)
+
+```
 ┌─────────────────┐
-│ SwiftUI View    │
-│   (updated)     │
+│ TerminalSession │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ TerminalBuffer  │
+│  (Data Model)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  MetalRenderer  │
+│ (Update Vertex) │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│    MTKView      │
+│     (GPU)       │
 └─────────────────┘
 ```
 
 ## Key Design Decisions
 
-### Block-Based Architecture
+### Block-Based Architecture & Rich Output
 
-Instead of a scrolling terminal buffer, Tethera organizes output into discrete blocks. This allows:
+Instead of a scrolling text buffer, Tethera organizes output into discrete blocks. This enables "Rich Text" features like rendering Markdown directly in the terminal stream, which is handled by `MarkdownOutputView` when detected.
 
-- Visual separation of commands
-- Easy copying of specific command outputs
-- Status indicators per command
-- Execution time display
+### GPU Acceleration
 
-### Synchronous Command Execution
+For raw terminal rendering (ncurses apps or classic view), Tethera uses a Custom Metal engine (`MetalRenderer`) instead of standard SwiftUI Text views. This provides 60fps performance even with heavy text loads by batching character draws into a single draw call per frame.
 
-Commands run synchronously with `Process.waitUntilExit()` for simplicity. This means:
+### PTY & Async Execution
 
-- No streaming output during execution
-- Full output captured after completion
-- Simple timing measurement
+Commands run via a Pseudo-Terminal (PTY) in `TerminalSession`. This allows accurate shell behavior, interactive commands, and captured exit codes, improving over the initial synchronous `Process` implementation.
 
-For long-running or interactive commands, consider the PTY-based `TerminalSession`.
+### Design System
 
-### Singleton History Manager
-
-`CommandHistoryManager.shared` provides global access to command history:
-
-- Enables search across all tabs
-- Centralizes persistence logic
-- Allows menu bar integration
-
-### SwiftUI Materials for Styling
-
-UI uses SwiftUI's material system (`.ultraThinMaterial`, etc.) for:
-
-- Consistent with macOS design language
-- Automatic dark/light mode adaptation
-- Blur effects without manual implementation
+UI uses SwiftUI's material system heavily (`.ultraThinMaterial`) and custom shaders/gradients ("Liquid Glass" style) to match macOS aesthetics while feeling modern and premium.
 
 ## Extension Points
 
@@ -176,23 +187,10 @@ UI uses SwiftUI's material system (`.ultraThinMaterial`, etc.) for:
 
 1. Add preset to `ThemePreset` enum in `UserSettings.swift`
 2. Define colors in `ThemeConfiguration`
-3. Theme will appear in Settings gallery
 
-### Custom Commands
+### Custom Renderers
 
-Extend `BlockTerminalViewModel.runShellCommand()` to handle:
-
-- Built-in commands (like `clear`)
-- Custom aliases
-- Integration with external tools
-
-### AI Integration
-
-`AIService.swift` provides hooks for:
-
-- Command suggestions
-- Output explanations
-- Error diagnosis
+The `TerminalBuffer` is decoupled from the renderer. You can implement new renderers (e.g., specific to other graphics APIs or ASCII export) by consuming the buffer state.
 
 ## File Locations
 

@@ -1,6 +1,36 @@
 # Tethera Terminal
 
-A modern, block-based terminal application for macOS built with SwiftUI.
+A modern, block-based terminal application for macOS built with SwiftUI and Metal.
+
+## Features
+
+### 🚀 Modern Block-Based Interface
+
+- **Visual Blocks**: Commands and outputs are organized into distinct blocks, making it easy to track execution history.
+- **Rich Interaction**: Edit, rerun, and copy commands directly from their blocks.
+- **Execution Timing**: Precise duration display for every command.
+- **Status Indicators**: Visual cues for command success or failure.
+
+### ⚡️ High Performance
+
+- **Metal-Accelerated Rendering**: Uses a custom Metal engine for raw terminal performance, capable of 60fps even under heavy load.
+- **Efficient Buffering**: Optimized data handling for large outputs.
+
+### 📝 Smart Output
+
+- **Markdown Rendering**: Automatically detects and renders Markdown content (headers, tables, code blocks) in command outputs.
+- **Column Formatting**: Smartly aligns tab-separated output for better readability.
+
+### 🧠 Intelligent Assistance
+
+- **Ghost Text Autocomplete**: Context-aware suggestions as you type.
+- **Dropdown Suggestions**: Interactive menu for command and path completion.
+
+### 🎨 Customization
+
+- **Themes**: Built-in support for multiple color schemes including dark and light and "Liquid Glass" aesthetics.
+- **Fonts**: Bundled JetBrains Mono for a premium coding experience.
+- **Tabs & Split Panes**: Drag-and-drop tab management and split views for multitasking.
 
 ## Quick Start
 
@@ -10,58 +40,20 @@ cd tethera
 swift run
 ```
 
-## Features
-
-### Core Terminal
-
-- **Block-based UI** — Commands and outputs organized in visual blocks with status indicators
-- **Execution timing** — See how long each command takes to run
-- **Tab management** — Multiple independent terminal sessions with drag-to-reorder
-- **Split panes** — Drag tabs to create side-by-side terminal views
-- **Smart autocomplete** — Command and path completion as you type
-
-### Search & History
-
-- **Fuzzy search** (`Cmd+F`) — Search through all command history
-- **Persistent history** — Commands saved across app restarts
-- **Jump to results** — Navigate search results and jump to specific blocks
-
-### Customization
-
-- **Theme gallery** — Multiple built-in themes (dark and light)
-- **Custom fonts** — JetBrains Mono included, or use your own
-- **Adjustable settings** — Font size, line spacing, and more
-
 ## Keyboard Shortcuts
 
 | Shortcut  | Action                     |
 | --------- | -------------------------- |
 | `Cmd+T`   | New tab                    |
+| `Cmd+D`   | Split pane                 |
 | `Cmd+F`   | Search history             |
 | `Cmd+,`   | Settings                   |
 | `↑` / `↓` | Command history navigation |
-| `Tab`     | Autocomplete               |
-| `Esc`     | Close search / Cancel      |
-
-## Requirements
-
-- macOS 14.0+
-- Swift 5.9+
-
-## Development
-
-```bash
-# Debug build
-swift build
-
-# Release build
-swift build -c release
-
-# Run
-swift run
-```
+| `Tab`     | Autocomplete / Dropdown    |
 
 ## Architecture
+
+Tethera uses a hybrid architecture combining SwiftUI for the block-based UI and Metal for high-performance rendering.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
 
