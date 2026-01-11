@@ -60,6 +60,10 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     
     // MARK: - TerminalBlockDelegate
     
+    private var executingBlockID: UUID?
+    
+    // MARK: - TerminalBlockDelegate
+    
     nonisolated func terminalDidStartPrompt() {
         Task { @MainActor in
             self.isRunningCommand = false
@@ -77,6 +81,12 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     nonisolated func terminalDidReceiveOutput(_ output: String) {
         Task { @MainActor in
             self.currentBlockOutput += output
+            
+            // Real-time update for in-place execution
+            if let id = self.executingBlockID, 
+               let index = self.blocks.firstIndex(where: { $0.id == id }) {
+                self.blocks[index].output += output
+            }
         }
     }
     
@@ -88,17 +98,34 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
                 durationMs = Int64(Date().timeIntervalSince(startTime) * 1000)
             }
             
-            let block = TerminalBlock(
-                input: self.pendingCommand,
-                output: self.currentBlockOutput.trimmingCharacters(in: .whitespacesAndNewlines),
-                timestamp: Date(),
-                workingDirectory: self.workingDirectory,
-                success: exitCode == 0,
-                exitCode: Int32(exitCode),
-                durationMs: durationMs
-            )
-            self.blocks.append(block)
-            CommandHistoryManager.shared.addEntry(from: block)
+            if let id = self.executingBlockID,
+               let index = self.blocks.firstIndex(where: { $0.id == id }) {
+                // Update existing block
+                self.blocks[index].success = exitCode == 0
+                self.blocks[index].exitCode = Int32(exitCode)
+                self.blocks[index].durationMs = durationMs
+                self.blocks[index].timestamp = Date() // Update time to now
+                
+                // Ensure output is synced (though real-time should have handled it)
+                if self.blocks[index].output != self.currentBlockOutput {
+                   self.blocks[index].output = self.currentBlockOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                
+                self.executingBlockID = nil
+            } else {
+                // Create new block
+                let block = TerminalBlock(
+                    input: self.pendingCommand,
+                    output: self.currentBlockOutput.trimmingCharacters(in: .whitespacesAndNewlines),
+                    timestamp: Date(),
+                    workingDirectory: self.workingDirectory,
+                    success: exitCode == 0,
+                    exitCode: Int32(exitCode),
+                    durationMs: durationMs
+                )
+                self.blocks.append(block)
+                CommandHistoryManager.shared.addEntry(from: block)
+            }
             
             self.pendingCommand = ""
             self.currentBlockOutput = ""
@@ -140,6 +167,36 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
         
         // Add to global history (async internally)
         CommandHistoryManager.shared.addEntry(from: block)
+    }
+    
+    /// Update a block's input command without running it (e.g. while editing)
+    func updateBlock(id: UUID, input: String) {
+        if let index = blocks.firstIndex(where: { $0.id == id }) {
+            blocks[index].input = input
+        }
+    }
+    
+    /// Rerun a specific block in-place
+    func rerunBlock(id: UUID, command: String) {
+        guard let index = blocks.firstIndex(where: { $0.id == id }) else { return }
+        
+        // Update input
+        blocks[index].input = command
+        // Clear output to prepare for new run
+        blocks[index].output = ""
+        blocks[index].success = nil
+        blocks[index].exitCode = nil
+        blocks[index].durationMs = nil
+        blocks[index].timestamp = Date()
+        
+        // Set execution context
+        executingBlockID = id
+        
+        // Use standard run logic (which will set pendingCommand etc)
+        // Note: we must clear pendingCommand after runShellCommand returns? 
+        // No, pendingCommand is used in terminalDidEndCommand.
+        // runShellCommand sets pendingCommand.
+        runShellCommand(command)
     }
 
     // MARK: - Async Command Execution (Non-blocking)

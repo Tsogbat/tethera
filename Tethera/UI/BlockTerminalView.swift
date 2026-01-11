@@ -64,9 +64,11 @@ struct BlockTerminalView: View {
                                 TerminalBlockView(
                                     block: block,
                                     onRerun: { command in
-                                        viewModel.runShellCommand(command)
+                                        viewModel.rerunBlock(id: block.id, command: command)
                                     },
                                     onEdit: { command in
+                                        // Legacy support or copy to clipboard? 
+                                        // Internal edit mode handles inline editing now.
                                         commandInput = command
                                         isInputFocused = true
                                     }
@@ -229,7 +231,7 @@ struct BlockTerminalView: View {
                                 selectedIndex: $autocompleteEngine.selectedIndex
                             )
                             .frame(maxWidth: 380)
-                            .offset(x: 36, y: -56) // Position right above input bar
+                            .offset(x: 36, y: -60) // Position right above input bar
                         }
                     }
                     .zIndex(100)
@@ -374,6 +376,10 @@ struct TerminalBlockView: View {
     @State private var showCopied: Bool = false
     @State private var showRawOutput: Bool = false
     
+    // Inline editing state
+    @State private var isEditing: Bool = false
+    @State private var editedCommand: String = ""
+    
     init(block: TerminalBlock, onRerun: ((String) -> Void)? = nil, onEdit: ((String) -> Void)? = nil) {
         self.block = block
         self.onRerun = onRerun
@@ -410,51 +416,80 @@ struct TerminalBlockView: View {
                 Spacer()
             }
             
-            // Command input with status indicator
-            HStack(spacing: 8) {
-                // Status indicator (Stage 2: Exit code visualization)
-                Image(systemName: block.statusIcon)
-                    .foregroundColor(block.statusColor)
-                    .font(.system(size: 12, weight: .semibold))
-                
-                Text(block.input)
-                    .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                    .textSelection(.enabled)
-                
-                Spacer()
-                
-                // Action bar (visible on hover)
-                if isHovered {
-                    HStack(spacing: 4) {
-                        BlockActionButton(icon: "arrow.clockwise", tooltip: "Rerun") {
-                            onRerun?(block.input)
+                // Command input with status indicator
+                HStack(spacing: 8) {
+                    // Status indicator (Stage 2: Exit code visualization)
+                    Image(systemName: block.statusIcon)
+                        .foregroundColor(block.statusColor)
+                        .font(.system(size: 12, weight: .semibold))
+                    
+                    if isEditing {
+                        // Inline Editing Mode
+                        TextField("Command", text: $editedCommand)
+                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                            .textFieldStyle(PlainTextFieldStyle())
+                            .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                            .onSubmit {
+                                isEditing = false
+                                onRerun?(editedCommand)
+                            }
+                            
+                        // Edit actions
+                        HStack(spacing: 4) {
+                            BlockActionButton(icon: "play.fill", tooltip: "Run") {
+                                isEditing = false
+                                onRerun?(editedCommand)
+                            }
+                            .foregroundColor(.green)
+                            
+                            BlockActionButton(icon: "xmark", tooltip: "Cancel") {
+                                isEditing = false
+                                editedCommand = block.input
+                            }
+                            .foregroundColor(.red)
                         }
-                        
-                        BlockActionButton(icon: "pencil", tooltip: "Edit") {
-                            onEdit?(block.input)
-                        }
-                        
-                        BlockActionButton(icon: "doc.on.doc", tooltip: "Copy Command") {
-                            copyToClipboard(block.input)
-                        }
-                        
-                        BlockActionButton(icon: "doc.on.doc.fill", tooltip: "Copy All") {
-                            copyToClipboard("\(block.input)\n\(block.output)")
-                        }
-                        
-                        // Markdown toggle for markdown content
-                        if block.isMarkdownContent {
-                            BlockActionButton(
-                                icon: showRawOutput ? "doc.richtext" : "doc.plaintext",
-                                tooltip: showRawOutput ? "Render Markdown" : "Show Raw"
-                            ) {
-                                showRawOutput.toggle()
+                    } else {
+                        // Read-only Mode
+                        Text(block.input)
+                            .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
+                            .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                            .textSelection(.enabled)
+                    }
+                    
+                    Spacer()
+                    
+                    // Action bar (visible on hover)
+                    if isHovered && !isEditing {
+                        HStack(spacing: 4) {
+                            BlockActionButton(icon: "arrow.clockwise", tooltip: "Rerun") {
+                                onRerun?(block.input)
+                            }
+                            
+                            BlockActionButton(icon: "pencil", tooltip: "Edit") {
+                                isEditing = true
+                                editedCommand = block.input
+                            }
+                            
+                            BlockActionButton(icon: "doc.on.doc", tooltip: "Copy Command") {
+                                copyToClipboard(block.input)
+                            }
+                            
+                            BlockActionButton(icon: "doc.on.doc.fill", tooltip: "Copy All") {
+                                copyToClipboard("\(block.input)\n\(block.output)")
+                            }
+                            
+                            // Markdown toggle for markdown content
+                            if block.isMarkdownContent {
+                                BlockActionButton(
+                                    icon: showRawOutput ? "doc.richtext" : "doc.plaintext",
+                                    tooltip: showRawOutput ? "Render Markdown" : "Show Raw"
+                                ) {
+                                    showRawOutput.toggle()
+                                }
                             }
                         }
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                }
                 
                 // Metadata badges (Stage 2: Enhanced block info)
                 HStack(spacing: 8) {
