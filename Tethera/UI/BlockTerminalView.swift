@@ -51,6 +51,42 @@ struct BlockTerminalView: View {
                     )
                     .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
                     
+                    // Git branch badge (inline, fast)
+                    if let gitInfo = viewModel.gitInfo {
+                        HStack(spacing: 6) {
+                            Image(systemName: gitInfo.branchIcon)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(gitInfo.isMainBranch ? .green : .purple)
+                            
+                            Text(gitInfo.displayBranch)
+                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.primary)
+                            
+                            if !gitInfo.statusIndicator.isEmpty {
+                                Text(gitInfo.statusIndicator)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.orange)
+                            }
+                            
+                            if let ab = gitInfo.aheadBehindText {
+                                Text(ab)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(.ultraThinMaterial)
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(.purple.opacity(0.3), lineWidth: 1)
+                            }
+                        )
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+                    
                     Spacer()
                 }
                 .padding(.top, 16)

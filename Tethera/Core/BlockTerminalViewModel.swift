@@ -5,7 +5,10 @@ import CoreText
 @MainActor
 class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     @Published var workingDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path {
-        didSet { _displayWorkingDirectory = nil } // Invalidate cache
+        didSet { 
+            _displayWorkingDirectory = nil // Invalidate cache
+            refreshGitInfo() // Refresh Git info on directory change
+        }
     }
     @Published var blocks: [TerminalBlock] = []
     @Published var selectedBlockID: UUID? = nil
@@ -14,6 +17,9 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     @Published var theme: TerminalTheme
     @Published var isRunningCommand: Bool = false // Loading state
     @Published var paletteActions: [String] = ["New Tab", "Split Pane", "Settings"]
+    
+    // Git integration
+    @Published var gitInfo: GitInfo?
     
     // Command history with persistence
     @Published var commandHistory: [String] = []
@@ -56,6 +62,20 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
                 }
             }
         }
+        
+        // Listen for Git info changes
+        NotificationCenter.default.addObserver(
+            forName: .gitInfoDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor in
+                self?.gitInfo = notification.object as? GitInfo
+            }
+        }
+        
+        // Initial Git info refresh
+        refreshGitInfo()
     }
     
     // MARK: - TerminalBlockDelegate
@@ -351,5 +371,16 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
         }
         Self._cachedFont = font
         return font
+    }
+    
+    // MARK: - Git Integration
+    
+    /// Refresh Git info for current directory (background, non-blocking)
+    func refreshGitInfo() {
+        Task {
+            GitService.shared.refresh(for: workingDirectory)
+            // Observe GitService changes
+            self.gitInfo = GitService.shared.currentInfo
+        }
     }
 }
