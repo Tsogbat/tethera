@@ -832,14 +832,17 @@ struct TerminalBlockView: View {
         return tabLineCount > 0 && tabLineCount >= lines.count / 2
     }
     
-    /// Format columnar output with even column widths
+    /// Format columnar output with even column widths (calculated globally across all lines)
     private func formatColumnarOutput(_ output: String) -> String {
         let lines = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var formattedLines: [String] = []
+        
+        // First pass: Parse all lines and find max column count
+        var parsedLines: [[String]] = []
+        var maxColumns = 0
         
         for line in lines {
             if line.isEmpty {
-                formattedLines.append("")
+                parsedLines.append([])
                 continue
             }
             
@@ -848,26 +851,50 @@ struct TerminalBlockView: View {
                 .map(String.init)
                 .filter { !$0.isEmpty }
             
-            if items.count <= 1 {
-                formattedLines.append(line)
+            parsedLines.append(items)
+            maxColumns = max(maxColumns, items.count)
+        }
+        
+        // If no columnar data, return as-is
+        guard maxColumns > 1 else {
+            return expandTabs(output, tabWidth: 8)
+        }
+        
+        // Second pass: Find max width for each column position
+        var columnWidths: [Int] = Array(repeating: 0, count: maxColumns)
+        for items in parsedLines {
+            for (colIndex, item) in items.enumerated() {
+                columnWidths[colIndex] = max(columnWidths[colIndex], item.count)
+            }
+        }
+        
+        // Add padding (2 spaces between columns)
+        let paddedWidths = columnWidths.map { $0 + 2 }
+        
+        // Third pass: Format each line using global column widths
+        var formattedLines: [String] = []
+        for (lineIndex, items) in parsedLines.enumerated() {
+            if items.isEmpty {
+                formattedLines.append("")
                 continue
             }
             
-            // Find the appropriate column width (longest item + padding)
-            let maxItemLen = items.map { $0.count }.max() ?? 0
-            let columnWidth = ((maxItemLen / 8) + 1) * 8 // Round up to next 8-char boundary
-            let minColumnWidth = max(16, columnWidth) // At least 16 chars
+            if items.count == 1 {
+                // Single item line - don't format
+                formattedLines.append(lines[lineIndex])
+                continue
+            }
             
-            // Format items into evenly-spaced columns
+            // Format items with proper column spacing
             var formattedLine = ""
-            for (index, item) in items.enumerated() {
-                if index > 0 {
-                    // Pad to column width
-                    let currentLen = formattedLine.count % minColumnWidth
-                    let padding = minColumnWidth - currentLen
-                    formattedLine += String(repeating: " ", count: max(2, padding))
-                }
+            for (colIndex, item) in items.enumerated() {
                 formattedLine += item
+                // Add padding to reach next column (except for last item)
+                if colIndex < items.count - 1 {
+                    let targetWidth = paddedWidths[colIndex]
+                    let padding = max(2, targetWidth - item.count)
+                    formattedLine += String(repeating: " ", count: padding)
+                }
             }
             formattedLines.append(formattedLine)
         }
@@ -1030,6 +1057,7 @@ struct CategoryBadge: View {
 
 struct MediaPreviewView: View {
     let filePath: String
+    @EnvironmentObject private var userSettings: UserSettings
     @State private var image: NSImage?
     @State private var isHovered: Bool = false
     @State private var loadError: Bool = false
@@ -1038,9 +1066,35 @@ struct MediaPreviewView: View {
         (filePath as NSString).lastPathComponent
     }
     
+    private var isVideo: Bool {
+        MediaService.shared.isVideo(at: filePath)
+    }
+    
+    private var isPDF: Bool {
+        MediaService.shared.isPDF(at: filePath)
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let img = image {
+            if isPDF {
+                // PDF preview with multi-page navigation
+                PDFPreviewView(url: URL(fileURLWithPath: filePath))
+                    .environmentObject(userSettings)
+                
+                // Filename label
+                Text(fileName)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else if isVideo {
+                // Video preview
+                VideoPreviewView(url: URL(fileURLWithPath: filePath))
+                    .environmentObject(userSettings)
+                
+                // Filename label
+                Text(fileName)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else if let img = image {
                 // Image display
                 Image(nsImage: img)
                     .resizable()
@@ -1093,7 +1147,9 @@ struct MediaPreviewView: View {
             }
         }
         .onAppear {
-            loadImage()
+            if !isVideo && !isPDF {
+                loadImage()
+            }
         }
     }
     

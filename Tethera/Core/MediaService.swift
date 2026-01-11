@@ -28,7 +28,20 @@ class MediaService {
     func isPreviewable(at path: String) -> Bool {
         let ext = (path as NSString).pathExtension.lowercased()
         return Self.imageExtensions.contains(ext) || 
+               Self.videoExtensions.contains(ext) ||
                Self.documentExtensions.contains(ext)
+    }
+    
+    /// Check if file is a video
+    func isVideo(at path: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        return Self.videoExtensions.contains(ext)
+    }
+    
+    /// Check if file is a PDF
+    func isPDF(at path: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        return ext == "pdf"
     }
     
     /// Get full path from potentially relative path
