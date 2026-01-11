@@ -151,6 +151,9 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
             self.currentBlockOutput = ""
             self.commandStartTime = nil
             self.isRunningCommand = false
+            
+            // Refresh git info after command completes (for git add, commit, etc.)
+            self.refreshGitInfo()
         }
     }
     
