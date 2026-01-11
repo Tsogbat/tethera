@@ -21,7 +21,7 @@ A modern, block-based terminal application for macOS built with SwiftUI and Meta
 
 - **Inline Display**: Preview images directly in terminal blocks.
 - **Commands**: `preview <file>` or `show <file>` to display images.
-- **Multiple Formats**: PNG, JPG, GIF, WEBP, HEIC, PDF support.
+- **Multiple Formats**: PNG, JPG, JPEG, GIF, WEBP, BMP, TIFF, HEIC, SVG, and PDF support.
 - **Click to Open**: Click images to open in Preview app.
 
 ### - High Performance
