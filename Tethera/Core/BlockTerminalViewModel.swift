@@ -242,6 +242,11 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
             return
         }
         
+        if trimmed == "quit" || trimmed == "exit" {
+            NSApplication.shared.terminate(nil)
+            return
+        }
+        
         // Preview command (instant, no PTY)
         if trimmed.hasPrefix("preview ") || trimmed.hasPrefix("show ") {
             handlePreviewCommand(trimmed)
