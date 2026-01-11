@@ -608,6 +608,17 @@ struct TerminalBlockView: View {
                 .padding(.leading, 20)
             }
             
+            // Media preview section (for preview/show commands)
+            if block.hasMedia, let mediaFiles = block.mediaFiles {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(mediaFiles, id: \.self) { path in
+                        MediaPreviewView(filePath: path)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.leading, 20)
+            }
+            
             // Copied indicator
             if showCopied {
                 Text("Copied!")
@@ -862,5 +873,91 @@ struct CategoryBadge: View {
         case .shell: return .gray
         case .unknown: return .gray
         }
+    }
+}
+
+// MARK: - Media Preview View
+
+struct MediaPreviewView: View {
+    let filePath: String
+    @State private var image: NSImage?
+    @State private var isHovered: Bool = false
+    @State private var loadError: Bool = false
+    
+    private var fileName: String {
+        (filePath as NSString).lastPathComponent
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let img = image {
+                // Image display
+                Image(nsImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 500, maxHeight: 350)
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(.white.opacity(isHovered ? 0.3 : 0.1), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .scaleEffect(isHovered ? 1.02 : 1.0)
+                    .animation(.spring(response: 0.3), value: isHovered)
+                    .onHover { hovering in
+                        isHovered = hovering
+                    }
+                    .onTapGesture {
+                        openInQuickLook()
+                    }
+                    .help("Click to open in Quick Look")
+                
+                // Filename label
+                Text(fileName)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
+            } else if loadError {
+                // Error state
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.orange)
+                    Text("Failed to load: \(fileName)")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.ultraThinMaterial)
+                )
+            } else {
+                // Loading placeholder
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Loading \(fileName)...")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .padding(12)
+            }
+        }
+        .onAppear {
+            loadImage()
+        }
+    }
+    
+    private func loadImage() {
+        let url = URL(fileURLWithPath: filePath)
+        if let nsImage = NSImage(contentsOf: url) {
+            self.image = nsImage
+        } else {
+            self.loadError = true
+        }
+    }
+    
+    private func openInQuickLook() {
+        let url = URL(fileURLWithPath: filePath)
+        NSWorkspace.shared.open(url)
     }
 }

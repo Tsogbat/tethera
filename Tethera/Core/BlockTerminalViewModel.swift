@@ -242,6 +242,12 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
             return
         }
         
+        // Preview command (instant, no PTY)
+        if trimmed.hasPrefix("preview ") || trimmed.hasPrefix("show ") {
+            handlePreviewCommand(trimmed)
+            return
+        }
+        
         // Store pending command for block creation in delegate
         pendingCommand = trimmed
         
@@ -251,6 +257,42 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
         } else {
             // Fallback to one-off Process if PTY not available
             fallbackRunCommand(trimmed, originalInput: input)
+        }
+    }
+    
+    /// Handle preview/show command for image display
+    private func handlePreviewCommand(_ command: String) {
+        let startTime = Date()
+        
+        if let urls = MediaService.shared.parsePreviewCommand(command, workingDirectory: workingDirectory) {
+            let paths = urls.map { $0.path }
+            let fileNames = urls.map { $0.lastPathComponent }
+            let output = "Previewing: \(fileNames.joined(separator: ", "))"
+            
+            let block = TerminalBlock(
+                input: command,
+                output: output,
+                timestamp: Date(),
+                workingDirectory: workingDirectory,
+                success: true,
+                exitCode: 0,
+                durationMs: Int64(Date().timeIntervalSince(startTime) * 1000),
+                mediaFiles: paths
+            )
+            blocks.append(block)
+            CommandHistoryManager.shared.addEntry(from: block)
+        } else {
+            // No valid files found
+            let block = TerminalBlock(
+                input: command,
+                output: "No valid image files found",
+                timestamp: Date(),
+                workingDirectory: workingDirectory,
+                success: false,
+                exitCode: 1,
+                durationMs: Int64(Date().timeIntervalSince(startTime) * 1000)
+            )
+            blocks.append(block)
         }
     }
     

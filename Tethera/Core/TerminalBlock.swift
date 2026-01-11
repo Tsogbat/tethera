@@ -57,6 +57,15 @@ struct TerminalBlock: Identifiable, Codable {
     var summary: String?
     var isExpanded: Bool = true
     
+    // Media preview support
+    var mediaFiles: [String]? // File paths for image/media preview
+    
+    /// Whether this block has media to display
+    var hasMedia: Bool {
+        guard let files = mediaFiles else { return false }
+        return !files.isEmpty
+    }
+    
     /// Whether this block's output should be rendered as markdown
     var isMarkdownContent: Bool {
         // Check if command is reading a markdown file
@@ -76,7 +85,8 @@ struct TerminalBlock: Identifiable, Codable {
         success: Bool? = nil,
         exitCode: Int32? = nil,
         durationMs: Int64? = nil,
-        summary: String? = nil
+        summary: String? = nil,
+        mediaFiles: [String]? = nil
     ) {
         self.id = id
         self.input = input
@@ -88,6 +98,7 @@ struct TerminalBlock: Identifiable, Codable {
         self.durationMs = durationMs
         self.category = CommandCategory.categorize(input)
         self.summary = summary
+        self.mediaFiles = mediaFiles
     }
     
     // MARK: - Computed Properties

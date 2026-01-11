@@ -4,7 +4,7 @@ This document describes the architecture and design of the Tethera Terminal appl
 
 ## Overview
 
-Tethera is a block-based terminal emulator built with SwiftUI for macOS. It organizes command inputs and outputs into visual blocks, providing a more structured and navigable terminal experience. It supports rich output rendering including Markdown and features a high-performance Metal-based renderer for raw terminal sessions.
+Tethera is a block-based terminal emulator built with SwiftUI for macOS. It organizes command inputs and outputs into visual blocks, providing a more structured and navigable terminal experience. It supports rich output rendering including Markdown and images, Git integration, and features a high-performance Metal-based renderer for raw terminal sessions.
 
 ## Project Structure
 
@@ -20,7 +20,9 @@ Tethera/
 │   ├── TerminalBuffer.swift          # Terminal output buffer model
 │   ├── MetalRenderer.swift           # Metal-based terminal renderer
 │   ├── Shaders.metal                 # Metal vertex/fragment shaders
-│   └── AIService.swift               # AI integration service
+│   ├── AIService.swift               # AI integration service
+│   ├── GitService.swift              # Fast Git repo info (branch, status)
+│   └── MediaService.swift            # Image/media preview handling
 │
 ├── UI/                        # SwiftUI views
 │   ├── BlockTerminalView.swift       # Main terminal block interface
@@ -57,15 +59,17 @@ Tethera/
 The fundamental data unit representing a single command execution:
 
 ```swift
-struct TerminalBlock: Identifiable {
+struct TerminalBlock: Identifiable, Codable {
     let id: UUID
     var input: String           // Command entered
     var output: String          // Command output
     var timestamp: Date         // When executed
     var workingDirectory: String?
     var success: Bool?          // Success/failure status
-    var executionDuration: TimeInterval?  // How long it took
     var exitCode: Int32?        // Shell exit code
+    var durationMs: Int64?      // Execution duration in milliseconds
+    var category: CommandCategory  // Auto-detected command type
+    var mediaFiles: [String]?   // Image/media paths for preview
 }
 ```
 
@@ -102,6 +106,24 @@ Singleton managing global command history:
 - Stores all commands across all tabs.
 - Persists to `~/Library/Application Support/Tethera/command_history.json`.
 - Provides fuzzy search functionality.
+
+### GitService
+
+Fast, file-based Git repository information:
+
+- **File-based parsing**: Reads `.git/HEAD` directly (<1ms) instead of spawning `git` subprocess.
+- **Branch detection**: Extracts current branch name from refs.
+- **Dirty status**: Uses `git status --porcelain` for accurate uncommitted change detection.
+- **Caching**: Background refresh with notification-based updates.
+- **UI Integration**: Displays branch badge in header with color coding (green=main, purple=feature).
+
+### MediaService
+
+Image and media preview handling:
+
+- **Format support**: PNG, JPG, JPEG, GIF, WEBP, BMP, HEIC, PDF.
+- **Command parsing**: Handles `preview` and `show` commands with glob patterns.
+- **Path resolution**: Supports relative, absolute, and `~` prefixed paths.
 
 ## Data Flow
 
