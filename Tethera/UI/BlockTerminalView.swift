@@ -379,6 +379,7 @@ struct TerminalBlockView: View {
     // Inline editing state
     @State private var isEditing: Bool = false
     @State private var editedCommand: String = ""
+    @FocusState private var isEditFieldFocused: Bool
     
     init(block: TerminalBlock, onRerun: ((String) -> Void)? = nil, onEdit: ((String) -> Void)? = nil) {
         self.block = block
@@ -429,6 +430,7 @@ struct TerminalBlockView: View {
                             .font(getFont(size: CGFloat(userSettings.themeConfiguration.fontSize)))
                             .textFieldStyle(PlainTextFieldStyle())
                             .foregroundColor(userSettings.themeConfiguration.accentColor.color)
+                            .focused($isEditFieldFocused)
                             .onSubmit {
                                 isEditing = false
                                 onRerun?(editedCommand)
@@ -468,6 +470,7 @@ struct TerminalBlockView: View {
                             BlockActionButton(icon: "pencil", tooltip: "Edit") {
                                 isEditing = true
                                 editedCommand = block.input
+                                isEditFieldFocused = true
                             }
                             
                             BlockActionButton(icon: "doc.on.doc", tooltip: "Copy Command") {
