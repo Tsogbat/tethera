@@ -424,6 +424,12 @@ struct TerminalBlockView: View {
     @State private var editedCommand: String = ""
     @FocusState private var isEditFieldFocused: Bool
     
+    // Markdown file editing (inline)
+    @State private var isEditingMarkdown: Bool = false
+    @State private var editableMarkdown: String = ""
+    @State private var originalMarkdown: String = ""
+    @State private var hasUnsavedChanges: Bool = false
+    
     init(block: TerminalBlock, onRerun: ((String) -> Void)? = nil, onEdit: ((String) -> Void)? = nil) {
         self.block = block
         self.onRerun = onRerun
@@ -539,6 +545,36 @@ struct TerminalBlockView: View {
                             
                             // Markdown toggle for markdown content
                             if block.isMarkdownContent {
+                                // Edit file button / Save & Cancel when editing
+                                if let path = block.markdownSourcePath {
+                                    if isEditingMarkdown {
+                                        // Cancel button
+                                        BlockActionButton(
+                                            icon: "xmark.circle",
+                                            tooltip: "Cancel"
+                                        ) {
+                                            isEditingMarkdown = false
+                                            hasUnsavedChanges = false
+                                        }
+                                        
+                                        // Save button
+                                        BlockActionButton(
+                                            icon: "square.and.arrow.down",
+                                            tooltip: "Save"
+                                        ) {
+                                            saveMarkdownFile(path: path)
+                                        }
+                                    } else {
+                                        // Edit button
+                                        BlockActionButton(
+                                            icon: "pencil.and.outline",
+                                            tooltip: "Edit File"
+                                        ) {
+                                            loadMarkdownFile(path: path)
+                                        }
+                                    }
+                                }
+                                
                                 BlockActionButton(
                                     icon: showRawOutput ? "doc.richtext" : "doc.plaintext",
                                     tooltip: showRawOutput ? "Render Markdown" : "Show Raw"
@@ -585,8 +621,68 @@ struct TerminalBlockView: View {
             if !block.output.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     if isExpanded {
-                        // Markdown toggle for markdown content
-                        if block.isMarkdownContent && !showRawOutput {
+                        // Inline markdown editor
+                        if block.isMarkdownContent && isEditingMarkdown {
+                            VStack(alignment: .leading, spacing: 8) {
+                                // Unsaved indicator
+                                if hasUnsavedChanges {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(.orange)
+                                            .frame(width: 8, height: 8)
+                                        Text("Unsaved changes")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                                
+                                // Split view: Editor | Preview
+                                HStack(spacing: 0) {
+                                    // Editor pane
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("MARKDOWN")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.secondary)
+                                        
+                                        TextEditor(text: $editableMarkdown)
+                                            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize - 1), design: .monospaced))
+                                            .scrollContentBackground(.hidden)
+                                            .background(SwiftUI.Color.black.opacity(0.2))
+                                            .cornerRadius(6)
+                                            .frame(minHeight: 200, maxHeight: 400)
+                                            .onChange(of: editableMarkdown) { _, newValue in
+                                                hasUnsavedChanges = newValue != originalMarkdown
+                                            }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    
+                                    Divider()
+                                        .padding(.horizontal, 8)
+                                    
+                                    // Preview pane
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("PREVIEW")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.secondary)
+                                        
+                                        ScrollView {
+                                            MarkdownOutputView(content: editableMarkdown)
+                                                .environmentObject(userSettings)
+                                        }
+                                        .frame(minHeight: 200, maxHeight: 400)
+                                        .background(SwiftUI.Color.black.opacity(0.1))
+                                        .cornerRadius(6)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(.ultraThinMaterial)
+                            )
+                        } else if block.isMarkdownContent && !showRawOutput {
+                            // Normal markdown rendering
                             MarkdownOutputView(content: block.output)
                                 .environmentObject(userSettings)
                         } else {
@@ -664,6 +760,34 @@ struct TerminalBlockView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
+    }
+    
+    // MARK: - Markdown File Helpers
+    
+    private func loadMarkdownFile(path: String) {
+        do {
+            let content = try String(contentsOfFile: path, encoding: .utf8)
+            editableMarkdown = content
+            originalMarkdown = content
+            hasUnsavedChanges = false
+            isEditingMarkdown = true
+        } catch {
+            editableMarkdown = "// Error loading file: \(error.localizedDescription)"
+            originalMarkdown = ""
+            isEditingMarkdown = true
+        }
+    }
+    
+    private func saveMarkdownFile(path: String) {
+        do {
+            try editableMarkdown.write(toFile: path, atomically: true, encoding: .utf8)
+            originalMarkdown = editableMarkdown
+            hasUnsavedChanges = false
+            isEditingMarkdown = false
+        } catch {
+            // Show error - could add alert here
+            print("Failed to save file: \(error)")
+        }
     }
     
     /// Format output for display with proper column alignment like Warp

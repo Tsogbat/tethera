@@ -79,6 +79,29 @@ struct TerminalBlock: Identifiable, Codable {
         return false
     }
     
+    /// Extract the markdown file path from the command (for editing)
+    var markdownSourcePath: String? {
+        guard isMarkdownContent else { return nil }
+        
+        // Extract file path from cat/less/more/bat command
+        let parts = input.split(separator: " ", maxSplits: 1)
+        guard parts.count > 1 else { return nil }
+        
+        var filePath = String(parts[1]).trimmingCharacters(in: .whitespaces)
+        
+        // Expand ~ to home directory
+        if filePath.hasPrefix("~") {
+            filePath = filePath.replacingOccurrences(of: "~", with: FileManager.default.homeDirectoryForCurrentUser.path)
+        }
+        
+        // If relative path, combine with workingDirectory
+        if !filePath.hasPrefix("/"), let wd = workingDirectory {
+            filePath = (wd as NSString).appendingPathComponent(filePath)
+        }
+        
+        return filePath
+    }
+    
     init(
         id: UUID = UUID(),
         input: String,
