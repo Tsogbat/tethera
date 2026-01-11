@@ -11,6 +11,7 @@ enum CommandCategory: String, Codable {
     case networkOperation = "network"
     case development = "development"
     case shell = "shell"
+    case media = "media"
     case unknown = "unknown"
     
     static func categorize(_ command: String) -> CommandCategory {
@@ -33,6 +34,8 @@ enum CommandCategory: String, Codable {
             return .development
         case "echo", "export", "source", "alias", "unalias", "history", "clear", "exit":
             return .shell
+        case "preview", "show":
+            return .media
         default:
             return .unknown
         }

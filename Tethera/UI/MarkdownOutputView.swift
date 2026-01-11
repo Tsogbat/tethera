@@ -46,8 +46,14 @@ struct MarkdownOutputView: View {
         // print("[MD] Parsing \(lines.count) lines")
         
         for (idx, rawLine) in lines.enumerated() {
-            // Clean the line - remove all control characters
-            let line = rawLine.filter { !$0.isASCII || $0.asciiValue! >= 32 || $0 == "\t" }
+            // Clean the line - remove only control characters, keep Unicode (box-drawing characters like ├── └── │)
+            let line = rawLine.filter { char in
+                // Keep all non-ASCII characters (includes box-drawing, emoji, etc.)
+                if !char.isASCII { return true }
+                // For ASCII, keep printable characters and tabs
+                guard let ascii = char.asciiValue else { return true }
+                return ascii >= 32 || char == "\t"
+            }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             
             // if idx < 10 {

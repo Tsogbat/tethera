@@ -258,14 +258,26 @@ class TerminalSession: ObservableObject {
     }
     
     // MARK: - OSC 133 Parser (also strips ANSI/CSI sequences)
+    private var utf8Buffer: [UInt8] = []
+    
     private func parseOSCByte(_ byte: UInt8) {
         switch oscState {
         case .normal:
             if byte == 0x1B { // ESC
+                flushUtf8Buffer()
                 oscState = .escape
+            } else if byte >= 0x80 { // UTF-8 continuation or start byte
+                utf8Buffer.append(byte)
+                // Try to decode if we have a complete character
+                if let str = String(bytes: utf8Buffer, encoding: .utf8) {
+                    outputBuffer.append(str)
+                    utf8Buffer.removeAll()
+                }
             } else if byte >= 0x20 && byte < 0x7F { // Printable ASCII
+                flushUtf8Buffer()
                 outputBuffer.append(Character(UnicodeScalar(byte)))
             } else if byte == 0x0A || byte == 0x0D || byte == 0x09 { // LF, CR, TAB
+                flushUtf8Buffer()
                 outputBuffer.append(Character(UnicodeScalar(byte)))
             }
             // Ignore other control characters
@@ -399,6 +411,11 @@ class TerminalSession: ObservableObject {
     
     private func flushOutputBuffer() {
         // Not used - see handleOSCSequence
+    }
+    
+    private func flushUtf8Buffer() {
+        // Clear any incomplete UTF-8 sequences
+        utf8Buffer.removeAll()
     }
     
     private func handleCancel() {

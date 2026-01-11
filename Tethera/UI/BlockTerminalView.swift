@@ -881,6 +881,7 @@ struct CategoryBadge: View {
         case .networkOperation: return "network"
         case .development: return "hammer"
         case .shell: return "terminal"
+        case .media: return "photo"
         case .unknown: return "questionmark"
         }
     }
@@ -895,6 +896,7 @@ struct CategoryBadge: View {
         case .networkOperation: return .cyan
         case .development: return .yellow
         case .shell: return .gray
+        case .media: return .pink
         case .unknown: return .gray
         }
     }
