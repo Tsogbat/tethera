@@ -28,6 +28,7 @@ Tethera/
 │   ├── BlockTerminalView.swift       # Main terminal block interface
 │   ├── TerminalView.swift            # Metal-backed raw terminal view
 │   ├── MarkdownOutputView.swift      # Markdown rendering component
+│   ├── MarkdownEditView.swift        # Split-pane markdown editor
 │   ├── TabBarView.swift              # Tab bar with drag support
 │   ├── SplitPaneView.swift           # Split view management
 │   ├── SearchOverlayView.swift       # Fuzzy search overlay
@@ -43,7 +44,8 @@ Tethera/
 │   ├── TabbedTerminalView.swift      # Root tabbed container
 │   ├── TabDropDelegate.swift         # Drag-drop handling
 │   ├── UserSettings.swift            # User preferences
-│   └── TerminalTheme.swift           # Theme configuration
+│   ├── TerminalTheme.swift           # Theme configuration
+│   └── GitInfo.swift                 # Git status model
 │
 ├── Extensions/                # Utility extensions
 │   └── FontLoader.swift              # Custom font loading
@@ -70,6 +72,7 @@ struct TerminalBlock: Identifiable, Codable {
     var durationMs: Int64?      // Execution duration in milliseconds
     var category: CommandCategory  // Auto-detected command type
     var mediaFiles: [String]?   // Image/media paths for preview
+    var markdownSourcePath: String? // Path for editable markdown files
 }
 ```
 
@@ -81,6 +84,8 @@ The main view model that manages:
 - Block creation and storage.
 - Working directory tracking.
 - Command history navigation.
+- Preview command handling (`preview`, `show`).
+- Inline editor state management.
 
 ### MetalRenderer & TerminalBuffer
 
@@ -92,12 +97,15 @@ High-performance rendering system:
   - Updates a vertex buffer dynamically based on grid content.
   - Runs custom shaders (`Shaders.metal`) for blending and coloring.
 
-### Markdown Rendering
+### Markdown Rendering & Editing
 
-Tethera can heuristically detect and render Markdown content in command outputs:
+Tethera provides a rich markdown experience:
 
-- **MarkdownDetector**: Analyzes output to detect Markdown patterns (headers, code blocks, etc.).
-- **MarkdownOutputView**: A SwiftUI view that parses and renders Markdown elements into rich native UI components (headers with gradients, code blocks with badges, tables).
+- **Rendering**: Detects and renders Markdown content (headers, code blocks, tables) using `MarkdownOutputView` and `MarkdownDetector`.
+- **Inline Editing**: Allows direct editing of markdown files within the terminal block.
+  - **Inline Mode**: Replaces rendered view with a split-pane editor (Raw + Preview).
+  - **Live Preview**: Updates rendered view as you type.
+  - **File Sync**: Saves changes directly back to the original file using `String(contentsOfFile:)` and `write(toFile:)`.
 
 ### CommandHistoryManager
 
@@ -124,6 +132,7 @@ Image and media preview handling:
 - **Format support**: PNG, JPG, JPEG, GIF, WEBP, BMP, HEIC, PDF.
 - **Command parsing**: Handles `preview` and `show` commands with glob patterns.
 - **Path resolution**: Supports relative, absolute, and `~` prefixed paths.
+- **Validation**: Ensures files exist and are valid media types before creating preview blocks.
 
 ## Data Flow
 
@@ -144,6 +153,8 @@ Image and media preview handling:
 ┌─────────────────┐
 │ TerminalSession │
 │     (PTY)       │
+1. Parse UTF-8    │
+2. Fix Output     │
 └────────┬────────┘
          │
          ▼
@@ -156,7 +167,12 @@ Image and media preview handling:
 ┌─────────────────┐       ┌────────────────────┐
 │ BlockTerminal   │──────▶│ MarkdownOutputView │
 │     View        │       │ (if MD detected)   │
-└─────────────────┘       └────────────────────┘
+└────────┬────────┘       └─────────┬──────────┘
+         │                          │
+    ┌────▼──────────┐               │
+    │ Inline Editor │◀──────────────┘
+    │ (Split View)  │
+    └───────────────┘
 ```
 
 ### Raw/Metal Mode (Background/Under-the-hood)
@@ -191,13 +207,17 @@ Image and media preview handling:
 
 Instead of a scrolling text buffer, Tethera organizes output into discrete blocks. This enables "Rich Text" features like rendering Markdown directly in the terminal stream, which is handled by `MarkdownOutputView` when detected.
 
+### Inline Markdown Editing
+
+To bridge the gap between terminal and editor, Tethera implements "Click-to-Edit". Instead of opening an external editor, users can toggle an inline split-view editor directly within the command block. This reduces context switching for quick documentation edits.
+
 ### GPU Acceleration
 
 For raw terminal rendering (ncurses apps or classic view), Tethera uses a Custom Metal engine (`MetalRenderer`) instead of standard SwiftUI Text views. This provides 60fps performance even with heavy text loads by batching character draws into a single draw call per frame.
 
 ### PTY & Async Execution
 
-Commands run via a Pseudo-Terminal (PTY) in `TerminalSession`. This allows accurate shell behavior, interactive commands, and captured exit codes, improving over the initial synchronous `Process` implementation.
+Commands run via a Pseudo-Terminal (PTY) in `TerminalSession`. This allows accurate shell behavior, interactive commands, and captured exit codes, improving over the initial synchronous `Process` implementation. Input parsing handles UTF-8 multi-byte characters to support modern CLI tools and international text.
 
 ### Design System
 

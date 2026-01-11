@@ -17,11 +17,18 @@ A modern, block-based terminal application for macOS built with SwiftUI and Meta
 - **Dirty Indicator**: Orange dot when uncommitted changes exist.
 - **Fast Detection**: File-based parsing (<1ms) instead of subprocess spawning.
 
+### - Inline Markdown Editing
+
+- **Click-to-Edit**: Edit rendered markdown files directly within the terminal block.
+- **Split View**: Side-by-side raw editor and live preview.
+- **Seamless Saving**: Save changes directly back to the original file.
+
 ### - Image Previews
 
 - **Inline Display**: Preview images directly in terminal blocks.
 - **Commands**: `preview <file>` or `show <file>` to display images.
 - **Multiple Formats**: PNG, JPG, GIF, WEBP, HEIC, PDF support.
+- **Copy Image**: Copy the actual image to clipboard using the block action button.
 - **Click to Open**: Click images to open in Preview app.
 
 ### - High Performance
@@ -71,6 +78,7 @@ make run
 | Command          | Description          |
 | ---------------- | -------------------- |
 | `clear`          | Clear all blocks     |
+| `quit`, `exit`   | Quit the application |
 | `preview <file>` | Display image inline |
 | `show <file>`    | Alias for preview    |
 
