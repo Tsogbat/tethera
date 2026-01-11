@@ -434,6 +434,8 @@ struct TerminalBlockView: View {
                             .onSubmit {
                                 isEditing = false
                                 onRerun?(editedCommand)
+                                // Restore focus to main input after running
+                                NotificationCenter.default.post(name: .restoreTerminalFocus, object: nil)
                             }
                             
                         // Edit actions
@@ -441,12 +443,16 @@ struct TerminalBlockView: View {
                             BlockActionButton(icon: "play.fill", tooltip: "Run") {
                                 isEditing = false
                                 onRerun?(editedCommand)
+                                // Restore focus to main input after running
+                                NotificationCenter.default.post(name: .restoreTerminalFocus, object: nil)
                             }
                             .foregroundColor(.green)
                             
                             BlockActionButton(icon: "xmark", tooltip: "Cancel") {
                                 isEditing = false
                                 editedCommand = block.input
+                                // Restore focus to main input on cancel too
+                                NotificationCenter.default.post(name: .restoreTerminalFocus, object: nil)
                             }
                             .foregroundColor(.red)
                         }
