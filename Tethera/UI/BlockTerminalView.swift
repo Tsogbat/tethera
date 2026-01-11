@@ -526,8 +526,15 @@ struct TerminalBlockView: View {
                                 copyToClipboard(block.input)
                             }
                             
-                            BlockActionButton(icon: "doc.on.doc.fill", tooltip: "Copy All") {
-                                copyToClipboard("\(block.input)\n\(block.output)")
+                            // Copy All - copies image if media block, otherwise text
+                            if block.hasMedia, let firstMedia = block.mediaFiles?.first {
+                                BlockActionButton(icon: "photo.on.rectangle", tooltip: "Copy Image") {
+                                    copyImageToClipboard(path: firstMedia)
+                                }
+                            } else {
+                                BlockActionButton(icon: "doc.on.doc.fill", tooltip: "Copy All") {
+                                    copyToClipboard("\(block.input)\n\(block.output)")
+                                }
                             }
                             
                             // Markdown toggle for markdown content
@@ -768,6 +775,23 @@ struct TerminalBlockView: View {
     private func copyToClipboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+        
+        withAnimation {
+            showCopied = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopied = false
+            }
+        }
+    }
+    
+    private func copyImageToClipboard(path: String) {
+        let url = URL(fileURLWithPath: path)
+        guard let image = NSImage(contentsOf: url) else { return }
+        
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
         
         withAnimation {
             showCopied = true
