@@ -81,14 +81,21 @@ struct BlockTerminalView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(.ultraThinMaterial)
                                 RoundedRectangle(cornerRadius: 8)
-                                    .strokeBorder(.purple.opacity(0.3), lineWidth: 1)
+                                    .strokeBorder(
+                                        gitInfo.isMainBranch ? SwiftUI.Color.green.opacity(0.4) : SwiftUI.Color.purple.opacity(0.4),
+                                        lineWidth: 1
+                                    )
                             }
                         )
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.9)).animation(.spring(response: 0.3)),
+                            removal: .opacity.animation(.easeOut(duration: 0.15))
+                        ))
                     }
                     
                     Spacer()
                 }
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: viewModel.gitInfo != nil)
                 .padding(.top, 16)
                 .padding(.horizontal, 20)
 
