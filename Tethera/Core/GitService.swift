@@ -85,24 +85,35 @@ class GitService: ObservableObject {
         return trimmed
     }
     
-    /// Check if repo has uncommitted changes (fast approximation)
-    /// Uses index mtime vs HEAD commit time as heuristic
+    /// Check if repo has uncommitted changes
+    /// Uses fast `git status --porcelain` - typically <50ms
     nonisolated private func isDirty(gitPath: String) -> Bool {
-        let indexPath = (gitPath as NSString).appendingPathComponent("index")
-        let fm = FileManager.default
+        // Get repo root (parent of .git)
+        let repoRoot = (gitPath as NSString).deletingLastPathComponent
         
-        // No index = no staged files = likely clean or new repo
-        guard fm.fileExists(atPath: indexPath) else { return false }
+        // Use git status --porcelain for accurate detection
+        // This is fast (<50ms) and returns empty if clean
+        let process = Process()
+        let pipe = Pipe()
         
-        // Get index modification time
-        guard let indexAttrs = try? fm.attributesOfItem(atPath: indexPath),
-              let indexMod = indexAttrs[.modificationDate] as? Date else {
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["status", "--porcelain"]
+        process.currentDirectoryURL = URL(fileURLWithPath: repoRoot)
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8) ?? ""
+            
+            // If output is not empty, there are changes
+            return !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } catch {
             return false
         }
-        
-        // If index was modified in last 2 seconds, likely dirty
-        // This is a fast heuristic - not 100% accurate but avoids slow git status
-        return Date().timeIntervalSince(indexMod) < 2.0
     }
     
     /// Get ahead/behind counts using refs (fast)
