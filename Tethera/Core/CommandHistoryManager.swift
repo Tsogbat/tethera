@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import OSLog
 
 /// Manages extensive command history with optimized search functionality
 @MainActor
@@ -16,6 +17,7 @@ class CommandHistoryManager: ObservableObject {
     private let maxSearchResults = 50
     private let historyFileURL: URL
     private var searchDebounceTask: Task<Void, Never>?
+    private let logger = Logger(subsystem: "com.tethera.app", category: "CommandHistoryManager")
     
     struct HistoryEntry: Identifiable, Codable, Equatable, Hashable {
         let id: UUID
@@ -57,7 +59,13 @@ class CommandHistoryManager: ObservableObject {
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let tetheraDir = appSupport.appendingPathComponent("Tethera", isDirectory: true)
-        try? FileManager.default.createDirectory(at: tetheraDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: tetheraDir, withIntermediateDirectories: true)
+        } catch {
+            let message = "Could not create history directory at \(tetheraDir.path). History may not be saved."
+            logger.error("\(message)")
+            AppErrorReporter.shared.report(title: "History directory error", message: message)
+        }
         historyFileURL = tetheraDir.appendingPathComponent("command_history.json")
         
         // Load history on background thread
@@ -173,13 +181,18 @@ class CommandHistoryManager: ObservableObject {
     private func saveAsync() {
         let entries = allEntries
         let url = historyFileURL
+        let log = logger
         
         Task.detached(priority: .utility) {
             do {
                 let data = try JSONEncoder().encode(entries)
                 try data.write(to: url, options: .atomic)
             } catch {
-                print("Failed to save command history: \(error)")
+                let message = "Failed to save command history to \(url.path). Changes may not persist."
+                log.error("\(message)")
+                await MainActor.run {
+                    AppErrorReporter.shared.report(title: "History save failed", message: message)
+                }
             }
         }
     }
@@ -194,7 +207,11 @@ class CommandHistoryManager: ObservableObject {
                 self.allEntries = entries
             }
         } catch {
-            print("Failed to load command history: \(error)")
+            let message = "Failed to load command history from \(historyFileURL.path)."
+            logger.error("\(message)")
+            await MainActor.run {
+                AppErrorReporter.shared.report(title: "History load failed", message: message)
+            }
         }
     }
 }

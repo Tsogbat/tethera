@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 // MARK: - AI Service (Stage 2-6 Infrastructure)
 // This service implements the roadmap's AI layer with strict safety rules
@@ -13,6 +14,7 @@ class AIService: ObservableObject {
     @Published var isOnline = true
     
     private var userSettings: UserSettings?
+    private let logger = Logger(subsystem: "com.tethera.app", category: "AIService")
     
     private init() {}
     
@@ -150,36 +152,50 @@ class AIService: ObservableObject {
     
     /// Parse man page for command explanation (Offline fallback)
     private func parseManPage(for command: String) async -> AIResponse {
-        let process = Process()
-        let pipe = Pipe()
+        let result = await Task.detached(priority: .utility) { () -> (output: String, status: Int32, error: Error?) in
+            let process = Process()
+            let pipe = Pipe()
+            
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/man")
+            process.arguments = [command]
+            process.standardOutput = pipe
+            process.standardError = pipe
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                return (output, process.terminationStatus, nil)
+            } catch {
+                return ("", -1, error)
+            }
+        }.value
         
-        process.launchPath = "/usr/bin/man"
-        process.arguments = [command]
-        process.standardOutput = pipe
-        process.standardError = pipe
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let output = String(data: data, encoding: .utf8) ?? ""
-            
-            // Extract the NAME and SYNOPSIS sections
-            let summary = extractManSummary(from: output)
-            
-            return AIResponse(
-                type: .explanation,
-                content: summary.isEmpty ? "No manual entry found for '\(command)'." : summary,
-                isOffline: true
-            )
-        } catch {
+        if let error = result.error {
+            logger.error("man failed: \(error.localizedDescription)")
             return AIResponse(
                 type: .explanation,
                 content: "Could not retrieve manual page for '\(command)'.",
                 isOffline: true
             )
         }
+        
+        if result.status != 0 || result.output.isEmpty {
+            return AIResponse(
+                type: .explanation,
+                content: "No manual entry found for '\(command)'.",
+                isOffline: true
+            )
+        }
+        
+        let summary = extractManSummary(from: result.output)
+        return AIResponse(
+            type: .explanation,
+            content: summary.isEmpty ? "No manual entry found for '\(command)'." : summary,
+            isOffline: true
+        )
     }
     
     private func extractManSummary(from manOutput: String) -> String {

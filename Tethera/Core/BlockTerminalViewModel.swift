@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import CoreText
+import OSLog
 
 @MainActor
 class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
@@ -36,6 +37,7 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     private var _displayWorkingDirectory: String?
     private static var _cachedFont: Font?
     private static let maxHistorySize = 500
+    private let logger = Logger(subsystem: "com.tethera.app", category: "BlockTerminalViewModel")
     
     init() {
         // Initialize theme
@@ -168,6 +170,13 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
             }
         }
     }
+
+    nonisolated func terminalDidEncounterError(_ message: String) {
+        Task { @MainActor in
+            self.isRunningCommand = false
+            self.addSystemErrorBlock(message)
+        }
+    }
     
     private func saveHistoryAsync() {
         let history = Array(commandHistory.suffix(Self.maxHistorySize))
@@ -269,28 +278,46 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
     private func handlePreviewCommand(_ command: String) {
         let startTime = Date()
         
-        if let urls = MediaService.shared.parsePreviewCommand(command, workingDirectory: workingDirectory) {
-            let paths = urls.map { $0.path }
-            let fileNames = urls.map { $0.lastPathComponent }
-            let output = "Previewing: \(fileNames.joined(separator: ", "))"
-            
-            let block = TerminalBlock(
-                input: command,
-                output: output,
-                timestamp: Date(),
-                workingDirectory: workingDirectory,
-                success: true,
-                exitCode: 0,
-                durationMs: Int64(Date().timeIntervalSince(startTime) * 1000),
-                mediaFiles: paths
-            )
-            blocks.append(block)
-            CommandHistoryManager.shared.addEntry(from: block)
+        if let result = MediaService.shared.parsePreviewCommandDetailed(command, workingDirectory: workingDirectory) {
+            if !result.urls.isEmpty {
+                let paths = result.urls.map { $0.path }
+                let fileNames = result.urls.map { $0.lastPathComponent }
+                var outputLines: [String] = ["Previewing: \(fileNames.joined(separator: ", "))"]
+                if !result.errors.isEmpty {
+                    outputLines.append("Warnings:")
+                    outputLines.append(contentsOf: result.errors.map { "- \($0)" })
+                }
+                let block = TerminalBlock(
+                    input: command,
+                    output: outputLines.joined(separator: "\n"),
+                    timestamp: Date(),
+                    workingDirectory: workingDirectory,
+                    success: true,
+                    exitCode: 0,
+                    durationMs: Int64(Date().timeIntervalSince(startTime) * 1000),
+                    mediaFiles: paths
+                )
+                blocks.append(block)
+                CommandHistoryManager.shared.addEntry(from: block)
+            } else {
+                let output = result.errors.isEmpty
+                    ? "No previewable files found"
+                    : "Preview failed:\n" + result.errors.map { "- \($0)" }.joined(separator: "\n")
+                let block = TerminalBlock(
+                    input: command,
+                    output: output,
+                    timestamp: Date(),
+                    workingDirectory: workingDirectory,
+                    success: false,
+                    exitCode: 1,
+                    durationMs: Int64(Date().timeIntervalSince(startTime) * 1000)
+                )
+                blocks.append(block)
+            }
         } else {
-            // No valid files found
             let block = TerminalBlock(
                 input: command,
-                output: "No valid image files found",
+                output: "No files specified for preview",
                 timestamp: Date(),
                 workingDirectory: workingDirectory,
                 success: false,
@@ -306,9 +333,19 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
         let directory = workingDirectory
         
         Task.detached(priority: .userInitiated) {
-            let output = Self.runCommand(command, in: directory)
+            let result = Self.runCommand(command, in: directory)
             await MainActor.run {
-                self.addBlock(input: originalInput, output: output, success: nil)
+                let success: Bool? = result.didRun ? (result.exitCode == 0) : false
+                let block = TerminalBlock(
+                    input: originalInput,
+                    output: result.output,
+                    timestamp: Date(),
+                    workingDirectory: directory,
+                    success: success,
+                    exitCode: result.exitCode
+                )
+                self.blocks.append(block)
+                CommandHistoryManager.shared.addEntry(from: block)
                 self.isRunningCommand = false
             }
         }
@@ -367,24 +404,31 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
 
     // MARK: - Command Execution (Background Thread - nonisolated)
     
-    nonisolated private static func runCommand(_ command: String, in directory: String) -> String {
+    private struct CommandResult {
+        let output: String
+        let exitCode: Int32?
+        let didRun: Bool
+    }
+
+    nonisolated private static func runCommand(_ command: String, in directory: String) -> CommandResult {
         let process = Process()
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
-        process.launchPath = "/bin/bash"
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
         process.arguments = ["-c", command]
-        process.currentDirectoryPath = directory
+        process.currentDirectoryURL = URL(fileURLWithPath: directory)
         
         do {
             try process.run()
         } catch {
-            return "Error: \(error.localizedDescription)"
+            return CommandResult(output: "Error: \(error.localizedDescription)", exitCode: nil, didRun: false)
         }
         
         process.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        return String(data: data, encoding: .utf8) ?? ""
+        let output = String(data: data, encoding: .utf8) ?? ""
+        return CommandResult(output: output, exitCode: process.terminationStatus, didRun: true)
     }
     
     // MARK: - Cached Properties
@@ -432,5 +476,18 @@ class BlockTerminalViewModel: ObservableObject, TerminalBlockDelegate {
             // Observe GitService changes
             self.gitInfo = GitService.shared.currentInfo
         }
+    }
+
+    private func addSystemErrorBlock(_ message: String) {
+        logger.error("\(message)")
+        let block = TerminalBlock(
+            input: "system",
+            output: message,
+            timestamp: Date(),
+            workingDirectory: workingDirectory,
+            success: false,
+            exitCode: 1
+        )
+        blocks.append(block)
     }
 }

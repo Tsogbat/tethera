@@ -36,6 +36,7 @@ struct TabbedTerminalView: View {
     @State private var splitGroups: [SplitGroup] = []
     @State private var activeSplitGroupId: UUID? = nil
     @State private var dropEdge: DropEdge? = nil
+    @StateObject private var errorReporter = AppErrorReporter.shared
     
     // Computed: get active split group
     private var activeSplitGroup: SplitGroup? {
@@ -82,6 +83,16 @@ struct TabbedTerminalView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(userSettings.themeConfiguration.backgroundColor.color)
         .preferredColorScheme(userSettings.themeConfiguration.isDarkMode ? .dark : .light)
+        .overlay(alignment: .top) {
+            if let error = errorReporter.current {
+                ErrorBannerView(error: error) {
+                    errorReporter.clear()
+                }
+                .padding(.top, 6)
+                .padding(.horizontal, 12)
+                .transition(.opacity)
+            }
+        }
         .onChange(of: tabManager.activeTabId) { _, newActiveId in
             guard let newId = newActiveId else { return }
             dropEdge = nil
