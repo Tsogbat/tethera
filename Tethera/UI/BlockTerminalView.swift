@@ -785,8 +785,8 @@ struct TerminalBlockView: View {
             hasUnsavedChanges = false
             isEditingMarkdown = false
         } catch {
-            // Show error - could add alert here
-            print("Failed to save file: \(error)")
+            let message = "Failed to save \(path): \(error.localizedDescription)"
+            AppErrorReporter.shared.report(title: "Markdown save failed", message: message)
         }
     }
     

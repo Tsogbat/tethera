@@ -10,6 +10,9 @@ struct MarkdownEditView: View {
     @State private var isSaving: Bool = false
     @State private var hasChanges: Bool = false
     @State private var showSaveError: Bool = false
+    @State private var showLoadError: Bool = false
+    @State private var saveErrorMessage: String = ""
+    @State private var loadErrorMessage: String = ""
     @EnvironmentObject private var userSettings: UserSettings
     
     var body: some View {
@@ -126,7 +129,12 @@ struct MarkdownEditView: View {
         .alert("Save Error", isPresented: $showSaveError) {
             Button("OK") {}
         } message: {
-            Text("Failed to save the file. Check permissions.")
+            Text(saveErrorMessage.isEmpty ? "Failed to save the file. Check permissions." : saveErrorMessage)
+        }
+        .alert("Load Error", isPresented: $showLoadError) {
+            Button("OK") {}
+        } message: {
+            Text(loadErrorMessage.isEmpty ? "Failed to load the file." : loadErrorMessage)
         }
     }
     
@@ -135,7 +143,9 @@ struct MarkdownEditView: View {
             content = try String(contentsOfFile: filePath, encoding: .utf8)
             originalContent = content
         } catch {
-            content = "// Error loading file: \(error.localizedDescription)"
+            content = ""
+            loadErrorMessage = "Failed to load \(filePath): \(error.localizedDescription)"
+            showLoadError = true
         }
     }
     
@@ -153,6 +163,7 @@ struct MarkdownEditView: View {
             } catch {
                 await MainActor.run {
                     isSaving = false
+                    saveErrorMessage = "Failed to save \(filePath): \(error.localizedDescription)"
                     showSaveError = true
                 }
             }

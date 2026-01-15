@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Fast, file-based Git information provider
 /// Reads .git folder directly - no subprocess spawning for maximum speed
@@ -11,6 +12,8 @@ class GitService: ObservableObject {
     private var cachedPath: String?
     private var refreshTask: Task<Void, Never>?
     private let fileManager = FileManager.default
+    private let logger = Logger(subsystem: "com.tethera.app", category: "GitService")
+    private var lastErrorMessage: String?
     
     private init() {}
     
@@ -61,11 +64,11 @@ class GitService: ObservableObject {
     }
     
     /// Read current branch from .git/HEAD (< 1ms)
-    nonisolated private func getCurrentBranch(gitPath: String) -> String? {
+    nonisolated private func getCurrentBranch(gitPath: String) -> (branch: String?, errorMessage: String?) {
         let headPath = (gitPath as NSString).appendingPathComponent("HEAD")
         
         guard let content = try? String(contentsOfFile: headPath, encoding: .utf8) else {
-            return nil
+            return (nil, "Could not read git HEAD at \(headPath).")
         }
         
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -73,21 +76,21 @@ class GitService: ObservableObject {
         // Check if detached HEAD (commit hash)
         if !trimmed.hasPrefix("ref: ") {
             // Return short hash
-            return String(trimmed.prefix(7))
+            return (String(trimmed.prefix(7)), nil)
         }
         
         // Extract branch name from "ref: refs/heads/main"
         let refPrefix = "ref: refs/heads/"
         if trimmed.hasPrefix(refPrefix) {
-            return String(trimmed.dropFirst(refPrefix.count))
+            return (String(trimmed.dropFirst(refPrefix.count)), nil)
         }
         
-        return trimmed
+        return (trimmed, nil)
     }
     
     /// Check if repo has uncommitted changes
     /// Uses fast `git status --porcelain` - typically <50ms
-    nonisolated private func isDirty(gitPath: String) -> Bool {
+    nonisolated private func isDirty(gitPath: String) -> (isDirty: Bool, errorMessage: String?) {
         // Get repo root (parent of .git)
         let repoRoot = (gitPath as NSString).deletingLastPathComponent
         
@@ -95,12 +98,13 @@ class GitService: ObservableObject {
         // This is fast (<50ms) and returns empty if clean
         let process = Process()
         let pipe = Pipe()
+        let errorPipe = Pipe()
         
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["status", "--porcelain"]
         process.currentDirectoryURL = URL(fileURLWithPath: repoRoot)
         process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+        process.standardError = errorPipe
         
         do {
             try process.run()
@@ -108,11 +112,18 @@ class GitService: ObservableObject {
             
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8) ?? ""
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
+            
+            if process.terminationStatus != 0 {
+                let detail = errorOutput.isEmpty ? "exit code \(process.terminationStatus)" : errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                return (false, "git status failed: \(detail)")
+            }
             
             // If output is not empty, there are changes
-            return !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return (!output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, nil)
         } catch {
-            return false
+            return (false, "git status failed to run: \(error.localizedDescription)")
         }
     }
     
@@ -146,8 +157,10 @@ class GitService: ObservableObject {
             }
             
             // Parse Git info
-            let branch = self.getCurrentBranch(gitPath: gitPath) ?? "unknown"
-            let dirty = self.isDirty(gitPath: gitPath)
+            let branchResult = self.getCurrentBranch(gitPath: gitPath)
+            let branch = branchResult.branch ?? "unknown"
+            let dirtyResult = self.isDirty(gitPath: gitPath)
+            let dirty = dirtyResult.isDirty
             let (ahead, behind) = self.getAheadBehind(gitPath: gitPath, branch: branch)
             
             // Get repo root (parent of .git)
@@ -162,12 +175,28 @@ class GitService: ObservableObject {
             )
             
             await MainActor.run {
+                if branchResult.errorMessage == nil && dirtyResult.errorMessage == nil {
+                    self.lastErrorMessage = nil
+                }
+                if let errorMessage = branchResult.errorMessage {
+                    self.reportErrorOnce(errorMessage)
+                }
+                if let errorMessage = dirtyResult.errorMessage {
+                    self.reportErrorOnce(errorMessage)
+                }
                 self.currentInfo = info
                 self.cachedPath = targetDirectory
                 // Post notification for observers
                 NotificationCenter.default.post(name: .gitInfoDidChange, object: info)
             }
         }
+    }
+
+    private func reportErrorOnce(_ message: String) {
+        guard message != lastErrorMessage else { return }
+        lastErrorMessage = message
+        logger.error("\(message)")
+        AppErrorReporter.shared.report(title: "Git status error", message: message)
     }
 }
 

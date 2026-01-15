@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import OSLog
 
 // MARK: - Block Event Protocol
 protocol TerminalBlockDelegate: AnyObject {
@@ -8,6 +9,11 @@ protocol TerminalBlockDelegate: AnyObject {
     func terminalDidReceiveOutput(_ output: String)
     func terminalDidEndCommand(exitCode: Int)
     func terminalDidUpdateWorkingDirectory(_ directory: String)
+    func terminalDidEncounterError(_ message: String)
+}
+
+extension TerminalBlockDelegate {
+    func terminalDidEncounterError(_ message: String) {}
 }
 
 // MARK: - OSC Parser State
@@ -29,12 +35,17 @@ class TerminalSession: ObservableObject {
     @Published var terminalSize = TerminalSize(columns: 80, rows: 24)
     
     // Block delegate for semantic events
-    weak var blockDelegate: TerminalBlockDelegate?
+    weak var blockDelegate: TerminalBlockDelegate? {
+        didSet {
+            flushPendingErrors()
+        }
+    }
     
     // OSC parser state
     private var oscState: OSCParserState = .normal
     private var oscBuffer = ""
     private var outputBuffer = ""
+    private var pendingErrors: [String] = []
     
     // Skip the first command (shell integration injection)
     private var skipNextCommand = true
@@ -47,6 +58,7 @@ class TerminalSession: ObservableObject {
     
     private var readSource: DispatchSourceRead?
     private var isRunning = false
+    private let logger = Logger(subsystem: "com.tethera.app", category: "TerminalSession")
     
     // Shell integration script path
     private var shellIntegrationPath: String? {
@@ -75,7 +87,9 @@ class TerminalSession: ObservableObject {
         
         let result = openpty(&masterFD, &slaveFD, nil, nil, nil)
         guard result == 0 else {
-            print("Failed to create PTY: \(String(cString: strerror(errno)))")
+            let message = "Failed to create PTY: \(String(cString: strerror(errno)))"
+            logger.error("\(message)")
+            reportError(message)
             return
         }
         
@@ -147,14 +161,16 @@ class TerminalSession: ObservableObject {
             shellPID = pid
             close(slaveFD) // Close slave FD in parent process
             isConnected = true
-            print("Shell launched successfully with PID: \(pid)")
+            logger.info("Shell launched successfully with PID: \(pid)")
             
             // Inject shell integration after a brief delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.injectShellIntegration(shellPath: shellPath)
             }
         } else {
-            print("Failed to launch shell: \(String(cString: strerror(result)))")
+            let message = "Failed to launch shell: \(String(cString: strerror(result)))"
+            logger.error("\(message)")
+            reportError(message)
             isConnected = false
         }
     }
@@ -167,7 +183,9 @@ class TerminalSession: ObservableObject {
         } else if shellPath.contains("bash") {
             scriptName = "tethera.bash"
         } else {
-            print("No shell integration available for: \(shellPath)")
+            let message = "Shell integration is not available for: \(shellPath). Block mode may be limited."
+            logger.error("\(message)")
+            reportError(message)
             return
         }
         
@@ -197,16 +215,11 @@ class TerminalSession: ObservableObject {
             // The \\r\\033[K clears the current line after sourcing
             let sourceCmd = "source '\(path)' >/dev/null 2>&1; clear\n"
             write(sourceCmd)
-            print("Injected shell integration: \(path)")
+            logger.info("Injected shell integration: \(path)")
         } else {
-            print("Shell integration script not found in bundle: \(scriptName)")
-            // Debug: print available resources
-            if let resourcePath = Bundle.main.resourcePath {
-                print("Bundle resourcePath: \(resourcePath)")
-                if let contents = try? FileManager.default.contentsOfDirectory(atPath: resourcePath) {
-                    print("Bundle contents: \(contents)")
-                }
-            }
+            let message = "Shell integration script not found: \(scriptName). Block mode may be limited."
+            logger.error("\(message)")
+            reportError(message)
         }
     }
     
@@ -243,8 +256,7 @@ class TerminalSession: ObservableObject {
             }
             
             // Also broadcast raw data for SwiftTerm/traditional terminal
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
+            DispatchQueue.main.async {
                 NotificationCenter.default.post(
                     name: .terminalDataReceived,
                     object: data
@@ -420,6 +432,26 @@ class TerminalSession: ObservableObject {
     
     private func handleCancel() {
         // Handle read source cancellation
+    }
+
+    private func reportError(_ message: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if let delegate = self.blockDelegate {
+                delegate.terminalDidEncounterError(message)
+            } else {
+                self.pendingErrors.append(message)
+            }
+        }
+    }
+
+    private func flushPendingErrors() {
+        guard let delegate = blockDelegate, !pendingErrors.isEmpty else { return }
+        let errors = pendingErrors
+        pendingErrors.removeAll()
+        for message in errors {
+            delegate.terminalDidEncounterError(message)
+        }
     }
     
     func write(_ data: Data) {

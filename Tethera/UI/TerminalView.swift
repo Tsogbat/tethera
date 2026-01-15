@@ -39,6 +39,8 @@ class TerminalNSView: NSView {
         metalView.colorPixelFormat = .bgra8Unorm
         metalView.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         metalView.framebufferOnly = false
+        metalView.enableSetNeedsDisplay = true
+        metalView.isPaused = true
         
         renderer = MetalRenderer()
         metalView.delegate = renderer
@@ -65,6 +67,13 @@ class TerminalNSView: NSView {
             .sink { [weak self] size in
                 self?.terminalBuffer.resize(columns: size.columns, rows: size.rows)
                 self?.renderer.resize(columns: size.columns, rows: size.rows)
+            }
+            .store(in: &cancellables)
+        
+        terminalBuffer.$renderVersion
+            .sink { [weak self] _ in
+                self?.renderer.setNeedsVertexUpdate()
+                self?.metalView.setNeedsDisplay(self?.metalView.bounds ?? .zero)
             }
             .store(in: &cancellables)
     }
@@ -108,14 +117,24 @@ class TerminalNSView: NSView {
     override func viewDidEndLiveResize() {
         super.viewDidEndLiveResize()
         
-        // Calculate new terminal size based on view size
-        let cellWidth: CGFloat = 8
-        let cellHeight: CGFloat = 16
+        resizeTerminalToFit()
+    }
+    
+    override func layout() {
+        super.layout()
+        resizeTerminalToFit()
+    }
+
+    private func resizeTerminalToFit() {
+        let cellWidth = max(1, renderer.cellSize.width)
+        let cellHeight = max(1, renderer.cellSize.height)
         
-        let columns = Int(bounds.width / cellWidth)
-        let rows = Int(bounds.height / cellHeight)
+        let columns = max(1, Int(bounds.width / cellWidth))
+        let rows = max(1, Int(bounds.height / cellHeight))
         
-        terminalSession.resizeTerminal(columns: columns, rows: rows)
+        if columns != terminalSession.terminalSize.columns || rows != terminalSession.terminalSize.rows {
+            terminalSession.resizeTerminal(columns: columns, rows: rows)
+        }
     }
     
     private var cancellables = Set<AnyCancellable>()

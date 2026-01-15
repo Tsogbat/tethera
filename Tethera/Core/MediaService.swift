@@ -1,5 +1,11 @@
 import Foundation
 import AppKit
+import OSLog
+
+struct PreviewParseResult: Equatable {
+    let urls: [URL]
+    let errors: [String]
+}
 
 /// Service for detecting and handling media files (images, etc.)
 class MediaService {
@@ -14,6 +20,8 @@ class MediaService {
     /// PDF support
     static let documentExtensions: Set<String> = ["pdf"]
     
+    private let logger = Logger(subsystem: "com.tethera.app", category: "MediaService")
+
     private init() {}
     
     // MARK: - File Detection
@@ -45,6 +53,11 @@ class MediaService {
     
     /// Parse preview command arguments and return valid image paths
     func parsePreviewCommand(_ command: String, workingDirectory: String) -> [URL]? {
+        return parsePreviewCommandDetailed(command, workingDirectory: workingDirectory)?.urls
+    }
+
+    /// Parse preview command arguments with error reporting
+    func parsePreviewCommandDetailed(_ command: String, workingDirectory: String) -> PreviewParseResult? {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Check for preview or show command
@@ -57,6 +70,7 @@ class MediaService {
         guard !args.isEmpty else { return nil }
         
         var validPaths: [URL] = []
+        var errors: [String] = []
         let fm = FileManager.default
         
         for arg in args {
@@ -64,33 +78,60 @@ class MediaService {
             
             // Handle glob patterns (*.png)
             if arg.contains("*") {
-                let pattern = fullPath
-                if let matches = try? fm.contentsOfDirectory(atPath: (pattern as NSString).deletingLastPathComponent) {
-                    let dir = (fullPath as NSString).deletingLastPathComponent
-                    let glob = (fullPath as NSString).lastPathComponent.replacingOccurrences(of: "*", with: ".*")
-                    
-                    for file in matches {
+                let dir = (fullPath as NSString).deletingLastPathComponent
+                let glob = (fullPath as NSString).lastPathComponent.replacingOccurrences(of: "*", with: ".*")
+                let regex: NSRegularExpression?
+                do {
+                    regex = try NSRegularExpression(pattern: "^\(glob)$", options: .caseInsensitive)
+                } catch {
+                    let message = "Invalid glob pattern: \(arg)"
+                    errors.append(message)
+                    logger.error("\(message)")
+                    continue
+                }
+                
+                let matches: [String]
+                do {
+                    matches = try fm.contentsOfDirectory(atPath: dir)
+                } catch {
+                    let message = "Failed to list directory: \(dir)"
+                    errors.append(message)
+                    logger.error("\(message)")
+                    continue
+                }
+                
+                var matchedFiles: [URL] = []
+                for file in matches {
+                    let range = NSRange(file.startIndex..., in: file)
+                    if regex?.firstMatch(in: file, range: range) != nil {
                         let filePath = (dir as NSString).appendingPathComponent(file)
                         if isPreviewable(at: filePath) {
-                            // Simple glob match
-                            if let regex = try? NSRegularExpression(pattern: "^\(glob)$", options: .caseInsensitive) {
-                                let range = NSRange(file.startIndex..., in: file)
-                                if regex.firstMatch(in: file, range: range) != nil {
-                                    validPaths.append(URL(fileURLWithPath: filePath))
-                                }
-                            }
+                            matchedFiles.append(URL(fileURLWithPath: filePath))
                         }
                     }
                 }
+                
+                if matchedFiles.isEmpty {
+                    errors.append("No previewable files found for: \(arg)")
+                } else {
+                    validPaths.append(contentsOf: matchedFiles)
+                }
             } else {
                 // Single file
-                if fm.fileExists(atPath: fullPath) && isPreviewable(at: fullPath) {
+                if !fm.fileExists(atPath: fullPath) {
+                    errors.append("File not found: \(arg)")
+                } else if !isPreviewable(at: fullPath) {
+                    errors.append("Unsupported file type: \(arg)")
+                } else {
                     validPaths.append(URL(fileURLWithPath: fullPath))
                 }
             }
         }
         
-        return validPaths.isEmpty ? nil : validPaths
+        if validPaths.isEmpty && errors.isEmpty {
+            return nil
+        }
+        return PreviewParseResult(urls: validPaths, errors: errors)
     }
     
     /// Load image from file path
