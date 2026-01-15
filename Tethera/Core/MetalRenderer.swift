@@ -1,6 +1,7 @@
 import Metal
 import MetalKit
 import Foundation
+import CoreText
 
 class MetalRenderer: NSObject {
     private var device: MTLDevice!
@@ -10,8 +11,10 @@ class MetalRenderer: NSObject {
     private var indexBuffer: MTLBuffer!
     private var fontAtlas: MTLTexture!
     private var fontAtlasData: [Character: FontGlyph] = [:]
+    private var atlasSize = CGSize(width: 512, height: 512)
+    private var font: CTFont?
     
-    private var cellSize = CGSize(width: 8, height: 16)
+    private(set) var cellSize = CGSize(width: 8, height: 16)
     private var columns = 80
     private var rows = 24
     
@@ -83,60 +86,105 @@ class MetalRenderer: NSObject {
     }
     
     private func createFontAtlas() {
-        // Create a simple monospace font atlas
-        let atlasSize = 512
-        let glyphSize = 16
+        // Build a basic ASCII glyph atlas using CoreText (32-126)
+        let fontName = "Menlo"
+        let fontSize: CGFloat = 14
+        let ctFont = CTFontCreateWithName(fontName as CFString, fontSize, nil)
+        font = ctFont
+        
+        let ascent = CTFontGetAscent(ctFont)
+        let descent = CTFontGetDescent(ctFont)
+        let leading = CTFontGetLeading(ctFont)
+        var glyph = CTFontGetGlyphWithName(ctFont, "M" as CFString)
+        var advance = CGSize.zero
+        CTFontGetAdvancesForGlyphs(ctFont, .horizontal, &glyph, &advance, 1)
+        
+        let cellWidth = max(1, ceil(advance.width))
+        let cellHeight = max(1, ceil(ascent + descent + leading))
+        cellSize = CGSize(width: cellWidth, height: cellHeight)
+        
+        let glyphs: [UInt32] = Array(32...126)
+        let columns = 16
+        let rows = Int(ceil(Double(glyphs.count) / Double(columns)))
+        let atlasWidth = Int(cellWidth) * columns
+        let atlasHeight = Int(cellHeight) * rows
+        atlasSize = CGSize(width: CGFloat(atlasWidth), height: CGFloat(atlasHeight))
         
         let bytesPerPixel = 4
-        let dataSize = atlasSize * atlasSize * bytesPerPixel
+        let bytesPerRow = atlasWidth * bytesPerPixel
+        let dataSize = atlasHeight * bytesPerRow
         var atlasData = [UInt8](repeating: 0, count: dataSize)
         
-        // For now, create a simple pattern - in a real implementation,
-        // you'd render actual font glyphs here
-        for y in 0..<atlasSize {
-            for x in 0..<atlasSize {
-                let index = (y * atlasSize + x) * bytesPerPixel
-                let glyphX = x / glyphSize
-                let glyphY = y / glyphSize
+        atlasData.withUnsafeMutableBytes { ptr in
+            guard let context = CGContext(
+                data: ptr.baseAddress,
+                width: atlasWidth,
+                height: atlasHeight,
+                bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+                return
+            }
+            
+            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            context.setAllowsAntialiasing(true)
+            context.setShouldAntialias(true)
+            context.setTextDrawingMode(.fill)
+            
+            // Flip for top-left origin
+            context.translateBy(x: 0, y: CGFloat(atlasHeight))
+            context.scaleBy(x: 1, y: -1)
+            
+            for (index, codepoint) in glyphs.enumerated() {
+                let col = index % columns
+                let row = index / columns
+                let x = CGFloat(col) * cellWidth
+                let y = CGFloat(row) * cellHeight + ascent
                 
-                // Create a simple pattern for demonstration
-                let value: UInt8 = (glyphX + glyphY) % 2 == 0 ? 255 : 0
-                atlasData[index] = value     // R
-                atlasData[index + 1] = value // G
-                atlasData[index + 2] = value // B
-                atlasData[index + 3] = 255   // A
+                let uni = UniChar(codepoint)
+                var glyph = CGGlyph()
+                var chars = [uni]
+                if CTFontGetGlyphsForCharacters(ctFont, &chars, &glyph, 1) {
+                    let position = CGPoint(x: x, y: y)
+                    let glyphsToDraw = [glyph]
+                    let positions = [position]
+                    glyphsToDraw.withUnsafeBufferPointer { glyphPtr in
+                        positions.withUnsafeBufferPointer { posPtr in
+                            if let g = glyphPtr.baseAddress, let p = posPtr.baseAddress {
+                                CTFontDrawGlyphs(ctFont, g, p, 1, context)
+                            }
+                        }
+                    }
+                    
+                    let u = Float(x / CGFloat(atlasWidth))
+                    let v = Float((CGFloat(row) * cellHeight) / CGFloat(atlasHeight))
+                    let w = Float(cellWidth / CGFloat(atlasWidth))
+                    let h = Float(cellHeight / CGFloat(atlasHeight))
+                    
+                    if let scalar = UnicodeScalar(codepoint) {
+                        let char = Character(scalar)
+                        fontAtlasData[char] = FontGlyph(x: u, y: v, width: w, height: h)
+                    }
+                }
             }
         }
         
-        // Create Metal texture
         let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .rgba8Unorm,
-            width: atlasSize,
-            height: atlasSize,
+            width: atlasWidth,
+            height: atlasHeight,
             mipmapped: false
         )
         
         fontAtlas = device.makeTexture(descriptor: textureDescriptor)
         fontAtlas.replace(
-            region: MTLRegionMake2D(0, 0, atlasSize, atlasSize),
+            region: MTLRegionMake2D(0, 0, atlasWidth, atlasHeight),
             mipmapLevel: 0,
             withBytes: atlasData,
-            bytesPerRow: atlasSize * bytesPerPixel
+            bytesPerRow: bytesPerRow
         )
-        
-        // Create glyph mapping
-        let glyphsPerRow = atlasSize / glyphSize
-        for i in 0..<256 {
-            let x = Float((i % glyphsPerRow) * glyphSize) / Float(atlasSize)
-            let y = Float((i / glyphsPerRow) * glyphSize) / Float(atlasSize)
-            let width = Float(glyphSize) / Float(atlasSize)
-            let height = Float(glyphSize) / Float(atlasSize)
-            
-            if let scalar = UnicodeScalar(i) {
-                let char = Character(scalar)
-                fontAtlasData[char] = FontGlyph(x: x, y: y, width: width, height: height)
-            }
-        }
     }
     
     func resize(columns: Int, rows: Int) {
@@ -154,6 +202,8 @@ class MetalRenderer: NSObject {
         guard needsVertexUpdate else { return }
         
         let totalVertices = columns * rows * 4
+        let totalWidth = Float(columns) * Float(cellSize.width)
+        let totalHeight = Float(rows) * Float(cellSize.height)
         
         // Resize array only if needed (terminal resized)
         if vertexArray.count != totalVertices {
@@ -181,24 +231,29 @@ class MetalRenderer: NSObject {
                 // Get glyph coordinates from atlas
                 let glyph = fontAtlasData[cell?.character ?? " "] ?? FontGlyph(x: 0, y: 0, width: 1, height: 1)
                 
+                let x0 = (x / totalWidth) * 2.0 - 1.0
+                let y0 = 1.0 - (y / totalHeight) * 2.0
+                let x1 = ((x + width) / totalWidth) * 2.0 - 1.0
+                let y1 = 1.0 - ((y + height) / totalHeight) * 2.0
+                
                 // Update quad vertices in-place
                 vertexArray[index] = Vertex(
-                    position: SIMD2<Float>(x, y),
+                    position: SIMD2<Float>(x0, y0),
                     texCoord: SIMD2<Float>(glyph.x, glyph.y),
                     color: color
                 )
                 vertexArray[index + 1] = Vertex(
-                    position: SIMD2<Float>(x + width, y),
+                    position: SIMD2<Float>(x1, y0),
                     texCoord: SIMD2<Float>(glyph.x + glyph.width, glyph.y),
                     color: color
                 )
                 vertexArray[index + 2] = Vertex(
-                    position: SIMD2<Float>(x + width, y + height),
+                    position: SIMD2<Float>(x1, y1),
                     texCoord: SIMD2<Float>(glyph.x + glyph.width, glyph.y + glyph.height),
                     color: color
                 )
                 vertexArray[index + 3] = Vertex(
-                    position: SIMD2<Float>(x, y + height),
+                    position: SIMD2<Float>(x0, y1),
                     texCoord: SIMD2<Float>(glyph.x, glyph.y + glyph.height),
                     color: color
                 )
@@ -284,5 +339,9 @@ class MetalRenderer: NSObject {
     
     func setBuffer(_ buffer: TerminalBuffer) {
         currentBuffer = buffer
+    }
+
+    func setNeedsVertexUpdate() {
+        needsVertexUpdate = true
     }
 }
