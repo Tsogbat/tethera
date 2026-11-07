@@ -29,12 +29,17 @@ struct TetheraCommands: Commands {
             Button("New Shell") { Workspace.shared.newSession() }
                 .keyboardShortcut("t", modifiers: .command)
             Menu("New Agent Session") {
-                ForEach(AgentDetector.launchable.filter { $0 != .ollama }, id: \.self) { kind in
-                    Button(kind.displayName) { Workspace.shared.newSession(agent: kind) }
+                ForEach(Array(AgentDetector.launchable.filter { $0 != .ollama }.enumerated()), id: \.element) { index, kind in
+                    if index < 4 {
+                        Button(kind.displayName) { Workspace.shared.newSession(agent: kind) }
+                            .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: [.command, .option])
+                    } else {
+                        Button(kind.displayName) { Workspace.shared.newSession(agent: kind) }
+                    }
                 }
             }
             Button("New Shell in Folder…") { SessionActions.newSessionInChosenFolder() }
-                .keyboardShortcut("o", modifiers: .command)
+                .keyboardShortcut("o", modifiers: [.command, .shift])
             Divider()
             Button("Split Right") { Workspace.shared.split(.horizontal) }
                 .keyboardShortcut("d", modifiers: .command)
@@ -54,7 +59,12 @@ struct TetheraCommands: Commands {
             Button("Quit and End All Sessions") { AppDelegate.quitEndingSessions() }
                 .keyboardShortcut("q", modifiers: [.command, .option])
         }
+        CommandGroup(replacing: .appInfo) {
+            Button("About Tethera") { AboutWindow.show() }
+        }
         CommandMenu("Session") {
+            Button("Home") { Workspace.shared.showHome() }
+                .keyboardShortcut("h", modifiers: [.command, .shift])
             Button("Command Palette") { Workspace.shared.showPalette.toggle() }
                 .keyboardShortcut("k", modifiers: .command)
             Button("Command Palette") { Workspace.shared.showPalette.toggle() }

@@ -9,7 +9,33 @@ final class Workspace: ObservableObject {
 
     struct Pane: Identifiable, Codable, Equatable {
         var id = UUID()
-        var session: UUID?
+        var content: PaneContent = .home
+
+        init(id: UUID = UUID(), content: PaneContent = .home) {
+            self.id = id
+            self.content = content
+        }
+
+        var session: UUID? { content.sessionID }
+
+        private enum CodingKeys: String, CodingKey { case id, content, session }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(UUID.self, forKey: .id)
+            if let content = try? c.decode(PaneContent.self, forKey: .content) {
+                self.content = content
+            } else {
+                // Layouts saved by 0.4 only had an optional session.
+                self.content = (try? c.decodeIfPresent(UUID.self, forKey: .session)).flatMap { $0.map(PaneContent.session) } ?? .home
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(content, forKey: .content)
+        }
     }
 
     enum Axis: String, Codable {
@@ -26,9 +52,8 @@ final class Workspace: ObservableObject {
 
     private let client = DaemonClient.shared
     private var restored = false
-    /// A session is on its way for an empty window; don't ask for another.
-    private var creatingFirst = false
-    private static let layoutKey = "tethera.layout.v4"
+    private static let layoutKey = "tethera.layout.v5"
+    private static let legacyLayoutKey = "tethera.layout.v4"
 
     private init() {
         let first = Pane()
@@ -44,6 +69,10 @@ final class Workspace: ObservableObject {
         client.session(focusedSessionID)
     }
 
+    var isShowingHome: Bool {
+        panes.first { $0.id == focusedPane }?.content == .home
+    }
+
     // MARK: Showing sessions
 
     /// Shows a session: focuses the pane that already shows it, otherwise puts it in the focused pane.
@@ -51,10 +80,22 @@ final class Workspace: ObservableObject {
         if let pane = panes.first(where: { $0.session == id }) {
             focusedPane = pane.id
         } else if let index = panes.firstIndex(where: { $0.id == focusedPane }) {
-            panes[index].session = id
+            panes[index].content = .session(id)
         }
+        if let cwd = client.session(id)?.cwd { RecentFolders.note(cwd) }
         save()
         focusTerminalSoon()
+    }
+
+    /// Shows Home (⇧⌘H): focuses a pane that already shows it, otherwise the focused pane turns
+    /// into Home. Its session keeps running and stays in the sidebar.
+    func showHome() {
+        if let pane = panes.first(where: { $0.content == .home }) {
+            focusedPane = pane.id
+        } else if let index = panes.firstIndex(where: { $0.id == focusedPane }) {
+            panes[index].content = .home
+        }
+        save()
     }
 
     func focus(pane: UUID) {
@@ -110,11 +151,12 @@ final class Workspace: ObservableObject {
         if let command = command ?? agent?.command {
             spec.initialInput = command + "\r"
         }
+        RecentFolders.note(directory)
         client.create(spec) { [weak self] info in
             guard let self else { return }
             if let axis = inNewPane {
                 self.axis = axis
-                let pane = Pane(session: info.id)
+                let pane = Pane(content: .session(info.id))
                 let index = (self.panes.firstIndex { $0.id == self.focusedPane } ?? self.panes.count - 1) + 1
                 self.panes.insert(pane, at: index)
                 self.focusedPane = pane.id
@@ -156,28 +198,26 @@ final class Workspace: ObservableObject {
             restored = true
             restore(valid: ids)
         }
-        if !sessions.isEmpty { creatingFirst = false }
-        // Panes whose session ended show the next session that isn't already on screen.
+        // A pane whose session ended shows the next session that isn't on screen. With none
+        // left, the pane closes, or the last pane turns into Home.
         var changed = false
-        for index in panes.indices where panes[index].session.map({ !ids.contains($0) }) ?? true {
+        for index in panes.indices.reversed() {
+            guard let id = panes[index].session, !ids.contains(id) else { continue }
             let shown = Set(panes.compactMap(\.session))
-            panes[index].session = sessions.first { !shown.contains($0.id) }?.id
+            if let next = sessions.first(where: { !shown.contains($0.id) }) {
+                panes[index].content = .session(next.id)
+            } else if panes.count > 1 {
+                panes.remove(at: index)
+            } else {
+                panes[index].content = .home
+            }
             changed = true
-        }
-        if panes.count > 1 {
-            let before = panes.count
-            panes.removeAll { $0.session == nil }
-            if panes.isEmpty { panes = [Pane()] }
-            changed = changed || panes.count != before
         }
         if !panes.contains(where: { $0.id == focusedPane }) {
             focusedPane = panes[0].id
             changed = true
         }
-        if client.hasLoaded && sessions.isEmpty && restored && !creatingFirst {
-            creatingFirst = true
-            newSession()
-        }
+        if let cwd = focusedSession?.cwd { RecentFolders.note(cwd) }
         if changed { save() }
     }
 
@@ -195,12 +235,58 @@ final class Workspace: ObservableObject {
     }
 
     private func restore(valid ids: Set<UUID>) {
-        guard let data = UserDefaults.standard.data(forKey: Self.layoutKey),
+        let defaults = UserDefaults.standard
+        guard !PreferencesStore.shared.value.openHomeOnLaunch,
+              let data = defaults.data(forKey: Self.layoutKey) ?? defaults.data(forKey: Self.legacyLayoutKey),
               let saved = try? JSONDecoder().decode(SavedLayout.self, from: data) else { return }
-        let kept = saved.panes.filter { $0.session.map(ids.contains) ?? false }
+        let kept = Self.validPanes(saved.panes, sessions: ids)
         guard !kept.isEmpty else { return }
         panes = kept
         axis = saved.axis
         focusedPane = kept[min(saved.focusedIndex, kept.count - 1)].id
+    }
+
+    /// The saved panes that can still be shown: Home, or sessions that are still alive.
+    static func validPanes(_ panes: [Pane], sessions ids: Set<UUID>) -> [Pane] {
+        panes.filter { pane in
+            switch pane.content {
+            case .home: return true
+            case .session(let id): return ids.contains(id)
+            }
+        }
+    }
+}
+
+/// What a pane shows.
+enum PaneContent: Codable, Equatable, Hashable {
+    case home
+    case session(UUID)
+
+    var sessionID: UUID? {
+        if case .session(let id) = self { return id }
+        return nil
+    }
+}
+
+/// The folders you've worked in lately, newest first, for Home.
+enum RecentFolders {
+    private static let key = "tethera.recentFolders"
+    static let limit = 8
+
+    static var all: [String] {
+        UserDefaults.standard.stringArray(forKey: key) ?? []
+    }
+
+    @MainActor
+    static func note(_ path: String) {
+        let updated = adding(path, to: all)
+        if updated != all { UserDefaults.standard.set(updated, forKey: key) }
+    }
+
+    /// Moves `path` to the front. Home and the filesystem root aren't worth listing.
+    static func adding(_ path: String, to list: [String], home: String = NSHomeDirectory()) -> [String] {
+        let trimmed = path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+        guard !trimmed.isEmpty, trimmed != "/", trimmed != home else { return list }
+        return Array(([trimmed] + list.filter { $0 != trimmed }).prefix(limit))
     }
 }

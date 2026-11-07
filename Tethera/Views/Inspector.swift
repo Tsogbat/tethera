@@ -61,7 +61,7 @@ private struct Field: View {
                 .foregroundStyle(theme.text3.color)
                 .frame(width: 64, alignment: .leading)
             Text(value)
-                .font(TypeScale.ui(12))
+                .font(TypeScale.ui(12, tone.weight))
                 .foregroundStyle(tone == .plain ? theme.text.color : tone.color(theme))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -144,7 +144,7 @@ struct AgentInspector: View {
         switch agent.state {
         case .needsInput: return .attention
         case .error: return .danger
-        case .done: return .success
+        case .done: return .strong
         default: return .plain
         }
     }
@@ -269,7 +269,7 @@ private struct GitFileRow: View {
         HStack(spacing: 8) {
             Text(file.letter)
                 .font(TypeScale.mono(10.5, .semibold))
-                .foregroundStyle(file.isStaged ? theme.success.color : (file.isUntracked ? theme.text3.color : theme.accent.color))
+                .foregroundStyle(file.isStaged ? theme.text.color : (file.isUntracked ? theme.text3.color : theme.text2.color))
                 .frame(width: 12)
             Text(file.path)
                 .font(TypeScale.mono(11))

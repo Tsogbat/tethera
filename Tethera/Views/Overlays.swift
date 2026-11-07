@@ -45,6 +45,7 @@ struct AgentsOverview: View {
                     TableColumn("State") { session in
                         let subtitle = session.subtitle
                         Text(session.agent?.state.label ?? (session.isAlive ? "Shell" : "Restored"))
+                            .fontWeight(subtitle.tone.weight)
                             .foregroundStyle(session.agent == nil ? theme.text3.color : subtitle.tone.color(theme))
                     }
                     .width(min: 70, ideal: 90)
@@ -112,6 +113,7 @@ struct CommandPalette: View {
                 workspace.show(session.id)
             }
         }
+        items.append(Item(id: "home", title: "Home", shortcut: "⇧⌘H") { workspace.showHome() })
         items.append(Item(id: "new", title: "New Shell", shortcut: "⌘T") { workspace.newSession() })
         for kind in detector.installed where kind != .ollama {
             items.append(Item(id: "agent-\(kind)", title: "New \(kind.displayName) Session", detail: kind.command, agent: kind) {
@@ -125,7 +127,8 @@ struct CommandPalette: View {
             Item(id: "overview", title: "Agents Overview", shortcut: "⇧⌘A") { workspace.showOverview = true },
             Item(id: "inspector", title: "Toggle Inspector", shortcut: "⌥⌘I") { PreferencesStore.shared.value.showInspector.toggle() },
             Item(id: "rename", title: "Rename Session…", shortcut: "⇧⌘R") { workspace.renaming = workspace.focusedSessionID },
-            Item(id: "folder", title: "New Shell in Folder…") { SessionActions.newSessionInChosenFolder() },
+            Item(id: "folder", title: "New Shell in Folder…", shortcut: "⇧⌘O") { SessionActions.newSessionInChosenFolder() },
+            Item(id: "about", title: "About Tethera") { AboutWindow.show() },
             Item(id: "end", title: "End Session…", shortcut: "⌥⌘W") {
                 if let session = workspace.focusedSession { SessionActions.confirmEnd(session) }
             },

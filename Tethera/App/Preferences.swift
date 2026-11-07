@@ -41,6 +41,8 @@ struct Preferences: Codable, Equatable {
     var notifyWhenAgentsNeedYou = true
     var showInspector = false
     var sidebarWidth: Double = 236
+    /// Open to Home instead of the last layout.
+    var openHomeOnLaunch = false
 
     init() {}
 
@@ -60,6 +62,7 @@ struct Preferences: Codable, Equatable {
         notifyWhenAgentsNeedYou = (try? c.decode(Bool.self, forKey: .notifyWhenAgentsNeedYou)) ?? d.notifyWhenAgentsNeedYou
         showInspector = (try? c.decode(Bool.self, forKey: .showInspector)) ?? d.showInspector
         sidebarWidth = (try? c.decode(Double.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
+        openHomeOnLaunch = (try? c.decode(Bool.self, forKey: .openHomeOnLaunch)) ?? d.openHomeOnLaunch
     }
 }
 

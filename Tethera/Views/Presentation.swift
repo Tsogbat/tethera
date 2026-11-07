@@ -2,19 +2,23 @@ import AppKit
 import SwiftUI
 import TetheraKit
 
-/// How a session's state reads in the UI: words first, color only when it means something.
+/// How a session's state reads in the UI: words first, brightness second, and a hue
+/// only for errors.
 enum Tone {
-    case plain, dim, attention, success, danger
+    case plain, dim, attention, strong, danger
 
     func color(_ theme: Theme) -> Color {
         switch self {
         case .plain: return theme.text2.color
         case .dim: return theme.text3.color
         case .attention: return theme.accent.color
-        case .success: return theme.success.color
+        case .strong: return theme.text.color
         case .danger: return theme.danger.color
         }
     }
+
+    /// Attention reads by weight as well as brightness, since there is no accent hue.
+    var weight: Font.Weight { self == .attention ? .semibold : .regular }
 }
 
 extension SessionInfo {
@@ -42,7 +46,7 @@ extension SessionInfo {
                 let why = agent.reason.map { $0 == "permission" ? "needs permission" : "needs you · \($0)" } ?? "needs you"
                 return ("\(agent.kind.displayName) · \(why)", .attention)
             case .working: return ("\(agent.kind.displayName) · working", .plain)
-            case .done: return ("\(agent.kind.displayName) · done", agent.unseen ? .success : .dim)
+            case .done: return ("\(agent.kind.displayName) · done", agent.unseen ? .strong : .dim)
             case .error: return ("\(agent.kind.displayName) · error", .danger)
             case .idle: return ("\(agent.kind.displayName) · waiting", agent.unseen ? .attention : .dim)
             }

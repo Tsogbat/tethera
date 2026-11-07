@@ -8,7 +8,7 @@ import TetheraKit
 ///
 /// Steps: a shell line (typed into the focused session with ↩), `@type:<text>`, `@keys:<text>`
 /// (`\e`, `\r`, `\x03` escapes), `@new`, `@agent:<kind>`, `@split`, `@select:<n>`, `@palette`,
-/// `@overview`, `@inspector`, `@close`, `@appearance:<dark|light>`, `@wait:<sec>`, `@shot:<name>`, `@quit`.
+/// `@overview`, `@inspector`, `@close`, `@home`, `@about` (captures about.png), `@appearance:<dark|light>`, `@wait:<sec>`, `@shot:<name>`, `@quit`.
 @MainActor
 enum DebugHooks {
     static func runIfRequested() {
@@ -53,9 +53,18 @@ enum DebugHooks {
             let sessions = client.sessions
             if let index = Int(step.dropFirst(11)), sessions.indices.contains(index) {
                 workspace.axis = .horizontal
-                let pane = Workspace.Pane(session: sessions[index].id)
+                let pane = Workspace.Pane(content: .session(sessions[index].id))
                 workspace.panes.append(pane)
                 workspace.focus(pane: pane.id)
+            }
+        } else if step == "@home" {
+            workspace.showHome()
+            try? await Task.sleep(nanoseconds: 800_000_000)
+        } else if step == "@about" {
+            AboutWindow.show()
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            if let window = NSApp.windows.first(where: { $0.title == "About Tethera" }) {
+                capture(window, name: "about", directory: directory)
             }
         } else if step == "@palette" {
             workspace.showPalette = true
@@ -90,6 +99,11 @@ enum DebugHooks {
         } else if step == "@quit" {
             NSApp.terminate(nil)
         } else if !step.isEmpty {
+            // Tethera opens to Home; a script's first shell line gets a session to type into.
+            if workspace.focusedSessionID == nil {
+                workspace.newSession()
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
             type(step + "\r")
             try? await Task.sleep(nanoseconds: 700_000_000)
         }

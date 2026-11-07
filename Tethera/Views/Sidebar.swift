@@ -16,6 +16,10 @@ struct SidebarView: View {
             .frame(height: Metrics.titlebarHeight)
             .background(WindowDragArea())
 
+            HomeSidebarRow(isSelected: workspace.isShowingHome)
+                .padding(.horizontal, 6)
+                .padding(.bottom, 10)
+
             HStack {
                 SectionLabel(text: "Sessions")
                 Spacer()
@@ -54,6 +58,40 @@ struct SidebarView: View {
     }
 }
 
+/// The way back to Home (⇧⌘H).
+private struct HomeSidebarRow: View {
+    let isSelected: Bool
+    @ObservedObject private var client = DaemonClient.shared
+    @Environment(\.theme) private var theme
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "house")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(isSelected ? theme.text.color : theme.text2.color)
+                .frame(width: 16)
+            Text("Home")
+                .font(TypeScale.ui(13, isSelected ? .semibold : .medium))
+                .foregroundStyle(theme.text.color)
+            Spacer()
+            Text("⇧⌘H")
+                .font(TypeScale.mono(10))
+                .foregroundStyle(theme.text3.color)
+                .opacity(hovering ? 1 : 0)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 30)
+        .background(
+            RoundedRectangle(cornerRadius: Metrics.panelRadius)
+                .fill(isSelected ? theme.raised.color : (hovering ? theme.raised.color.opacity(0.5) : .clear))
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { Workspace.shared.showHome() }
+    }
+}
+
 struct SessionRow: View {
     let session: SessionInfo
     let isSelected: Bool
@@ -71,7 +109,7 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 nameView
                 Text(session.subtitle.text)
-                    .font(TypeScale.ui(11))
+                    .font(TypeScale.ui(11, session.subtitle.tone.weight))
                     .foregroundStyle(session.subtitle.tone.color(theme))
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -86,7 +124,7 @@ struct SessionRow: View {
                 .fill(isSelected ? theme.raised.color : (hovering ? theme.raised.color.opacity(0.5) : .clear))
         )
         .overlay(alignment: .leading) {
-            // A 2pt amber edge marks a session waiting on you, even when it's selected.
+            // A 2pt bone edge marks a session waiting on you, even when it's selected.
             if session.needsYou {
                 Capsule().fill(theme.accent.color).frame(width: 2, height: 18).offset(x: -1)
             }
@@ -114,7 +152,7 @@ struct SessionRow: View {
                 .onChange(of: nameFocused) { _, focused in if !focused { commitRename() } }
         } else {
             Text(session.name)
-                .font(TypeScale.ui(13, isSelected ? .semibold : .medium))
+                .font(TypeScale.ui(13, isSelected || session.needsYou ? .semibold : .medium))
                 .foregroundStyle(session.isAlive ? theme.text.color : theme.text2.color)
                 .lineLimit(1)
         }
@@ -127,11 +165,14 @@ struct SessionRow: View {
             case .working:
                 WorkingSpinner(color: theme.text3.color)
             case .needsInput:
-                Text(Elapsed.short(since: agent.since))
-                    .font(TypeScale.mono(10))
-                    .foregroundStyle(theme.accent.color)
+                HStack(spacing: 5) {
+                    Text(Elapsed.short(since: agent.since))
+                        .font(TypeScale.mono(10, .medium))
+                    Circle().frame(width: 7, height: 7)
+                }
+                .foregroundStyle(theme.accent.color)
             case .done where agent.unseen:
-                Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(theme.success.color)
+                Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(theme.text2.color)
             case .error:
                 Image(systemName: "exclamationmark").font(.system(size: 10, weight: .bold)).foregroundStyle(theme.danger.color)
             default:
@@ -160,7 +201,7 @@ struct SessionRow: View {
         Button("Open in Split Right") {
             workspace.axis = .horizontal
             if !workspace.panes.contains(where: { $0.session == session.id }) {
-                workspace.panes.append(Workspace.Pane(session: session.id))
+                workspace.panes.append(Workspace.Pane(content: .session(session.id)))
                 workspace.focus(pane: workspace.panes.last!.id)
             }
         }
@@ -216,6 +257,7 @@ struct NewSessionMenu: View {
             }
             Divider()
             Button("Shell in Folder…") { SessionActions.newSessionInChosenFolder() }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 12, weight: .medium))
@@ -237,7 +279,7 @@ private struct SidebarFooter: View {
         HStack(spacing: 6) {
             switch client.status {
             case .connected:
-                Circle().fill(theme.success.color.opacity(0.8)).frame(width: 5, height: 5)
+                Circle().fill(theme.text3.color).frame(width: 5, height: 5)
                 Text("Sessions persist when you quit")
             case .connecting:
                 ProgressView().controlSize(.mini)

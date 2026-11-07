@@ -78,7 +78,7 @@ struct AgentStateLabel: View {
                     SessionGlyph(agent: agent.kind, size: 11, color: tone.color(theme))
                     if agent.state == .working { WorkingSpinner(color: theme.text2.color) }
                     Text(text(now: context.date))
-                        .font(TypeScale.ui(11.5, .medium))
+                        .font(TypeScale.ui(11.5, tone == .attention ? .semibold : .medium))
                         .foregroundStyle(tone.color(theme))
                         .lineLimit(1)
                 }
@@ -90,7 +90,7 @@ struct AgentStateLabel: View {
         switch session.agent?.state {
         case .needsInput: return .attention
         case .error: return .danger
-        case .done: return .success
+        case .done: return .strong
         default: return .plain
         }
     }
@@ -145,7 +145,7 @@ struct PaneView: View {
                     Spacer(minLength: 8)
                     if session.agent != nil {
                         Text(session.subtitle.text)
-                            .font(TypeScale.ui(11))
+                            .font(TypeScale.ui(11, session.subtitle.tone.weight))
                             .foregroundStyle(session.subtitle.tone.color(theme))
                             .lineLimit(1)
                     }
@@ -158,19 +158,40 @@ struct PaneView: View {
                 .frame(height: 26)
                 .background(theme.surface.color)
                 .overlay(alignment: .top) {
-                    Rectangle().fill(isFocused ? theme.accent.color : .clear).frame(height: 1)
+                    Rectangle().fill(isFocused ? theme.accent.color.opacity(0.6) : .clear).frame(height: 1)
                 }
                 .overlay(alignment: .bottom) { Rectangle().fill(theme.hairline.color).frame(height: 1) }
                 .contentShape(Rectangle())
                 .onTapGesture { workspace.focus(pane: pane.id); workspace.focusTerminalSoon() }
             }
-            if let id = pane.session {
+            switch pane.content {
+            case .home:
+                if showsHeader { homeHeader }
+                HomeView()
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .session(let id):
                 TerminalHost(sessionID: id, paneID: pane.id)
-            } else {
-                EmptyPane()
             }
         }
         .frame(minWidth: 240, minHeight: 120)
+    }
+
+    private var homeHeader: some View {
+        HStack(spacing: 8) {
+            Text("Home").font(TypeScale.ui(11.5, .medium)).foregroundStyle(theme.text2.color)
+            Spacer(minLength: 8)
+            IconButton(systemName: "xmark", help: "Close pane (⌘W)") {
+                workspace.focus(pane: pane.id)
+                workspace.closeFocusedPane()
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 26)
+        .background(theme.surface.color)
+        .overlay(alignment: .top) {
+            Rectangle().fill(isFocused ? theme.accent.color.opacity(0.6) : .clear).frame(height: 1)
+        }
+        .overlay(alignment: .bottom) { Rectangle().fill(theme.hairline.color).frame(height: 1) }
     }
 }
 
@@ -203,18 +224,6 @@ final class TerminalSlot: NSView {
     }
 }
 
-private struct EmptyPane: View {
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ProgressView().controlSize(.small)
-            Text("Starting a session…").font(TypeScale.ui(12)).foregroundStyle(theme.text3.color)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 /// The bottom strip: what needs you across every session, and the focused agent's numbers.
 struct StatusBar: View {
     @ObservedObject private var client = DaemonClient.shared
@@ -234,6 +243,7 @@ struct StatusBar: View {
                         Text(needsYou.count == 1 ? "\(needsYou[0].name) needs you" : "\(needsYou.count) sessions need you")
                         Text("⇧⌘U").foregroundStyle(theme.text3.color)
                     }
+                    .font(TypeScale.ui(11, .semibold))
                     .foregroundStyle(theme.accent.color)
                 }
                 .buttonStyle(.plain)
