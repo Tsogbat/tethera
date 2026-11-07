@@ -1,370 +1,286 @@
 import SwiftUI
 
-/// A view that renders markdown content with proper formatting
+/// Renders Markdown from `cat file.md` blocks and AI answers.
 struct MarkdownOutputView: View {
+    @EnvironmentObject private var settings: UserSettings
     let content: String
-    @EnvironmentObject private var userSettings: UserSettings
-    
-    // Cache parsed elements to avoid re-parsing on every render
-    @State private var cachedElements: [MarkdownElement] = []
-    @State private var cachedContent: String = ""
-    
-    private var elements: [MarkdownElement] {
-        // Return cached if content hasn't changed
-        if content == cachedContent && !cachedElements.isEmpty {
-            return cachedElements
-        }
-        return cachedElements
-    }
-    
+    /// When set, shell code blocks get an "Insert" button that puts the command in the prompt.
+    var onInsertCode: ((String) -> Void)? = nil
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        let elements = MarkdownParser.parse(content)
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(elements.enumerated()), id: \.offset) { _, element in
-                renderElement(element)
+                render(element)
             }
         }
-        .onAppear {
-            parseAndCache()
-        }
-        .onChange(of: content) { _, _ in
-            parseAndCache()
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
-    private func parseAndCache() {
-        cachedContent = content
-        cachedElements = parseMarkdownLines()
-    }
-    
-    private func parseMarkdownLines() -> [MarkdownElement] {
-        var elements: [MarkdownElement] = []
-        let lines = content.components(separatedBy: .newlines)
-        var inCodeBlock = false
-        var codeBlockContent: [String] = []
-        var codeLanguage = ""
-        
-        // print("[MD] Parsing \(lines.count) lines")
-        
-        for (idx, rawLine) in lines.enumerated() {
-            // Clean the line - remove only control characters, keep Unicode (box-drawing characters like ├── └── │)
-            let line = rawLine.filter { char in
-                // Keep all non-ASCII characters (includes box-drawing, emoji, etc.)
-                if !char.isASCII { return true }
-                // For ASCII, keep printable characters and tabs
-                guard let ascii = char.asciiValue else { return true }
-                return ascii >= 32 || char == "\t"
-            }
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            
-            // if idx < 10 {
-            //     print("[MD] Line \(idx): '\(trimmed.prefix(40))...' starts with: \(trimmed.prefix(4).map { "\\u{\(String(format: "%04X", $0.asciiValue ?? 0))}" })")
-            // }
-            
-            // Check for code block delimiters
-            if trimmed.hasPrefix("```") {
-                if inCodeBlock {
-                    elements.append(.codeBlock(codeBlockContent.joined(separator: "\n"), language: codeLanguage))
-                    codeBlockContent = []
-                    codeLanguage = ""
-                    inCodeBlock = false
-                } else {
-                    codeLanguage = String(trimmed.dropFirst(3))
-                    inCodeBlock = true
-                }
-            } else if inCodeBlock {
-                codeBlockContent.append(line)
-            } else if isHeader1(trimmed) {
-                elements.append(.header1(String(trimmed.dropFirst(2))))
-            } else if isHeader2(trimmed) {
-                elements.append(.header2(String(trimmed.dropFirst(3))))
-            } else if isHeader3(trimmed) {
-                elements.append(.header3(String(trimmed.dropFirst(4))))
-            } else if isListItem(trimmed) {
-                elements.append(.listItem(String(trimmed.dropFirst(2))))
-            } else if trimmed.hasPrefix("|") && trimmed.contains("|") {
-                elements.append(.tableRow(trimmed))
-            } else if trimmed.isEmpty {
-                elements.append(.blank)
-            } else {
-                elements.append(.paragraph(line))
-            }
-        }
-        
-        if inCodeBlock && !codeBlockContent.isEmpty {
-            elements.append(.codeBlock(codeBlockContent.joined(separator: "\n"), language: codeLanguage))
-        }
-        
-        // print("[MD] Parsed \(elements.count) elements")
-        return elements
-    }
-    
-    private func isHeader1(_ s: String) -> Bool {
-        guard s.count >= 2 else { return false }
-        let chars = Array(s)
-        return chars[0] == "#" && chars[1] == " "
-    }
-    
-    private func isHeader2(_ s: String) -> Bool {
-        guard s.count >= 3 else { return false }
-        let chars = Array(s)
-        return chars[0] == "#" && chars[1] == "#" && chars[2] == " "
-    }
-    
-    private func isHeader3(_ s: String) -> Bool {
-        guard s.count >= 4 else { return false }
-        let chars = Array(s)
-        return chars[0] == "#" && chars[1] == "#" && chars[2] == "#" && chars[3] == " "
-    }
-    
-    private func isListItem(_ s: String) -> Bool {
-        guard s.count >= 2 else { return false }
-        let chars = Array(s)
-        return (chars[0] == "-" || chars[0] == "*") && chars[1] == " "
-    }
-    
+
+    private var theme: DesignTheme { settings.theme }
+    private var bodySize: CGFloat { max(12, CGFloat(settings.themeConfiguration.fontSize)) }
+
     @ViewBuilder
-    private func renderElement(_ element: MarkdownElement) -> some View {
+    private func render(_ element: MarkdownElement) -> some View {
         switch element {
-        case .header1(let text):
-            VStack(alignment: .leading, spacing: 4) {
-                Text(renderInline(text))
-                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 8), weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [userSettings.themeConfiguration.accentColor.color, userSettings.themeConfiguration.accentColor.color.opacity(0.7)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                // Subtle underline
-                Rectangle()
-                    .fill(userSettings.themeConfiguration.accentColor.color.opacity(0.3))
-                    .frame(height: 2)
-                    .frame(maxWidth: 200)
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 2)
-            
-        case .header2(let text):
-            HStack(spacing: 10) {
-                Rectangle()
-                    .fill(userSettings.themeConfiguration.accentColor.color)
-                    .frame(width: 3)
-                Text(renderInline(text))
-                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 4), weight: .semibold))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 2)
-            
-        case .header3(let text):
-            Text(renderInline(text))
-                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize + 2), weight: .medium))
-                .foregroundColor(userSettings.themeConfiguration.accentColor.color.opacity(0.9))
-                .padding(.top, 4)
-                .padding(.bottom, 2)
-            
-        case .codeBlock(let code, let language):
-            VStack(alignment: .leading, spacing: 0) {
-                // Language badge
-                if !language.isEmpty {
-                    Text(language.uppercased())
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(userSettings.themeConfiguration.accentColor.color.opacity(0.15))
-                        )
-                        .padding(.bottom, 8)
+        case .heading(let level, let text):
+            Text(inline(text))
+                .font(.system(size: bodySize + CGFloat(max(0, 4 - level)) * 2.5, weight: level <= 2 ? .bold : .semibold))
+                .foregroundStyle(theme.textPrimary)
+                .padding(.top, level <= 2 ? 6 : 3)
+        case .paragraph(let text):
+            Text(inline(text))
+                .font(.system(size: bodySize))
+                .foregroundStyle(theme.textPrimary.opacity(0.88))
+                .lineSpacing(3)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        case .bullet(let indent, let marker, let text):
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if let marker {
+                    Text(marker)
+                        .font(.system(size: bodySize - 1, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(theme.textTertiary)
+                } else {
+                    Circle().fill(theme.accent.opacity(0.8)).frame(width: 4.5, height: 4.5)
+                        .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
                 }
-                
-                Text(code)
-                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize - 1), design: .monospaced))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.95))
+                Text(inline(text))
+                    .font(.system(size: bodySize))
+                    .foregroundStyle(theme.textPrimary.opacity(0.88))
+                    .lineSpacing(3)
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(SwiftUI.Color.black.opacity(0.4))
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [.white.opacity(0.1), .clear],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
+            .padding(.leading, CGFloat(indent) * 14)
+        case .quote(let text):
+            HStack(spacing: 10) {
+                Capsule().fill(theme.border).frame(width: 2.5)
+                Text(inline(text))
+                    .font(.system(size: bodySize).italic())
+                    .foregroundStyle(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        case .code(let language, let code):
+            CodeBlockView(language: language, code: code, onInsert: insertHandler(for: language))
+        case .table(let rows):
+            MarkdownTable(rows: rows)
+        case .rule:
+            Rectangle().fill(theme.hairline).frame(height: 1).padding(.vertical, 4)
+        }
+    }
+
+    private func insertHandler(for language: String) -> ((String) -> Void)? {
+        guard let onInsertCode, CommandSanitizer.shellLanguages.contains(language) else { return nil }
+        return onInsertCode
+    }
+
+    private func inline(_ text: String) -> AttributedString {
+        var attributed = (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        for run in attributed.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            attributed[run.range].font = Typography.mono(settings.themeConfiguration.fontFamily, size: bodySize - 1, weight: .medium)
+            attributed[run.range].foregroundColor = theme.accent
+            attributed[run.range].backgroundColor = theme.accentSoft.opacity(0.6)
+        }
+        for run in attributed.runs where run.link != nil {
+            attributed[run.range].foregroundColor = theme.accent
+            attributed[run.range].underlineStyle = .single
+        }
+        return attributed
+    }
+}
+
+struct CodeBlockView: View {
+    @EnvironmentObject private var settings: UserSettings
+    let language: String
+    let code: String
+    var onInsert: ((String) -> Void)?
+    @State private var hovering = false
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Text(language.isEmpty ? "code" : language)
+                    .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 10, weight: .semibold))
+                    .foregroundStyle(settings.theme.textTertiary)
+                Spacer()
+                IconButton(systemName: copied ? "checkmark" : "doc.on.doc", help: "Copy", tint: copied ? settings.theme.success : nil, size: 22) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(code, forType: .string)
+                    withAnimation(Motion.bouncy) { copied = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { withAnimation(Motion.quick) { copied = false } }
                 }
-            )
-            .padding(.vertical, 2)
-            
-        case .listItem(let text):
-            HStack(alignment: .top, spacing: 12) {
-                Circle()
-                    .fill(userSettings.themeConfiguration.accentColor.color)
-                    .frame(width: 6, height: 6)
-                    .padding(.top, 7)
-                Text(renderInline(text))
-                    .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.9))
-                    .lineSpacing(4)
+                if let onInsert {
+                    PillButton(title: "Insert", systemImage: "arrow.down.to.line", prominent: true) { onInsert(code) }
+                }
             }
-            .padding(.vertical, 2)
-            
-        case .tableRow(let text):
-            let cells = parseTableCells(text)
-            if cells.isEmpty || isSeparatorRow(text) {
-                EmptyView()
-            } else {
-                HStack(spacing: 1) {
-                    ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
-                        Text(renderInline(cell.trimmingCharacters(in: .whitespaces)))
-                            .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize - 1), design: .monospaced))
-                            .foregroundColor(index == 0 ? userSettings.themeConfiguration.accentColor.color : userSettings.themeConfiguration.textColor.color.opacity(0.85))
-                            .fontWeight(index == 0 ? .medium : .regular)
-                            .frame(minWidth: 100, maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Rectangle()
-                                    .fill(SwiftUI.Color.white.opacity(index == 0 ? 0.06 : 0.02))
-                            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(settings.theme.surfaceRaised.opacity(0.7))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(Typography.mono(settings.themeConfiguration.fontFamily, size: CGFloat(settings.themeConfiguration.fontSize) - 0.5))
+                    .foregroundStyle(settings.theme.textPrimary)
+                    .textSelection(.enabled)
+                    .padding(11)
+                    .fixedSize(horizontal: true, vertical: true)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(settings.theme.background.opacity(settings.theme.isDark ? 0.55 : 0.75)))
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(settings.theme.hairline, lineWidth: 0.75))
+        .padding(.vertical, 3)
+    }
+}
+
+struct MarkdownTable: View {
+    @EnvironmentObject private var settings: UserSettings
+    let rows: [[String]]
+
+    var body: some View {
+        let columns = rows.map(\.count).max() ?? 0
+        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                GridRow {
+                    ForEach(0..<columns, id: \.self) { column in
+                        Text((try? AttributedString(markdown: column < row.count ? row[column] : "")) ?? AttributedString())
+                            .font(.system(size: CGFloat(settings.themeConfiguration.fontSize) - 0.5, weight: index == 0 ? .semibold : .regular))
+                            .foregroundStyle(index == 0 ? settings.theme.textPrimary : settings.theme.textPrimary.opacity(0.85))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(SwiftUI.Color.white.opacity(0.08), lineWidth: 1)
-                )
+                .background(index == 0 ? settings.theme.surfaceRaised : (index.isMultiple(of: 2) ? settings.theme.surface.opacity(0.6) : .clear))
             }
-            
-        case .paragraph(let text):
-            Text(renderInline(text))
-                .font(.system(size: CGFloat(userSettings.themeConfiguration.fontSize)))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.85))
-                .lineSpacing(4)
-                .textSelection(.enabled)
-            
-        case .blank:
-            Spacer().frame(height: 2)
         }
-    }
-    
-    /// Render inline markdown (bold, italic, code, links)
-    private func renderInline(_ text: String) -> AttributedString {
-        if let attributed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
-            return attributed
-        }
-        return AttributedString(text)
-    }
-    
-    /// Parse table row into cells
-    private func parseTableCells(_ row: String) -> [String] {
-        // Split by | and filter empty strings
-        let cells = row.split(separator: "|", omittingEmptySubsequences: false)
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        return cells
-    }
-    
-    /// Check if row is a separator (|---|---|)
-    private func isSeparatorRow(_ row: String) -> Bool {
-        let trimmed = row.trimmingCharacters(in: .whitespaces)
-        // Separator rows contain only |, -, :, and spaces
-        let allowedChars = CharacterSet(charactersIn: "|-: ")
-        return trimmed.unicodeScalars.allSatisfy { allowedChars.contains($0) } && trimmed.contains("-")
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(settings.theme.hairline, lineWidth: 0.75))
     }
 }
 
-enum MarkdownElement {
-    case header1(String)
-    case header2(String)
-    case header3(String)
-    case codeBlock(String, language: String)
-    case listItem(String)
-    case tableRow(String)
+// MARK: - Parsing
+
+enum MarkdownElement: Equatable {
+    case heading(level: Int, text: String)
     case paragraph(String)
-    case blank
+    case bullet(indent: Int, marker: String?, text: String)
+    case quote(String)
+    case code(language: String, code: String)
+    case table([[String]])
+    case rule
 }
 
-/// Detects if content is likely markdown
-struct MarkdownDetector {
-    /// Check if the command output looks like markdown
-    static func isMarkdownContent(_ content: String, command: String) -> Bool {
-        // Check if command is reading a markdown file
-        let mdFilePattern = command.contains(".md") || command.contains(".markdown")
-        if mdFilePattern && (command.hasPrefix("cat ") || command.hasPrefix("less ") || command.hasPrefix("more ") || command.hasPrefix("bat ")) {
-            return true
+enum MarkdownParser {
+    static func parse(_ content: String) -> [MarkdownElement] {
+        var elements: [MarkdownElement] = []
+        var paragraph: [String] = []
+        var table: [[String]] = []
+        var codeLines: [String] = []
+        var codeLanguage = ""
+        var inCode = false
+
+        func flushParagraph() {
+            if !paragraph.isEmpty {
+                elements.append(.paragraph(paragraph.joined(separator: " ")))
+                paragraph.removeAll()
+            }
         }
-        
-        // Check for markdown patterns in content
-        return hasMarkdownPatterns(content)
-    }
-    
-    /// Check if content has markdown patterns
-    static func hasMarkdownPatterns(_ content: String) -> Bool {
-        let lines = content.split(separator: "\n", omittingEmptySubsequences: false)
-        var markdownScore = 0
-        
-        for line in lines {
+        func flushTable() {
+            if !table.isEmpty {
+                elements.append(.table(table))
+                table.removeAll()
+            }
+        }
+
+        for rawLine in content.components(separatedBy: "\n") {
+            let line = rawLine.replacingOccurrences(of: "\t", with: "    ")
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            
-            // Headers
-            if trimmed.hasPrefix("# ") || trimmed.hasPrefix("## ") || trimmed.hasPrefix("### ") {
-                markdownScore += 3
-            }
-            
-            // Bold/italic
-            if trimmed.contains("**") || trimmed.contains("__") {
-                markdownScore += 2
-            }
-            
-            // Inline code
-            if trimmed.contains("`") && !trimmed.hasPrefix("`") {
-                markdownScore += 1
-            }
-            
-            // Lists
-            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("1. ") {
-                markdownScore += 1
-            }
-            
-            // Links
-            if trimmed.contains("](") && trimmed.contains("[") {
-                markdownScore += 2
-            }
-            
-            // Code blocks
+
             if trimmed.hasPrefix("```") {
-                markdownScore += 3
+                if inCode {
+                    elements.append(.code(language: codeLanguage, code: codeLines.joined(separator: "\n")))
+                    codeLines.removeAll()
+                    inCode = false
+                } else {
+                    flushParagraph(); flushTable()
+                    codeLanguage = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces).lowercased()
+                    inCode = true
+                }
+                continue
+            }
+            if inCode {
+                codeLines.append(line)
+                continue
+            }
+            if trimmed.isEmpty {
+                flushParagraph(); flushTable()
+                continue
+            }
+            if trimmed.hasPrefix("|") {
+                flushParagraph()
+                let isSeparator = trimmed.allSatisfy { "|-: ".contains($0) }
+                if !isSeparator {
+                    var cells = trimmed.split(separator: "|", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+                    if cells.first == "" { cells.removeFirst() }
+                    if cells.last == "" { cells.removeLast() }
+                    table.append(cells)
+                }
+                continue
+            }
+            flushTable()
+            if let heading = headingLevel(trimmed) {
+                flushParagraph()
+                elements.append(.heading(level: heading.level, text: heading.text))
+            } else if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                flushParagraph()
+                elements.append(.rule)
+            } else if trimmed.hasPrefix("> ") {
+                flushParagraph()
+                elements.append(.quote(String(trimmed.dropFirst(2))))
+            } else if let bullet = bulletItem(line) {
+                flushParagraph()
+                elements.append(bullet)
+            } else {
+                paragraph.append(trimmed)
             }
         }
-        
-        // Consider it markdown if score is high enough relative to content length
-        let threshold = max(3, lines.count / 5)
-        return markdownScore >= threshold
+        if inCode {
+            elements.append(.code(language: codeLanguage, code: codeLines.joined(separator: "\n")))
+        }
+        flushParagraph()
+        flushTable()
+        return elements
     }
-}
 
-#Preview {
-    MarkdownOutputView(content: """
-    # Hello World
-    
-    This is **bold** and *italic* text.
-    
-    - Item 1
-    - Item 2
-    
-    `code snippet`
-    """)
-    .padding()
-    .environmentObject(UserSettings())
+    private static func headingLevel(_ line: String) -> (level: Int, text: String)? {
+        var level = 0
+        for character in line {
+            if character == "#" { level += 1 } else { break }
+        }
+        guard (1...6).contains(level), line.count > level, line[line.index(line.startIndex, offsetBy: level)] == " " else { return nil }
+        return (level, String(line.dropFirst(level + 1)))
+    }
+
+    private static func bulletItem(_ line: String) -> MarkdownElement? {
+        let indentWidth = line.prefix(while: { $0 == " " }).count
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let indent = indentWidth / 2
+        for marker in ["- ", "* ", "+ "] where trimmed.hasPrefix(marker) {
+            var text = String(trimmed.dropFirst(2))
+            if text.hasPrefix("[ ] ") { text = "☐ " + text.dropFirst(4) }
+            if text.hasPrefix("[x] ") || text.hasPrefix("[X] ") { text = "☑ " + text.dropFirst(4) }
+            return .bullet(indent: indent, marker: nil, text: text)
+        }
+        let digits = trimmed.prefix(while: { $0.isNumber })
+        if !digits.isEmpty, digits.count <= 3 {
+            let rest = trimmed.dropFirst(digits.count)
+            if rest.hasPrefix(". ") || rest.hasPrefix(") ") {
+                return .bullet(indent: indent, marker: "\(digits).", text: String(rest.dropFirst(2)))
+            }
+        }
+        return nil
+    }
 }

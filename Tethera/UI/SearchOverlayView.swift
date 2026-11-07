@@ -1,158 +1,92 @@
 import SwiftUI
 
-/// Overlay view for searching command history
+/// History search across every tab (⌘F / ⌃R).
 struct SearchOverlayView: View {
+    @EnvironmentObject private var settings: UserSettings
     @ObservedObject var historyManager: CommandHistoryManager
-    @EnvironmentObject private var userSettings: UserSettings
-    @FocusState private var isSearchFocused: Bool
-    let onJumpToBlock: (UUID) -> Void
+    let onJump: (CommandHistoryManager.HistoryEntry) -> Void
     let onDismiss: () -> Void
-    
+
+    @FocusState private var fieldFocused: Bool
+    @State private var appeared = false
+    @Namespace private var selection
+
     var body: some View {
-        ZStack {
-            // Dimmed background
-            SwiftUI.Color.black.opacity(0.5)
+        ZStack(alignment: .top) {
+            Color.black.opacity(settings.theme.isDark ? 0.28 : 0.12)
                 .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
-            
-            // Search panel
+                .onTapGesture(perform: onDismiss)
+
             VStack(spacing: 0) {
-                // Search input
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                        .font(.system(size: 16))
-                    
-                    TextField("Search commands and output...", text: $historyManager.searchQuery)
-                        .font(.system(size: 15))
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .foregroundColor(userSettings.themeConfiguration.textColor.color)
-                        .focused($isSearchFocused)
-                        .onChange(of: historyManager.searchQuery) { _, newValue in
-                            historyManager.search(query: newValue)
-                        }
-                        .onSubmit {
-                            jumpToCurrentResult()
-                        }
-                    
-                    // Result count
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(settings.theme.accent)
+                    TextField("Search commands and output", text: $historyManager.searchQuery)
+                        .textFieldStyle(.plain)
+                        .font(Typography.ui(15))
+                        .foregroundStyle(settings.theme.textPrimary)
+                        .focused($fieldFocused)
+                        .onChange(of: historyManager.searchQuery) { _, value in historyManager.search(query: value) }
+                        .onSubmit(jumpToSelection)
                     if !historyManager.searchResults.isEmpty {
-                        Text("\(historyManager.selectedResultIndex + 1)/\(historyManager.searchResults.count)")
-                            .font(.system(size: 12))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+                        Text("\(historyManager.selectedResultIndex + 1) of \(historyManager.searchResults.count)")
+                            .font(Typography.ui(11).monospacedDigit())
+                            .foregroundStyle(settings.theme.textTertiary)
+                            .contentTransition(.numericText())
                     }
-                    
-                    // Navigation buttons
-                    HStack(spacing: 4) {
-                        Button(action: { historyManager.selectPreviousResult() }) {
-                            Image(systemName: "chevron.up")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
-                                .frame(width: 24, height: 24)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(userSettings.themeConfiguration.textColor.color.opacity(0.05))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(historyManager.selectedResultIndex == 0)
-                        
-                        Button(action: { historyManager.selectNextResult() }) {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
-                                .frame(width: 24, height: 24)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(userSettings.themeConfiguration.textColor.color.opacity(0.05))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(historyManager.selectedResultIndex >= historyManager.searchResults.count - 1)
-                    }
-                    
-                    // Close button
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.escape, modifiers: [])
+                    KeyHint(keys: "esc", label: "")
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(userSettings.themeConfiguration.backgroundColor.color)
-                
-                // Separator
-                Rectangle()
-                    .fill(userSettings.themeConfiguration.textColor.color.opacity(0.1))
-                    .frame(height: 1)
-                
-                // Results list
-                if historyManager.searchResults.isEmpty && !historyManager.searchQuery.isEmpty {
-                    VStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 32))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.3))
-                        Text("No results found")
-                            .font(.system(size: 14))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(userSettings.themeConfiguration.backgroundColor.color.opacity(0.95))
-                } else if !historyManager.searchResults.isEmpty {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 4) {
-                                ForEach(Array(historyManager.searchResults.enumerated()), id: \.element.id) { index, entry in
-                                    SearchResultRow(
-                                        entry: entry,
-                                        isSelected: index == historyManager.selectedResultIndex,
-                                        query: historyManager.searchQuery,
-                                        onSelect: {
-                                            historyManager.selectedResultIndex = index
-                                            jumpToCurrentResult()
-                                        }
-                                    )
-                                    .id(entry.id)
+                .padding(.vertical, 13)
+
+                Rectangle().fill(settings.theme.hairline).frame(height: 0.5)
+
+                Group {
+                    if historyManager.searchQuery.isEmpty {
+                        emptyState("Search everything you've run", detail: "↑↓ to move · ↩ to jump to the block or insert the command")
+                    } else if historyManager.searchResults.isEmpty {
+                        emptyState("No matches", detail: "Try part of a command or something it printed")
+                    } else {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                VStack(spacing: 1) {
+                                    ForEach(Array(historyManager.searchResults.enumerated()), id: \.element.id) { index, entry in
+                                        SearchResultRow(entry: entry,
+                                                        isSelected: index == historyManager.selectedResultIndex,
+                                                        query: historyManager.searchQuery,
+                                                        selection: selection)
+                                            .id(entry.id)
+                                            .onTapGesture {
+                                                historyManager.selectedResultIndex = index
+                                                jumpToSelection()
+                                            }
+                                            .onHover { inside in if inside { historyManager.selectedResultIndex = index } }
+                                    }
                                 }
+                                .padding(6)
+                                .animation(Motion.snappy, value: historyManager.selectedResultIndex)
                             }
-                            .padding(8)
-                        }
-                        .background(userSettings.themeConfiguration.backgroundColor.color.opacity(0.95))
-                        .onChange(of: historyManager.selectedResultIndex) { _, newIndex in
-                            if newIndex < historyManager.searchResults.count {
-                                withAnimation {
-                                    proxy.scrollTo(historyManager.searchResults[newIndex].id, anchor: .center)
+                            .onChange(of: historyManager.selectedResultIndex) { _, index in
+                                guard historyManager.searchResults.indices.contains(index) else { return }
+                                withAnimation(Motion.quick) {
+                                    proxy.scrollTo(historyManager.searchResults[index].id, anchor: .center)
                                 }
                             }
                         }
                     }
-                } else {
-                    // Empty state when no query
-                    VStack(spacing: 8) {
-                        Text("Start typing to search command history")
-                            .font(.system(size: 14))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                        Text("Press ↑↓ to navigate, Enter to jump")
-                            .font(.system(size: 12))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.3))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(userSettings.themeConfiguration.backgroundColor.color.opacity(0.95))
                 }
+                .frame(height: 360)
             }
-            .frame(width: 600, height: 400)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(userSettings.themeConfiguration.textColor.color.opacity(0.15), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+            .frame(width: 640)
+            .glassSurface(RoundedRectangle(cornerRadius: 18, style: .continuous), elevated: true)
+            .padding(.top, 90)
+            .scaleEffect(appeared ? 1 : 0.97)
+            .opacity(appeared ? 1 : 0)
         }
         .onAppear {
-            isSearchFocused = true
+            fieldFocused = true
+            withAnimation(Motion.snappy) { appeared = true }
         }
         .onKeyPress(.upArrow) {
             historyManager.selectPreviousResult()
@@ -162,86 +96,82 @@ struct SearchOverlayView: View {
             historyManager.selectNextResult()
             return .handled
         }
-    }
-    
-    private func jumpToCurrentResult() {
-        if let result = historyManager.currentResult {
-            onJumpToBlock(result.id)
+        .onKeyPress(.escape) {
             onDismiss()
+            return .handled
+        }
+    }
+
+    private func emptyState(_ title: String, detail: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(Typography.ui(13, weight: .medium))
+                .foregroundStyle(settings.theme.textSecondary)
+            Text(detail)
+                .font(Typography.ui(11.5))
+                .foregroundStyle(settings.theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func jumpToSelection() {
+        if let result = historyManager.currentResult {
+            onJump(result)
         }
     }
 }
 
-// MARK: - Search Result Row
 struct SearchResultRow: View {
+    @EnvironmentObject private var settings: UserSettings
     let entry: CommandHistoryManager.HistoryEntry
     let isSelected: Bool
     let query: String
-    let onSelect: () -> Void
-    @EnvironmentObject private var userSettings: UserSettings
-    
+    let selection: Namespace.ID
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            // Command
-            HStack(spacing: 6) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(entry.success == false ? settings.theme.danger : settings.theme.success.opacity(0.8))
+                    .frame(width: 5, height: 5)
                 Text(entry.command)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color)
+                    .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 12.5, weight: .medium))
+                    .foregroundStyle(settings.theme.textPrimary)
                     .lineLimit(1)
-                
                 Spacer()
-                
-                // Timestamp
-                Text(formatDate(entry.timestamp))
-                    .font(.system(size: 10))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.4))
+                Text(BlockTerminalViewModel.abbreviate(entry.workingDirectory))
+                    .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 10.5))
+                    .foregroundStyle(settings.theme.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: 160, alignment: .trailing)
+                Text(entry.timestamp, format: .relative(presentation: .named))
+                    .font(Typography.ui(10.5))
+                    .foregroundStyle(settings.theme.textTertiary)
             }
-            
-            // Output preview (if contains match)
-            if !entry.output.isEmpty && entry.output.lowercased().contains(query.lowercased()) {
-                Text(entry.output.prefix(100) + (entry.output.count > 100 ? "..." : ""))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.6))
-                    .lineLimit(2)
-                    .padding(.leading, 15)
+            if let snippet = matchingLine {
+                Text(snippet)
+                    .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 11))
+                    .foregroundStyle(settings.theme.textSecondary)
+                    .lineLimit(1)
+                    .padding(.leading, 13)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 11)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected 
-                    ? userSettings.themeConfiguration.accentColor.color.opacity(0.15)
-                    : SwiftUI.Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(
-                    isSelected ? userSettings.themeConfiguration.accentColor.color.opacity(0.3) : SwiftUI.Color.clear,
-                    lineWidth: 1
-                )
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { onSelect() }
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        let calendar = Calendar.current
-        
-        if calendar.isDateInToday(date) {
-            formatter.dateFormat = "HH:mm"
-            return "Today " + formatter.string(from: date)
-        } else if calendar.isDateInYesterday(date) {
-            formatter.dateFormat = "HH:mm"
-            return "Yesterday " + formatter.string(from: date)
-        } else {
-            formatter.dateFormat = "MMM d, HH:mm"
-            return formatter.string(from: date)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(settings.theme.accentSoft)
+                    .matchedGeometryEffect(id: "selection", in: selection)
+            }
         }
+        .contentShape(Rectangle())
+    }
+
+    private var matchingLine: String? {
+        guard !query.isEmpty, !entry.command.lowercased().contains(query.lowercased()) else { return nil }
+        return entry.output.split(separator: "\n").first { $0.lowercased().contains(query.lowercased()) }
+            .map { String($0.trimmingCharacters(in: .whitespaces).prefix(160)) }
     }
 }

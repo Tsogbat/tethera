@@ -1,11 +1,10 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Display Item (for rendering tabs + split groups)
 enum TabDisplayItem: Identifiable {
     case singleTab(Tab)
     case splitGroup(SplitGroup, leftTab: Tab, rightTab: Tab)
-    
+
     var id: String {
         switch self {
         case .singleTab(let tab): return "single-\(tab.id)"
@@ -14,383 +13,354 @@ enum TabDisplayItem: Identifiable {
     }
 }
 
-// MARK: - Tab Bar (Chrome Style)
+/// Tabs live in the title bar, beside the traffic lights.
 struct TabBarContent: View {
+    @EnvironmentObject private var settings: UserSettings
     @ObservedObject var tabManager: TabManager
+    @ObservedObject private var metrics = WindowMetrics.shared
     var splitGroups: [SplitGroup] = []
-    var activeSplitGroupId: UUID? = nil
-    @EnvironmentObject private var userSettings: UserSettings
+    var activeSplitGroupId: UUID?
+    var onOpenPalette: () -> Void = {}
+
+    @Namespace private var pillNamespace
     @State private var draggedTab: Tab?
-    
-    // Build display items - group split tabs together
+
     private var displayItems: [TabDisplayItem] {
         var items: [TabDisplayItem] = []
-        var processedTabIds: Set<UUID> = []
-        
-        for tab in tabManager.tabs {
-            if processedTabIds.contains(tab.id) { continue }
-            
-            // Check if this tab is the LEFT tab of any split group
+        var handled = Set<UUID>()
+        for tab in tabManager.tabs where !handled.contains(tab.id) {
             if let group = splitGroups.first(where: { $0.leftTabId == tab.id }),
-               let rightTab = tabManager.tabs.first(where: { $0.id == group.rightTabId }) {
-                items.append(.splitGroup(group, leftTab: tab, rightTab: rightTab))
-                processedTabIds.insert(tab.id)
-                processedTabIds.insert(rightTab.id)
+               let right = tabManager.tab(with: group.rightTabId) {
+                items.append(.splitGroup(group, leftTab: tab, rightTab: right))
+                handled.insert(tab.id)
+                handled.insert(right.id)
             } else if !splitGroups.contains(where: { $0.rightTabId == tab.id }) {
-                // Single tab (not part of any split)
                 items.append(.singleTab(tab))
-                processedTabIds.insert(tab.id)
+                handled.insert(tab.id)
             }
         }
         return items
     }
-    
+
     var body: some View {
         HStack(spacing: 0) {
+            WindowDragArea().frame(width: metrics.leadingInset)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: 3) {
                     ForEach(displayItems) { item in
                         switch item {
                         case .singleTab(let tab):
-                            ChromeTabView(
-                                tab: tab,
-                                isActive: tab.id == tabManager.activeTabId,
-                                onSelect: { tabManager.setActiveTab(tab.id) },
-                                onClose: { tabManager.closeTab(tab.id) },
-                                onRename: { newName in tabManager.renameTab(tab.id, to: newName) }
-                            )
-                            .onDrag {
-                                draggedTab = tab
-                                return NSItemProvider(object: tab.id.uuidString as NSString)
-                            }
-                            .onDrop(of: [.text], delegate: TabDropDelegate(
-                                tab: tab,
-                                tabManager: tabManager,
-                                draggedTab: $draggedTab
-                            ))
-                            
-                        case .splitGroup(let group, let leftTab, let rightTab):
-                            SplitTabGroupView(
-                                group: group,
-                                leftTab: leftTab,
-                                rightTab: rightTab,
-                                isActive: group.id == activeSplitGroupId,
-                                focusedPane: group.focusedPane,
-                                onSelectPane: { pane in
-                                    let tabId = pane == 0 ? leftTab.id : rightTab.id
-                                    tabManager.setActiveTab(tabId)
-                                },
-                                onClose: {
-                                    // Close split - both tabs stay, just unsplit
-                                    NotificationCenter.default.post(
-                                        name: NSNotification.Name("CloseSplitGroup"),
-                                        object: nil,
-                                        userInfo: ["groupId": group.id]
-                                    )
+                            TabPill(tab: tab,
+                                    isActive: tab.id == tabManager.activeTabId,
+                                    namespace: pillNamespace,
+                                    onSelect: { tabManager.setActiveTab(tab.id) },
+                                    onClose: { tabManager.closeTab(tab.id) },
+                                    onRename: { tabManager.renameTab(tab.id, to: $0) })
+                                .onDrag {
+                                    draggedTab = tab
+                                    return NSItemProvider(object: tab.id.uuidString as NSString)
                                 }
-                            )
+                                .onDrop(of: [.text], delegate: TabDropDelegate(tab: tab, tabManager: tabManager, draggedTab: $draggedTab))
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        case .splitGroup(let group, let left, let right):
+                            SplitTabGroupView(group: group, leftTab: left, rightTab: right,
+                                              isActive: group.id == activeSplitGroupId,
+                                              namespace: pillNamespace,
+                                              onSelect: { tabManager.setActiveTab($0) },
+                                              onClose: {
+                                                  NotificationCenter.default.post(name: .closeSplitGroup, object: nil, userInfo: ["groupId": group.id])
+                                              })
+                                .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
                     }
-                    
-                    Button(action: { tabManager.createNewTab() }) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
+
+                    NewTabButton { tabManager.createNewTab() }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 2)
+                .padding(.vertical, 4)
+                .animation(Motion.snappy, value: tabManager.tabs.map(\.id))
+                .animation(Motion.snappy, value: tabManager.activeTabId)
             }
-            .id("\(tabManager.activeTabId?.uuidString ?? "")-\(activeSplitGroupId?.uuidString ?? "")")
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
+
+            WindowDragArea()
+                .frame(minWidth: 24, maxWidth: .infinity)
+
+            HStack(spacing: 2) {
+                IconButton(systemName: "command", help: "Command palette (⌘P)", action: onOpenPalette)
+                IconButton(systemName: "gearshape", help: "Settings (⌘,)") { tabManager.openSettingsTab() }
+            }
+            .padding(.trailing, 10)
         }
-        .frame(height: 38)
-        .background(userSettings.themeConfiguration.backgroundColor.color)
+        .frame(height: metrics.titlebarHeight)
+        .background(WindowDragArea())
     }
 }
 
-// MARK: - Split Tab Group View (Arc-style grouped tabs)
-struct SplitTabGroupView: View {
-    let group: SplitGroup
-    let leftTab: Tab
-    let rightTab: Tab
-    let isActive: Bool
-    let focusedPane: Int
-    let onSelectPane: (Int) -> Void
-    let onClose: () -> Void
-    @EnvironmentObject private var userSettings: UserSettings
-    @State private var isHovered = false
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            // Left pane mini tab
-            miniTab(tab: leftTab, pane: 0)
-            
-            // Divider
-            Rectangle()
-                .fill(userSettings.themeConfiguration.textColor.color.opacity(0.2))
-                .frame(width: 1)
-                .padding(.vertical, 6)
-            
-            // Right pane mini tab
-            miniTab(tab: rightTab, pane: 1)
-            
-            // Close button
-            if isHovered || isActive {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(userSettings.themeConfiguration.textColor.color.opacity(0.1)))
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 4)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isActive ? .ultraThinMaterial : .regularMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(
-                    isActive 
-                        ? userSettings.themeConfiguration.accentColor.color.opacity(0.5)
-                        : userSettings.themeConfiguration.textColor.color.opacity(0.15),
-                    lineWidth: isActive ? 1.5 : 1
-                )
-        )
-        .shadow(color: isActive ? userSettings.themeConfiguration.accentColor.color.opacity(0.15) : .clear, radius: 4)
-        .onHover { isHovered = $0 }
-    }
-    
-    @ViewBuilder
-    private func miniTab(tab: Tab, pane: Int) -> some View {
-        let isFocused = focusedPane == pane
-        
-        HStack(spacing: 4) {
-            Image(systemName: tab.isSettingsTab ? "gearshape.fill" : "terminal.fill")
-                .font(.system(size: 10))
-                .foregroundColor(isFocused && isActive
-                    ? userSettings.themeConfiguration.accentColor.color
-                    : userSettings.themeConfiguration.textColor.color.opacity(0.5))
-            
-            Text(tab.title)
-                .font(.system(size: 11, weight: isFocused && isActive ? .medium : .regular))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(isFocused ? 1 : 0.6))
-                .lineLimit(1)
-                .frame(maxWidth: 60)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(isFocused && isActive 
-                    ? userSettings.themeConfiguration.accentColor.color.opacity(0.1)
-                    : SwiftUI.Color.clear)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { onSelectPane(pane) }
-    }
-}
-
-// MARK: - Individual Tab (Chrome Style)
-struct ChromeTabView: View {
+struct TabPill: View {
+    @EnvironmentObject private var settings: UserSettings
     @ObservedObject var tab: Tab
     let isActive: Bool
+    let namespace: Namespace.ID
     let onSelect: () -> Void
     let onClose: () -> Void
     let onRename: (String) -> Void
-    @EnvironmentObject private var userSettings: UserSettings
-    
-    @State private var isHovered = false
+
+    @State private var hovering = false
     @State private var isEditing = false
     @State private var editingName = ""
-    @FocusState private var isTextFieldFocused: Bool
-    
+    @FocusState private var fieldFocused: Bool
+
     var body: some View {
-        HStack(spacing: 8) {
-            // Icon
-            Image(systemName: tab.isSettingsTab ? "gearshape.fill" : "terminal.fill")
-                .font(.system(size: 11))
-                .foregroundColor(isActive
-                    ? userSettings.themeConfiguration.accentColor.color
-                    : userSettings.themeConfiguration.textColor.color.opacity(0.5))
-            
-            // Title
+        HStack(spacing: 7) {
+            TabIcon(tab: tab, isActive: isActive)
+
             if isEditing {
                 TextField("", text: $editingName)
-                    .font(.system(size: 12))
                     .textFieldStyle(.plain)
-                    .frame(minWidth: 40, maxWidth: 100)
-                    .focused($isTextFieldFocused)
-                    .onSubmit { finishEditing() }
-                    .onExitCommand { cancelEditing() }
-                    .onChange(of: isTextFieldFocused) { _, focused in
-                        // Save when focus is lost (clicking outside)
-                        if !focused && isEditing {
-                            finishEditing()
-                        }
-                    }
+                    .font(Typography.ui(12, weight: .medium))
+                    .frame(minWidth: 50, maxWidth: 130)
+                    .focused($fieldFocused)
+                    .onSubmit(finishEditing)
+                    .onExitCommand { isEditing = false }
+                    .onChange(of: fieldFocused) { _, focused in if !focused && isEditing { finishEditing() } }
             } else {
                 Text(tab.title)
-                    .font(.system(size: 12, weight: isActive ? .medium : .regular))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(isActive ? 1.0 : 0.6))
+                    .font(Typography.ui(12, weight: isActive ? .semibold : .medium))
+                    .foregroundStyle(isActive ? settings.theme.textPrimary : settings.theme.textSecondary)
                     .lineLimit(1)
+                    .frame(maxWidth: 150)
             }
-            
-            // Close button (visible on hover or active)
-            if !isEditing && (isHovered || isActive) {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
-                        .frame(width: 16, height: 16)
-                        .background(
-                            Circle()
-                                .fill(userSettings.themeConfiguration.textColor.color.opacity(isHovered ? 0.15 : 0))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
+
             ZStack {
-                if isActive || isHovered {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.ultraThinMaterial)
-                    
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    .white.opacity(isActive ? 0.2 : 0.08),
-                                    .white.opacity(isActive ? 0.08 : 0.02)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: isActive ? 1.5 : 1
-                        )
+                if tab.needsAttention && !isActive && !hovering {
+                    PulsingDot(color: settings.theme.warning, size: 6)
+                        .transition(.scale.combined(with: .opacity))
+                } else if hovering || isActive {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(settings.theme.textTertiary)
+                            .frame(width: 16, height: 16)
+                            .background(Circle().fill(hovering ? settings.theme.surfaceRaised : .clear))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close tab (⌘W)")
+                    .transition(.opacity)
                 }
             }
-        )
-        .shadow(color: isActive ? .black.opacity(0.08) : .clear, radius: 4, x: 0, y: 2)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if !isEditing { onSelect() }
+            .frame(width: 16, height: 16)
         }
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded {
-                if !tab.isSettingsTab { startEditing() }
+        .padding(.leading, 10)
+        .padding(.trailing, 6)
+        .frame(height: 28)
+        .background {
+            if isActive {
+                Color.clear
+                    .glassSurface(RoundedRectangle(cornerRadius: 9, style: .continuous), tint: settings.theme.accent)
+                    .matchedGeometryEffect(id: "activeTab", in: namespace)
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(settings.theme.surfaceRaised.opacity(0.6))
+                    .transition(.opacity)
             }
-        )
-        .onHover { isHovered = $0 }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { if !tab.isSettingsTab { startEditing() } }
+        .simultaneousGesture(TapGesture().onEnded { if !isEditing { onSelect() } })
+        .onHover { inside in withAnimation(Motion.quick) { hovering = inside } }
+        .animation(Motion.snappy, value: tab.needsAttention)
         .contextMenu {
             if !tab.isSettingsTab {
-                Button("Rename Tab") { startEditing() }
+                Button("Rename Tab…") { startEditing() }
+                if tab.isCustomTitle { Button("Reset Title") { tab.resetToAutoTitle() } }
+                Divider()
             }
             Button("Close Tab") { onClose() }
         }
     }
-    
+
     private func startEditing() {
         editingName = tab.title
         isEditing = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            isTextFieldFocused = true
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { fieldFocused = true }
     }
-    
+
     private func finishEditing() {
-        isTextFieldFocused = false  // Release focus
-        let trimmed = editingName.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty { onRename(trimmed) }
+        let name = editingName.trimmingCharacters(in: .whitespaces)
+        if !name.isEmpty { onRename(name) }
         isEditing = false
-        
-        // Reset window first responder to allow terminal to receive keyboard input
-        DispatchQueue.main.async {
-            NSApp.keyWindow?.makeFirstResponder(nil)
-        }
-    }
-    
-    private func cancelEditing() {
-        isTextFieldFocused = false
-        isEditing = false
-        DispatchQueue.main.async {
-            NSApp.keyWindow?.makeFirstResponder(nil)
-        }
+        fieldFocused = false
     }
 }
 
-// MARK: - Chrome Tab Shape (rounded top corners)
-struct ChromeTabShape: Shape {
+struct TabIcon: View {
+    @EnvironmentObject private var settings: UserSettings
+    @ObservedObject var tab: Tab
     let isActive: Bool
-    
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let radius: CGFloat = 8
-        
-        // Start at bottom left
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        
-        // Line up to curve start
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
-        
-        // Top left corner
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + radius, y: rect.minY),
-            control: CGPoint(x: rect.minX, y: rect.minY)
-        )
-        
-        // Top edge
-        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
-        
-        // Top right corner
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.minY + radius),
-            control: CGPoint(x: rect.maxX, y: rect.minY)
-        )
-        
-        // Right edge to bottom
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        
-        // Close path (bottom edge)
-        path.closeSubpath()
-        
-        return path
-    }
-}
 
-// MARK: - Legacy TabBarView (compatibility)
-struct TabBarView: View {
-    @ObservedObject var tabManager: TabManager
-    @ObservedObject var splitPaneManager: SplitPaneManager
-    @EnvironmentObject private var userSettings: UserSettings
-    let onTabSplit: () -> Void
-    
     var body: some View {
-        EmptyView()
+        ZStack {
+            if tab.isSettingsTab {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(isActive ? settings.theme.accent : settings.theme.textTertiary)
+            } else if let agent = tab.runningAgent {
+                AgentBadge(agent: agent, size: 15)
+                    .transition(.scale.combined(with: .opacity))
+            } else if tab.isRunning {
+                TabSpinner(color: settings.theme.accent)
+                    .transition(.opacity)
+            } else {
+                Image(systemName: "terminal")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(isActive ? settings.theme.accent : settings.theme.textTertiary)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: 16, height: 16)
+        .animation(Motion.snappy, value: tab.isRunning)
+        .animation(Motion.snappy, value: tab.runningAgent)
     }
 }
 
-// MARK: - Window Drag Area
+struct TabSpinner: View {
+    let color: Color
+    @State private var rotating = false
+
+    var body: some View {
+        Circle()
+            .trim(from: 0.15, to: 0.85)
+            .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            .frame(width: 11, height: 11)
+            .rotationEffect(.degrees(rotating ? 360 : 0))
+            .onAppear {
+                withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { rotating = true }
+            }
+    }
+}
+
+private struct NewTabButton: View {
+    @EnvironmentObject private var settings: UserSettings
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(hovering ? settings.theme.textPrimary : settings.theme.textTertiary)
+                .frame(width: 26, height: 26)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(hovering ? settings.theme.surfaceRaised.opacity(0.6) : .clear))
+                .rotationEffect(.degrees(hovering ? 90 : 0))
+        }
+        .buttonStyle(.plain)
+        .help("New tab (⌘T)")
+        .onHover { inside in withAnimation(Motion.snappy) { hovering = inside } }
+    }
+}
+
+struct SplitTabGroupView: View {
+    @EnvironmentObject private var settings: UserSettings
+    let group: SplitGroup
+    let leftTab: Tab
+    let rightTab: Tab
+    let isActive: Bool
+    let namespace: Namespace.ID
+    let onSelect: (UUID) -> Void
+    let onClose: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            mini(leftTab, focused: group.focusedPane == 0)
+            Image(systemName: group.direction == .horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(settings.theme.textTertiary)
+            mini(rightTab, focused: group.focusedPane == 1)
+            if hovering || isActive {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(settings.theme.textTertiary)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+                .help("Unsplit")
+            }
+        }
+        .padding(.horizontal, 5)
+        .frame(height: 28)
+        .background {
+            if isActive {
+                Color.clear
+                    .glassSurface(RoundedRectangle(cornerRadius: 9, style: .continuous), tint: settings.theme.accent)
+                    .matchedGeometryEffect(id: "activeTab", in: namespace)
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 9, style: .continuous).fill(settings.theme.surfaceRaised.opacity(0.6))
+            }
+        }
+        .onHover { inside in withAnimation(Motion.quick) { hovering = inside } }
+    }
+
+    private func mini(_ tab: Tab, focused: Bool) -> some View {
+        HStack(spacing: 5) {
+            TabIcon(tab: tab, isActive: focused && isActive)
+            Text(tab.title)
+                .font(Typography.ui(11.5, weight: focused && isActive ? .semibold : .medium))
+                .foregroundStyle(focused && isActive ? settings.theme.textPrimary : settings.theme.textSecondary)
+                .lineLimit(1)
+                .frame(maxWidth: 90)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(focused && isActive ? settings.theme.accentSoft : .clear))
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect(tab.id) }
+    }
+}
+
+// MARK: - Window chrome helpers
+
+/// Lets empty title-bar space drag the window.
 struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> DraggableView { DraggableView() }
     func updateNSView(_ nsView: DraggableView, context: Context) {}
 }
 
-class DraggableView: NSView {
+final class DraggableView: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            window?.performZoom(nil)
+        } else {
+            window?.performDrag(with: event)
+        }
+    }
 }
 
-#Preview {
-    TabBarContent(tabManager: TabManager())
-        .environmentObject(UserSettings())
-        .frame(width: 600, height: 40)
+/// Title-bar geometry so tabs line up with the traffic lights.
+@MainActor
+final class WindowMetrics: ObservableObject {
+    static let shared = WindowMetrics()
+    @Published var titlebarHeight: CGFloat = 40
+    @Published var leadingInset: CGFloat = Layout.trafficLightInset
+
+    func update(from window: NSWindow) {
+        let isFullScreen = window.styleMask.contains(.fullScreen)
+        let measured = window.frame.height - window.contentLayoutRect.height
+        let height = isFullScreen ? 40 : max(34, min(measured, 60))
+        if abs(height - titlebarHeight) > 0.5 { titlebarHeight = height }
+        var inset: CGFloat = 12
+        if !isFullScreen, let zoom = window.standardWindowButton(.zoomButton), !zoom.isHidden {
+            inset = zoom.frame.maxX + 14
+        }
+        if abs(inset - leadingInset) > 0.5 { leadingInset = inset }
+    }
+}
+
+extension Notification.Name {
+    static let closeSplitGroup = Notification.Name("CloseSplitGroup")
 }

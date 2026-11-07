@@ -1,93 +1,116 @@
-# Tethera Terminal
+<p align="center">
+  <img src="Tethera/Resources/Brand/AppIcon.png" width="112" alt="Tethera icon">
+</p>
 
-A modern, block-based terminal application for macOS built with SwiftUI and Metal.
+<h1 align="center">Tethera</h1>
+
+<p align="center">
+  A block-based terminal for macOS.<br>
+  Blocks for every command. AI from the CLIs you already use — no API keys.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg"><b>Download for Mac</b></a> ·
+  <a href="https://tsogbat.github.io/tethera/">Website</a> ·
+  <a href="https://github.com/Tsogbat/tethera/releases">Releases</a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screens/hero.png" alt="Tethera with command blocks, an AI fix suggestion and an AI answer">
+</p>
+
+## What's new in 0.3
+
+Tethera 0.3 is a rewrite of the terminal core and the UI.
+
+| v0.2 | v0.3 |
+| :---: | :---: |
+| <img src="docs/assets/screens/before.png" alt="Tethera 0.2"> | <img src="docs/assets/screens/after.png" alt="Tethera 0.3"> |
+
+- **A real terminal underneath.** Every tab runs your login shell in a pseudo-terminal (SwiftTerm). Output streams live with full ANSI color, and keys go to the running program, so `vim`, `htop`, `less`, `ssh`, REPLs and `sudo` prompts all work.
+- **Agents run inside.** `claude`, `codex`, `opencode`, `hermes`, `gemini` and other TUIs open full-pane with working keys, resize and mouse; finished sessions collapse back into a block.
+- **AI from your own logins.** Tethera drives the coding CLIs you're already signed in to — OpenCode (free models, the default), Claude Code, Codex, Hermes, Gemini or local Ollama.
+- **Race-free shell integration** for zsh and bash (OSC 133 / OSC 7), so blocks split exactly at command boundaries.
+- **New design**: flat blocks with cwd · branch · duration headers, title-bar tabs, a floating input bar, Liquid Glass on macOS 26, and nine themes with full 16-color palettes.
 
 ## Features
 
-### - Modern Block-Based Interface
+**Blocks**
+- Every command is a block: working directory, git branch, duration and an exit-code pill when it fails.
+- Hover a block to rerun, edit, copy the command or output, explain or fix it with AI, or attach it to your next AI question.
+- Long output collapses to its last lines, with a button to show the rest; Markdown output renders; `preview <file>` shows images inline.
 
-- **Visual Blocks**: Commands and outputs are organized into distinct blocks, making it easy to track execution history.
-- **Rich Interaction**: Edit and rerun commands inline within their blocks.
-- **Execution Timing**: Precise duration display for every command.
-- **Status Indicators**: Visual cues for command success or failure.
+**AI** (uses the CLI you pick in the input bar; tools are always off or read-only)
+- `#` + plain English → a shell command in the editor. It never runs until you press ↩.
+- `?` + a question → an answer block about your session, with Insert / Run on code.
+- **✦ Fix** — when a command fails, a suggested fix appears under the block and as ghost text.
+- **Send to agent** opens Claude Code, Codex, OpenCode, Hermes or Gemini in the pane, seeded with the block.
 
-### - Git Integration
+**Editing**
+- Ghost-text completion from your history (including `~/.zsh_history`), commands and subcommands; Tab for the menu, → to accept.
+- Multi-line input with ⇧↩, ↑/↓ history, ⌃R history search.
 
-- **Branch Display**: Shows current branch in header badge with color coding.
-- **Dirty Indicator**: Orange dot when uncommitted changes exist.
-- **Fast Detection**: File-based parsing (<1ms) instead of subprocess spawning.
+| AI provider | How Tethera calls it | Sign in with |
+| --- | --- | --- |
+| OpenCode *(default, free models)* | `opencode run --format json --agent plan` | `opencode auth login` |
+| Claude Code | `claude -p --tools "" --output-format stream-json` | `claude` → `/login` |
+| Codex | `codex exec --json -s read-only --ephemeral` | `codex login` |
+| Hermes | `hermes -z` | `hermes setup` |
+| Gemini CLI | `gemini -o stream-json` | `gemini` |
+| Ollama | `ollama run <model>` | — (local) |
 
-### - Inline Markdown Editing
+Settings → AI shows which CLIs are installed, lets you pick models, and has a Test button.
 
-- **Click-to-Edit**: Edit rendered markdown files directly within the terminal block.
-- **Split View**: Side-by-side raw editor and live preview.
-- **Seamless Saving**: Save changes directly back to the original file.
+## Install
 
-### - Image Previews
+1. [Download **Tethera-macOS.dmg**](https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg), open it, and drag Tethera to Applications.
+2. The build isn't notarized yet, so the first time, right-click Tethera.app → **Open** → **Open**. Or:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Tethera.app
+   ```
 
-- **Inline Display**: Preview images directly in terminal blocks.
-- **Commands**: `preview <file>` or `show <file>` to display images.
-- **Multiple Formats**: PNG, JPG, GIF, WEBP, HEIC, PDF support.
-- **Copy Image**: Copy the actual image to clipboard using the block action button.
-- **Click to Open**: Click images to open in Preview app.
+Requires macOS 14 Sonoma or later, on Apple silicon or Intel.
 
-### - High Performance
-
-- **Metal-Accelerated Rendering**: Uses a custom Metal engine for raw terminal performance, capable of 60fps even under heavy load.
-- **Static Command Sets**: Optimized autocomplete with pre-allocated data structures.
-- **Efficient Buffering**: Bulk array operations for large outputs.
-
-### - Smart Output
-
-- **Markdown Rendering**: Automatically detects and renders Markdown content (headers, tables, code blocks) in command outputs.
-- **Column Formatting**: Smartly aligns tab-separated output for better readability.
-
-### - Intelligent Assistance
-
-- **Ghost Text Autocomplete**: Context-aware suggestions as you type.
-- **Dropdown Suggestions**: Interactive menu for command and path completion.
-- **Path Resolution**: Smart handling of `~`, relative, and absolute paths.
-
-### - Customization
-
-- **Themes**: Built-in support for multiple color schemes including dark and light and "Liquid Glass" aesthetics.
-- **Fonts**: Bundled JetBrains Mono for a premium coding experience.
-- **Tabs & Split Panes**: Drag-and-drop tab management and split views for multitasking.
-
-## Quick Start
+### Build from source
 
 ```bash
 git clone https://github.com/Tsogbat/tethera.git
 cd tethera
-make run
+make run          # debug build
+make test         # unit + real-shell tests
+make app          # dist/Tethera.app and dist/Tethera-macOS.dmg (universal)
 ```
 
-## Keyboard Shortcuts
+Needs Xcode 26 (Swift 6.2).
 
-| Shortcut  | Action                     |
-| --------- | -------------------------- |
-| `Cmd+T`   | New tab                    |
-| `Cmd+D`   | Split pane                 |
-| `Cmd+F`   | Search history             |
-| `Cmd+,`   | Settings                   |
-| `↑` / `↓` | Command history navigation |
-| `Tab`     | Autocomplete / Dropdown    |
+## Keyboard shortcuts
 
-## Built-in Commands
+| Shortcut | Action |
+| --- | --- |
+| ⌘T / ⌘W | New tab / close tab |
+| ⌘D / ⌘⇧D | Split right / split down |
+| ⌘P | Command palette |
+| ⌘F, ⌃R | Search history |
+| ⌘K | Clear blocks |
+| ⌘I | Toggle AI mode |
+| ⌘↑ / ⌘↓ | Select previous / next block |
+| ⌘⇧C | Copy selected block |
+| ⌘+ / ⌘- / ⌘0 | Font size |
+| ⌘, | Settings |
+| ⌃C | Interrupt the running command |
 
-| Command          | Description          |
-| ---------------- | -------------------- |
-| `clear`          | Clear all blocks     |
-| `quit`, `exit`   | Quit the application |
-| `preview <file>` | Display image inline |
-| `show <file>`    | Alias for preview    |
+## Built-in commands
+
+| Command | Description |
+| --- | --- |
+| `clear` | Clear all blocks |
+| `exit`, `quit` | Close the tab |
+| `preview <file>`, `show <file>` | Show an image inline |
 
 ## Architecture
 
-Tethera uses a hybrid architecture combining SwiftUI for the block-based UI and Metal for high-performance rendering.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed technical documentation.
+See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
-GNU AFFERO GENERAL PUBLIC LICENSE — See [LICENCE.TXT](LICENCE.TXT)
+GNU Affero General Public License v3 — see [LICENCE.TXT](LICENCE.TXT).

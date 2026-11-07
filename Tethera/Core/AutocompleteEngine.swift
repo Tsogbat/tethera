@@ -3,7 +3,8 @@ import Foundation
 /// Warp-style autocompletion engine with two modes:
 /// 1. Inline ghost completion (→ to accept)
 /// 2. Tab dropdown suggestions (Tab to show, arrows to navigate)
-class AutocompleteEngine: ObservableObject {
+@MainActor
+final class AutocompleteEngine: ObservableObject {
     // MARK: - Published State
     
     /// Ghost text shown inline after cursor (accept with → key)
@@ -349,7 +350,7 @@ class AutocompleteEngine: ObservableObject {
     /// Called on every keystroke
     func updateInlineCompletion(for input: String, history: [String], workingDirectory: String = "") {
         guard !input.isEmpty else {
-            DispatchQueue.main.async { self.inlineCompletion = "" }
+            self.inlineCompletion = ""
             return
         }
         
@@ -359,14 +360,14 @@ class AutocompleteEngine: ObservableObject {
         if components.count >= 2, let cmd = components.first {
             let cmdStr = String(cmd).lowercased()
             if Self.noCompletionCommands.contains(cmdStr) {
-                DispatchQueue.main.async { self.inlineCompletion = "" }
+                self.inlineCompletion = ""
                 return
             }
         }
         
         // Priority 1: Match from command history (context-aware)
         if let historyMatch = findHistoryMatch(input: input, history: history, workingDirectory: workingDirectory) {
-            DispatchQueue.main.async { self.inlineCompletion = historyMatch }
+            self.inlineCompletion = historyMatch
             return
         }
         
@@ -374,7 +375,7 @@ class AutocompleteEngine: ObservableObject {
         if components.count == 1, let command = components.first {
             if let match = Self.commonCommands.first(where: { $0.hasPrefix(String(command).lowercased()) && $0 != String(command).lowercased() }) {
                 let completion = String(match.dropFirst(command.count))
-                DispatchQueue.main.async { self.inlineCompletion = input + completion }
+                self.inlineCompletion = input + completion
                 return
             }
         }
@@ -385,28 +386,24 @@ class AutocompleteEngine: ObservableObject {
             // Skip if it's a standalone command
             if !Self.noCompletionCommands.contains(cmdStr) {
                 if let completions = Self.commandCompletions[cmdStr], let first = completions.first {
-                    DispatchQueue.main.async { self.inlineCompletion = input + first.text }
+                    self.inlineCompletion = input + first.text
                     return
                 }
             }
         }
         
-        DispatchQueue.main.async { self.inlineCompletion = "" }
+        self.inlineCompletion = ""
     }
     
     private func findHistoryMatch(input: String, history: [String], workingDirectory: String) -> String? {
-        let lowercaseInput = input.lowercased()
         let currentDirName = (workingDirectory as NSString).lastPathComponent.lowercased()
-        let parentDirName = ((workingDirectory as NSString).deletingLastPathComponent as NSString).lastPathComponent.lowercased()
         
         // Command type categories (use static sets)
         let createCommands = Set(["mkdir", "touch"]) // Target should NOT exist
         
         for entry in history.reversed() {
-            let lowercaseEntry = entry.lowercased()
-            
-            // Skip if doesn't match prefix
-            guard lowercaseEntry.hasPrefix(lowercaseInput) && lowercaseEntry != lowercaseInput else { continue }
+            // Case-sensitive so the ghost text always continues exactly what was typed.
+            guard entry.hasPrefix(input) && entry != input, !entry.contains("\n") else { continue }
             
             // Extract command and target
             let parts = entry.split(separator: " ", maxSplits: 1)
@@ -478,11 +475,9 @@ class AutocompleteEngine: ObservableObject {
         // Generate filtered suggestions
         let fallbackSuggestions = generateSuggestions(for: input, workingDirectory: workingDirectory)
         
-        DispatchQueue.main.async {
-            self.dropdownSuggestions = fallbackSuggestions
-            self.isDropdownVisible = !fallbackSuggestions.isEmpty
-            self.selectedIndex = 0
-        }
+        dropdownSuggestions = fallbackSuggestions
+        isDropdownVisible = !fallbackSuggestions.isEmpty
+        selectedIndex = 0
         
         // Skip shell completions for directory-only commands (cd, pushd, etc)
         // Our path resolution handles these better with home directory fallback
@@ -512,21 +507,17 @@ class AutocompleteEngine: ObservableObject {
                 }
             }
             
-            DispatchQueue.main.async {
-                if self.isDropdownVisible {
-                    self.dropdownSuggestions = merged
-                }
+            if self.isDropdownVisible {
+                self.dropdownSuggestions = merged
             }
         }
     }
     
     /// Hide the dropdown
     func hideDropdown() {
-        DispatchQueue.main.async {
-            self.isDropdownVisible = false
-            self.dropdownSuggestions = []
-            self.selectedIndex = 0
-        }
+        isDropdownVisible = false
+        dropdownSuggestions = []
+        selectedIndex = 0
     }
     
     /// Toggle dropdown visibility
@@ -541,16 +532,12 @@ class AutocompleteEngine: ObservableObject {
     /// Navigate dropdown with arrow keys
     func navigateDown() {
         guard !dropdownSuggestions.isEmpty else { return }
-        DispatchQueue.main.async {
-            self.selectedIndex = min(self.selectedIndex + 1, self.dropdownSuggestions.count - 1)
-        }
+        selectedIndex = min(selectedIndex + 1, dropdownSuggestions.count - 1)
     }
     
     func navigateUp() {
         guard !dropdownSuggestions.isEmpty else { return }
-        DispatchQueue.main.async {
-            self.selectedIndex = max(self.selectedIndex - 1, 0)
-        }
+        selectedIndex = max(selectedIndex - 1, 0)
     }
     
     /// Get currently selected suggestion
@@ -570,6 +557,7 @@ class AutocompleteEngine: ObservableObject {
         
         let prefix = String(lastComponent)
         let suffix = suggestion.type == .directory ? "/" : ""
+        let text = suggestion.type == .command ? suggestion.text : suggestion.text.replacingOccurrences(of: " ", with: "\\ ")
         
         // Check if the prefix contains a path (has /)
         if prefix.contains("/") {
@@ -579,14 +567,14 @@ class AutocompleteEngine: ObservableObject {
                 // Keep everything before the last segment
                 let pathPrefix = pathParts.dropLast().joined(separator: "/") + "/"
                 var newComponents = Array(components.dropLast())
-                newComponents.append(Substring(pathPrefix + suggestion.text + suffix))
+                newComponents.append(Substring(pathPrefix + text + suffix))
                 return newComponents.joined(separator: " ")
             }
         }
         
         // No path prefix - just replace last component
         var newComponents = Array(components.dropLast())
-        newComponents.append(Substring(suggestion.text + suffix))
+        newComponents.append(Substring(text + suffix))
         return newComponents.joined(separator: " ")
     }
     
@@ -694,19 +682,17 @@ class AutocompleteEngine: ObservableObject {
                 // Absolute path
                 searchDir = "/" + pathPart
             } else {
-                // Relative path - try HOME first (Projects, Documents etc are typically there)
-                // then fall back to working directory
-                let tryHomeDir = (home as NSString).appendingPathComponent(pathPart)
+                // Relative path: resolve against the working directory, then home.
                 let tryWorkingDir = (workingDirectory as NSString).appendingPathComponent(pathPart)
-                
+                let tryHomeDir = (home as NSString).appendingPathComponent(pathPart)
+
                 var isDir: ObjCBool = false
-                if fileManager.fileExists(atPath: tryHomeDir, isDirectory: &isDir) && isDir.boolValue {
-                    searchDir = tryHomeDir
-                } else if fileManager.fileExists(atPath: tryWorkingDir, isDirectory: &isDir) && isDir.boolValue {
+                if fileManager.fileExists(atPath: tryWorkingDir, isDirectory: &isDir) && isDir.boolValue {
                     searchDir = tryWorkingDir
-                } else {
-                    // Neither exists, try home
+                } else if fileManager.fileExists(atPath: tryHomeDir, isDirectory: &isDir) && isDir.boolValue {
                     searchDir = tryHomeDir
+                } else {
+                    searchDir = tryWorkingDir
                 }
             }
         } else {
@@ -720,7 +706,7 @@ class AutocompleteEngine: ObservableObject {
         
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: searchDir)
-            for item in contents where !item.hasPrefix(".") {
+            for item in contents where !item.hasPrefix(".") || searchPrefix.hasPrefix(".") {
                 if searchPrefix.isEmpty || item.lowercased().hasPrefix(searchPrefix.lowercased()) {
                     var isDirectory: ObjCBool = false
                     let fullPath = (searchDir as NSString).appendingPathComponent(item)
@@ -746,12 +732,10 @@ class AutocompleteEngine: ObservableObject {
     
     /// Clear all completion state
     func clear() {
-        DispatchQueue.main.async {
-            self.inlineCompletion = ""
-            self.dropdownSuggestions = []
-            self.isDropdownVisible = false
-            self.selectedIndex = 0
-        }
+        inlineCompletion = ""
+        dropdownSuggestions = []
+        isDropdownVisible = false
+        selectedIndex = 0
     }
 }
 
@@ -789,147 +773,93 @@ struct AutocompleteSuggestion: Identifiable, Hashable {
 
 // MARK: - Shell Completion Provider
 
-/// Queries the shell for real completions using zsh's completion system
-class ShellCompletionProvider {
+/// Asks bash's `compgen` (zsh has no scriptable equivalent) for command and
+/// subcommand completions. Runs off the main thread with a short timeout.
+final class ShellCompletionProvider: @unchecked Sendable {
     static let shared = ShellCompletionProvider()
-    
-    private let completionQueue = DispatchQueue(label: "com.tethera.completion", qos: .userInitiated)
+
+    private let queue = DispatchQueue(label: "com.tethera.completion", qos: .userInitiated)
     private var cache: [String: (completions: [String], timestamp: Date)] = [:]
-    private let cacheTimeout: TimeInterval = 30 // Cache for 30 seconds
-    
+    private let cacheTimeout: TimeInterval = 30
+
     private init() {}
-    
-    /// Query zsh for completions (async with timeout)
-    func queryCompletions(for input: String, workingDirectory: String, timeout: TimeInterval = 0.3, completion: @escaping ([AutocompleteSuggestion]) -> Void) {
+
+    func queryCompletions(for input: String, workingDirectory: String, completion: @escaping ([AutocompleteSuggestion]) -> Void) {
         guard !input.isEmpty else {
             completion([])
             return
         }
-        
-        // Check cache first
-        let cacheKey = "\(workingDirectory):\(input)"
-        if let cached = cache[cacheKey], Date().timeIntervalSince(cached.timestamp) < cacheTimeout {
-            let suggestions = cached.completions.map { self.parseCompletion($0, workingDirectory: workingDirectory) }
-            completion(suggestions)
-            return
-        }
-        
-        completionQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            let result = self.executeCompletionQuery(input: input, workingDirectory: workingDirectory)
-            
-            // Cache the result
-            self.cache[cacheKey] = (result, Date())
-            
-            let suggestions = result.map { self.parseCompletion($0, workingDirectory: workingDirectory) }
-            
+        queue.async { [weak self] in
+            guard let self else { return }
+            let key = "\(workingDirectory)\u{0}\(input)"
+            let results: [String]
+            if let cached = self.cache[key], Date().timeIntervalSince(cached.timestamp) < self.cacheTimeout {
+                results = cached.completions
+            } else {
+                results = self.execute(input: input, workingDirectory: workingDirectory)
+                self.cache[key] = (results, Date())
+                if self.cache.count > 200 { self.cache.removeAll() }
+            }
+            let suggestions = results.map { Self.parse($0, workingDirectory: workingDirectory) }
             DispatchQueue.main.async {
                 completion(suggestions)
             }
         }
     }
-    
-    private func executeCompletionQuery(input: String, workingDirectory: String) -> [String] {
-        // Use zsh's capture_completions to get real completions
+
+    private func execute(input: String, workingDirectory: String) -> [String] {
+        let quoted = ShellQuoting.singleQuote(input)
         let script = """
-        cd '\(workingDirectory.replacingOccurrences(of: "'", with: "'\\''"))' 2>/dev/null
-        autoload -Uz compinit 2>/dev/null
-        compinit -C 2>/dev/null
-        
-        # Capture completions for the input
-        capture_completions() {
-            local input="$1"
-            local cmd="${input%% *}"
-            local args="${input#* }"
-            
-            # For commands with arguments, try to get subcommand completions
-            if [[ "$input" == *" "* ]]; then
-                case "$cmd" in
-                    git)
-                        if [[ "$args" == "" ]] || [[ "$args" == "$input" ]]; then
-                            git --list-cmds=main 2>/dev/null | head -20
-                        else
-                            # Get completions for git subcommands
-                            compgen -W "$(git --list-cmds=main 2>/dev/null)" -- "${args%% *}" 2>/dev/null | head -15
-                        fi
-                        ;;
-                    brew)
-                        brew commands 2>/dev/null | head -20
-                        ;;
-                    npm)
-                        echo "install\\nstart\\nrun\\ntest\\nbuild\\ninit\\npublish\\nversion\\nupdate\\naudit\\nci\\nlink\\nuninstall"
-                        ;;
-                    pip|pip3)
-                        echo "install\\nuninstall\\nfreeze\\nlist\\nshow\\nsearch\\ndownload\\nwheel\\nhash\\ncompletion\\nconfig\\ncache\\nindex\\ncheck"
-                        ;;
-                    docker)
-                        docker --help 2>/dev/null | grep -E '^  [a-z]' | awk '{print $1}' | head -20
-                        ;;
-                    cargo)
-                        echo "build\\nrun\\ntest\\ncheck\\nclean\\ndoc\\nnew\\ninit\\nadd\\nremove\\nupdate\\nsearch\\npublish\\ninstall\\nuninstall"
-                        ;;
-                    *)
-                        # For other commands, try to list files/directories
-                        ls -1 2>/dev/null | head -20
-                        ;;
-                esac
-            else
-                # Complete command names
-                compgen -c -- "$input" 2>/dev/null | sort -u | head -20
-            fi
-        }
-        
-        capture_completions '\(input.replacingOccurrences(of: "'", with: "'\\''"))'
+        input=\(quoted)
+        cmd="${input%% *}"
+        if [[ "$input" == *" "* ]]; then
+            rest="${input#* }"
+            word="${rest##* }"
+            case "$cmd" in
+                git) compgen -W "$(git --list-cmds=main,others,alias 2>/dev/null)" -- "$word" ;;
+                brew) compgen -W "$(brew commands --quiet 2>/dev/null)" -- "$word" ;;
+                *) compgen -f -- "$word" ;;
+            esac
+        else
+            compgen -c -- "$input" | sort -u
+        fi
         """
-        
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-c", script]
-        process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
-        
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["--noprofile", "--norc", "-c", script]
+        if FileManager.default.fileExists(atPath: workingDirectory) {
+            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        }
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
-        
+        process.standardInput = FileHandle.nullDevice
         do {
             try process.run()
-            process.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                return output.components(separatedBy: .newlines)
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
-                    .prefix(20)
-                    .map { String($0) }
-            }
         } catch {
-            // Silently fail - caller will use fallback
+            return []
         }
-        
-        return []
+        let timer = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.6, execute: timer)
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        timer.cancel()
+        return String(decoding: data, as: UTF8.self)
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .prefix(24)
+            .map { String($0) }
     }
-    
-    private func parseCompletion(_ completion: String, workingDirectory: String) -> AutocompleteSuggestion {
-        // Check if it's a directory
-        let fullPath = (workingDirectory as NSString).appendingPathComponent(completion)
+
+    private static func parse(_ completion: String, workingDirectory: String) -> AutocompleteSuggestion {
+        let fullPath = completion.hasPrefix("/") ? completion : (workingDirectory as NSString).appendingPathComponent(completion)
         var isDir: ObjCBool = false
-        
         if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir) {
-            if isDir.boolValue {
-                return AutocompleteSuggestion(text: completion, type: .directory, description: "Directory")
-            } else {
-                return AutocompleteSuggestion(text: completion, type: .file, description: "File")
-            }
+            return isDir.boolValue
+                ? AutocompleteSuggestion(text: completion, type: .directory, description: "Folder")
+                : AutocompleteSuggestion(text: completion, type: .file, description: "File")
         }
-        
-        // Default to command/subcommand
         return AutocompleteSuggestion(text: completion, type: .command, description: "")
-    }
-    
-    /// Clear completion cache
-    func clearCache() {
-        cache.removeAll()
     }
 }

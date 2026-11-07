@@ -1,282 +1,370 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Split Direction
-enum SplitDirection {
-    case horizontal  // Side by side
-    case vertical    // Top and bottom
+enum SplitDirection: Equatable {
+    case horizontal  // side by side
+    case vertical    // stacked
 }
 
-// MARK: - Split Group (supports multiple splits)
 struct SplitGroup: Identifiable, Equatable {
     let id: UUID
     var leftTabId: UUID
     var rightTabId: UUID
     var direction: SplitDirection
-    var colorIndex: Int  // 0-5 for color palette
-    var focusedPane: Int = 0  // 0 = left, 1 = right
-    
-    static let colors: [SwiftUI.Color] = [
-        .blue, SwiftUI.Color(red: 0.6, green: 0.4, blue: 0.8), .green, SwiftUI.Color(red: 1, green: 0.6, blue: 0.2), SwiftUI.Color(red: 1, green: 0.4, blue: 0.6), .cyan
-    ]
-    
-    var color: SwiftUI.Color {
-        SplitGroup.colors[colorIndex % SplitGroup.colors.count]
-    }
-    
+    var focusedPane: Int = 0
+
     func contains(_ tabId: UUID) -> Bool {
         leftTabId == tabId || rightTabId == tabId
     }
 }
 
-// MARK: - Main Tabbed Terminal View
+/// The window: title-bar tabs, the active tab (or a split pair), and app overlays.
 struct TabbedTerminalView: View {
     @StateObject private var tabManager = TabManager()
-    @EnvironmentObject private var userSettings: UserSettings
+    @EnvironmentObject private var settings: UserSettings
+    @ObservedObject private var errorReporter = AppErrorReporter.shared
+    @ObservedObject private var history = CommandHistoryManager.shared
+    @ObservedObject private var metrics = WindowMetrics.shared
+
     @State private var splitGroups: [SplitGroup] = []
-    @State private var activeSplitGroupId: UUID? = nil
-    @State private var dropEdge: DropEdge? = nil
-    @StateObject private var errorReporter = AppErrorReporter.shared
-    
-    // Computed: get active split group
+    @State private var activeSplitGroupId: UUID?
+    @State private var dropEdge: DropEdge?
+    @State private var isPaletteOpen = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var activeSplitGroup: SplitGroup? {
         guard let id = activeSplitGroupId else { return nil }
         return splitGroups.first { $0.id == id }
     }
-    
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Tab bar with split group info
-            TabBarContent(
-                tabManager: tabManager,
-                splitGroups: splitGroups,
-                activeSplitGroupId: activeSplitGroupId
-            )
-            
-            // Content area
-            GeometryReader { geo in
-                ZStack {
-                    if let group = activeSplitGroup {
-                        splitContentView(for: group)
-                    } else {
-                        singleContentView
+        ZStack {
+            VStack(spacing: 0) {
+                TabBarContent(tabManager: tabManager, splitGroups: splitGroups, activeSplitGroupId: activeSplitGroupId,
+                              onOpenPalette: { togglePalette() })
+                    .zIndex(2)
+
+                GeometryReader { geo in
+                    ZStack {
+                        if let group = activeSplitGroup {
+                            splitContent(for: group)
+                                .transition(.opacity)
+                        } else {
+                            singleContent
+                                .transition(.opacity)
+                        }
+                        if let edge = dropEdge {
+                            DropIndicatorOverlay(edge: edge, size: geo.size)
+                                .allowsHitTesting(false)
+                                .transition(.opacity)
+                        }
                     }
-                    
-                    // Drop indicator overlay
-                    if let edge = dropEdge {
-                        DropIndicatorOverlay(edge: edge, size: geo.size)
-                            .allowsHitTesting(false)
-                            .transition(.opacity)
-                    }
+                    .animation(Motion.fade, value: dropEdge)
+                    .animation(Motion.adaptive(Motion.smooth, reduceMotion: reduceMotion), value: activeSplitGroupId)
+                    .onDrop(of: [.text], delegate: SplitDropDelegate(
+                        tabManager: tabManager,
+                        splitGroups: $splitGroups,
+                        activeSplitGroupId: $activeSplitGroupId,
+                        dropEdge: $dropEdge,
+                        containerSize: geo.size
+                    ))
                 }
-                .animation(.easeInOut(duration: 0.2), value: dropEdge)
-                .animation(.easeInOut(duration: 0.2), value: activeSplitGroupId)
-                .onDrop(of: [.text], delegate: SplitDropDelegate(
-                    tabManager: tabManager,
-                    splitGroups: $splitGroups,
-                    activeSplitGroupId: $activeSplitGroupId,
-                    dropEdge: $dropEdge,
-                    containerSize: geo.size
-                ))
+                // Scroll views extend under the title bar on macOS 26; keep blocks below the tabs.
+                .clipped()
+            }
+
+            if isPaletteOpen {
+                CommandPaletteView(actions: paletteActions, onDismiss: { togglePalette() })
+                    .transition(.opacity)
+                    .zIndex(10)
+            }
+            if history.isSearching {
+                SearchOverlayView(historyManager: history, onJump: jump(to:), onDismiss: {
+                    withAnimation(Motion.snappy) { history.closeSearch() }
+                    tabManager.activeViewModel?.insert("")
+                })
+                .transition(.opacity)
+                .zIndex(11)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(userSettings.themeConfiguration.backgroundColor.color)
-        .preferredColorScheme(userSettings.themeConfiguration.isDarkMode ? .dark : .light)
         .overlay(alignment: .top) {
             if let error = errorReporter.current {
-                ErrorBannerView(error: error) {
-                    errorReporter.clear()
-                }
-                .padding(.top, 6)
-                .padding(.horizontal, 12)
-                .transition(.opacity)
+                ErrorBannerView(error: error) { errorReporter.clear() }
+                    .padding(.top, metrics.titlebarHeight + 6)
+                    .padding(.horizontal, 16)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(20)
             }
         }
-        .onChange(of: tabManager.activeTabId) { _, newActiveId in
-            guard let newId = newActiveId else { return }
-            dropEdge = nil
-            
-            // Check if clicked tab is in any split group
-            if let group = splitGroups.first(where: { $0.contains(newId) }) {
-                // Activate this split group and update focused pane
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    activeSplitGroupId = group.id
-                    if let idx = splitGroups.firstIndex(where: { $0.id == group.id }) {
-                        splitGroups[idx].focusedPane = (newId == group.leftTabId) ? 0 : 1
-                    }
-                }
-            } else {
-                // Tab not in any split - deactivate split view
-                withAnimation(.easeInOut(duration: 0.2)) {
+        .animation(Motion.adaptive(Motion.snappy, reduceMotion: reduceMotion), value: isPaletteOpen)
+        .animation(Motion.adaptive(Motion.snappy, reduceMotion: reduceMotion), value: history.isSearching)
+        .animation(Motion.smooth, value: errorReporter.current)
+        .ignoresSafeArea(.container, edges: .top)
+        .background(
+            WindowBackdrop(tint: settings.theme.backgroundNS, opacity: settings.terminal.windowOpacity)
+                .ignoresSafeArea()
+        )
+        .preferredColorScheme(settings.themeConfiguration.isDarkMode ? .dark : .light)
+        .animation(.easeInOut(duration: 0.25), value: settings.selectedThemeId)
+        .onReceive(AppCommands.shared.publisher) { handle($0) }
+        .onReceive(NotificationCenter.default.publisher(for: .tabClosed)) { note in
+            guard let tabId = note.userInfo?["tabId"] as? UUID else { return }
+            withAnimation(Motion.smooth) {
+                splitGroups.removeAll { $0.contains(tabId) }
+                if let active = activeSplitGroupId, !splitGroups.contains(where: { $0.id == active }) {
                     activeSplitGroupId = nil
                 }
             }
         }
-        .onAppear {
-            setupKeyboardShortcuts()
-            setupTabCloseHandler()
-        }
-    }
-    
-    // MARK: - Handle Tab Closure
-    private func setupTabCloseHandler() {
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("TabClosed"), object: nil, queue: .main) { notification in
-            guard let tabId = notification.userInfo?["tabId"] as? UUID else { return }
-            Task { @MainActor in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    splitGroups.removeAll { $0.contains(tabId) }
-                    if let activeId = activeSplitGroupId, !splitGroups.contains(where: { $0.id == activeId }) {
-                        activeSplitGroupId = nil
-                    }
-                }
+        .onReceive(NotificationCenter.default.publisher(for: .closeSplitGroup)) { note in
+            guard let groupId = note.userInfo?["groupId"] as? UUID else { return }
+            withAnimation(Motion.smooth) {
+                splitGroups.removeAll { $0.id == groupId }
+                if activeSplitGroupId == groupId { activeSplitGroupId = nil }
             }
         }
-        
-        // Handle close split group (X button on grouped tab)
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("CloseSplitGroup"), object: nil, queue: .main) { notification in
-            guard let groupId = notification.userInfo?["groupId"] as? UUID else { return }
-            Task { @MainActor in
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    splitGroups.removeAll { $0.id == groupId }
-                    if activeSplitGroupId == groupId {
-                        activeSplitGroupId = nil
-                    }
-                }
-            }
-        }
-    }
-    
-    // MARK: - Single Content View
-    @ViewBuilder
-    private var singleContentView: some View {
-        if let activeTab = tabManager.activeTab {
-            if activeTab.isSettingsTab {
-                NativeSettingsView()
+        .onChange(of: tabManager.activeTabId) { _, newId in
+            guard let newId else { return }
+            dropEdge = nil
+            if let index = splitGroups.firstIndex(where: { $0.contains(newId) }) {
+                activeSplitGroupId = splitGroups[index].id
+                splitGroups[index].focusedPane = newId == splitGroups[index].leftTabId ? 0 : 1
             } else {
-                BlockTerminalView(viewModel: activeTab.viewModel, isActivePane: true)
+                activeSplitGroupId = nil
+            }
+        }
+        .onAppear {
+            tabManager.onEmpty = {
+                NSApp.keyWindow?.close()
+            }
+            #if DEBUG
+            DebugState.tabManager = tabManager
+            #endif
+        }
+    }
+
+    // MARK: Content
+
+    @ViewBuilder
+    private var singleContent: some View {
+        if let tab = tabManager.activeTab {
+            if tab.isSettingsTab {
+                NativeSettingsView()
+            } else if let viewModel = tab.viewModel {
+                TerminalPaneView(viewModel: viewModel, isActivePane: true)
+                    .id(tab.id)
             }
         }
     }
-    
-    // MARK: - Split Content View
+
     @ViewBuilder
-    private func splitContentView(for group: SplitGroup) -> some View {
-        let leftTab = tabManager.tabs.first { $0.id == group.leftTabId }
-        let rightTab = tabManager.tabs.first { $0.id == group.rightTabId }
-        
+    private func splitContent(for group: SplitGroup) -> some View {
+        let left = tabManager.tab(with: group.leftTabId)
+        let right = tabManager.tab(with: group.rightTabId)
         if group.direction == .horizontal {
             HSplitView {
-                if let tab = leftTab {
-                    paneView(for: tab, paneIndex: 0, group: group)
-                }
-                if let tab = rightTab {
-                    paneView(for: tab, paneIndex: 1, group: group)
-                }
+                if let left { pane(left, index: 0, group: group) }
+                if let right { pane(right, index: 1, group: group) }
             }
         } else {
             VSplitView {
-                if let tab = leftTab {
-                    paneView(for: tab, paneIndex: 0, group: group)
-                }
-                if let tab = rightTab {
-                    paneView(for: tab, paneIndex: 1, group: group)
-                }
+                if let left { pane(left, index: 0, group: group) }
+                if let right { pane(right, index: 1, group: group) }
             }
         }
     }
-    
-    private func paneView(for tab: Tab, paneIndex: Int, group: SplitGroup) -> some View {
-        BlockTerminalView(viewModel: tab.viewModel, isActivePane: group.focusedPane == paneIndex)
-            .overlay(
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(
-                        group.focusedPane == paneIndex 
-                            ? group.color.opacity(0.6) 
-                            : SwiftUI.Color.clear,
-                        lineWidth: 2
-                    )
-                    .padding(2)
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if let idx = splitGroups.firstIndex(where: { $0.id == group.id }) {
-                    splitGroups[idx].focusedPane = paneIndex
-                }
-                tabManager.setActiveTab(tab.id)
+
+    @ViewBuilder
+    private func pane(_ tab: Tab, index: Int, group: SplitGroup) -> some View {
+        let focused = group.focusedPane == index
+        Group {
+            if let viewModel = tab.viewModel {
+                TerminalPaneView(viewModel: viewModel, isActivePane: focused)
+            } else {
+                NativeSettingsView()
             }
+        }
+        .frame(minWidth: 280, minHeight: 200)
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(settings.theme.accent.opacity(focused ? 0.35 : 0), lineWidth: 1)
+                .padding(3)
+                .allowsHitTesting(false)
+                .animation(Motion.quick, value: focused)
+        }
+        .opacity(focused ? 1 : 0.86)
+        .simultaneousGesture(TapGesture().onEnded {
+            if let i = splitGroups.firstIndex(where: { $0.id == group.id }) {
+                splitGroups[i].focusedPane = index
+            }
+            tabManager.setActiveTab(tab.id)
+        })
     }
-    
-    // MARK: - Keyboard Shortcuts
-    private func setupKeyboardShortcuts() {
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "t" {
-                tabManager.createNewTab()
-                return nil
+
+    // MARK: Commands
+
+    private var activeViewModel: BlockTerminalViewModel? {
+        tabManager.activeViewModel
+    }
+
+    private func handle(_ command: AppCommand) {
+        switch command {
+        case .newTab:
+            tabManager.createNewTab()
+        case .closeTab:
+            if isPaletteOpen { togglePalette(); return }
+            if history.isSearching { history.closeSearch(); return }
+            tabManager.closeActiveTab()
+        case .splitRight:
+            split(.horizontal)
+        case .splitDown:
+            split(.vertical)
+        case .nextTab:
+            tabManager.selectTab(offset: 1)
+        case .previousTab:
+            tabManager.selectTab(offset: -1)
+        case .selectTab(let number):
+            tabManager.selectTab(number: number)
+        case .clear:
+            activeViewModel?.clearBlocks()
+        case .palette:
+            togglePalette()
+        case .search:
+            withAnimation(Motion.snappy) {
+                if history.isSearching { history.closeSearch() } else { history.openSearch() }
             }
-            if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "w" {
-                if activeSplitGroupId != nil {
-                    closeSplit()
-                } else if tabManager.tabs.count > 1 {
-                    if let activeId = tabManager.activeTabId {
-                        tabManager.closeTab(activeId)
-                    }
-                }
-                return nil
+        case .toggleAIMode:
+            guard let viewModel = activeViewModel else { return }
+            viewModel.aiModeSticky.toggle()
+            viewModel.insert("")
+        case .openSettings:
+            tabManager.openSettingsTab()
+        case .fontBigger:
+            settings.adjustFontSize(by: 1)
+        case .fontSmaller:
+            settings.adjustFontSize(by: -1)
+        case .fontReset:
+            settings.resetFontSize()
+        case .previousBlock:
+            activeViewModel?.selectAdjacent(-1)
+        case .nextBlock:
+            activeViewModel?.selectAdjacent(1)
+        case .copyBlock:
+            _ = activeViewModel?.copySelectedBlock()
+        case .restartShell:
+            activeViewModel?.restartShell()
+        case .interrupt:
+            activeViewModel?.interrupt()
+        case .runInNewTab(let commandLine):
+            tabManager.openTab(running: commandLine)
+        case .launchAgent(let agent):
+            if let viewModel = activeViewModel, !viewModel.isRunning {
+                viewModel.launchAgent(agent)
+            } else {
+                tabManager.openTab(running: agent.interactiveCommand(prompt: nil))
             }
-            return event
-        }
-        
-        NotificationCenter.default.addObserver(forName: .openSettingsTab, object: nil, queue: .main) { _ in
-            Task { @MainActor in
-                tabManager.openSettingsTab()
-            }
+        #if DEBUG
+        case .runInActiveTab(let commandLine):
+            activeViewModel?.submit(commandLine)
+        case .debugInsert(let text):
+            activeViewModel?.insert(text)
+        case .debugAsk(let question):
+            activeViewModel?.ask(question)
+        case .debugGenerate(let request):
+            activeViewModel?.generateCommand(from: request)
+        case .debugSendKeys(let keys):
+            activeViewModel?.debugSendKeys(keys)
+        #endif
         }
     }
-    
-    private func closeSplit() {
-        guard let group = activeSplitGroup else { return }
-        let keepTabId = group.focusedPane == 0 ? group.leftTabId : group.rightTabId
-        withAnimation(.easeInOut(duration: 0.2)) {
-            splitGroups.removeAll { $0.id == group.id }
-            activeSplitGroupId = nil
+
+    private func togglePalette() {
+        isPaletteOpen.toggle()
+        if !isPaletteOpen { activeViewModel?.insert("") }
+    }
+
+    private func split(_ direction: SplitDirection) {
+        guard let active = tabManager.activeTab, !active.isSettingsTab else { return }
+        let newTab = tabManager.createNewTab(activate: false)
+        withAnimation(Motion.smooth) {
+            splitGroups.removeAll { $0.contains(active.id) }
+            let group = SplitGroup(id: UUID(), leftTabId: active.id, rightTabId: newTab.id, direction: direction, focusedPane: 1)
+            splitGroups.append(group)
+            activeSplitGroupId = group.id
         }
-        tabManager.setActiveTab(keepTabId)
+        tabManager.setActiveTab(newTab.id)
+    }
+
+    private func jump(to entry: CommandHistoryManager.HistoryEntry) {
+        withAnimation(Motion.snappy) { history.closeSearch() }
+        if let tabId = entry.tabId, let tab = tabManager.tab(with: tabId), tab.viewModel?.block(entry.id) != nil {
+            tabManager.setActiveTab(tabId)
+            tab.viewModel?.reveal(entry.id)
+        } else {
+            activeViewModel?.insert(entry.command)
+        }
+    }
+
+    private var paletteActions: [PaletteAction] {
+        var actions: [PaletteAction] = [
+            PaletteAction(title: "New Tab", icon: "plus.square", shortcut: "⌘T") { handle(.newTab) },
+            PaletteAction(title: "Split Right", icon: "rectangle.split.2x1", shortcut: "⌘D") { handle(.splitRight) },
+            PaletteAction(title: "Split Down", icon: "rectangle.split.1x2", shortcut: "⇧⌘D") { handle(.splitDown) },
+            PaletteAction(title: "Close Tab", icon: "xmark.square", shortcut: "⌘W") { tabManager.closeActiveTab() },
+            PaletteAction(title: "Clear Blocks", icon: "eraser", shortcut: "⌘K") { handle(.clear) },
+            PaletteAction(title: "Search History", icon: "magnifyingglass", shortcut: "⌘F") { handle(.search) },
+            PaletteAction(title: "Toggle AI Mode", icon: "sparkle", shortcut: "⌘I") { handle(.toggleAIMode) },
+            PaletteAction(title: "Restart Shell", icon: "arrow.clockwise") { handle(.restartShell) },
+            PaletteAction(title: "Settings", icon: "gearshape", shortcut: "⌘,") { handle(.openSettings) },
+            PaletteAction(title: "Re-detect AI CLIs", icon: "arrow.triangle.2.circlepath") {
+                Task { await AgentDetector.shared.refresh() }
+            },
+        ]
+        for agent in AgentCLI.allCases where AgentDetector.shared.status(for: agent)?.isInstalled ?? false {
+            actions.append(PaletteAction(title: "Open \(agent.displayName)", subtitle: "Interactive session in this tab", agent: agent) {
+                handle(.launchAgent(agent))
+            })
+        }
+        for agent in AgentCLI.allCases {
+            actions.append(PaletteAction(title: "Use \(agent.displayName) for AI", subtitle: agent.tagline, agent: agent,
+                                         isChecked: settings.aiSettings.provider == agent) {
+                settings.aiSettings.provider = agent
+            })
+        }
+        for preset in UserSettings.presets {
+            actions.append(PaletteAction(title: "Theme: \(preset.name)", icon: "paintpalette",
+                                         isChecked: settings.selectedThemeId == preset.id) {
+                settings.applyPreset(preset)
+            })
+        }
+        return actions
     }
 }
 
-// MARK: - Drop Edge
-enum DropEdge {
+// MARK: - Drag to split
+
+enum DropEdge: Equatable {
     case left, right, top, bottom
 }
 
-// MARK: - Drop Indicator Overlay
 struct DropIndicatorOverlay: View {
+    @EnvironmentObject private var settings: UserSettings
     let edge: DropEdge
     let size: CGSize
-    
+
     var body: some View {
         ZStack(alignment: alignment) {
-            SwiftUI.Color.clear
-            Rectangle()
-                .fill(SwiftUI.Color.blue.opacity(0.3))
-                .frame(
-                    width: isHorizontal ? size.width * 0.4 : size.width,
-                    height: isHorizontal ? size.height : size.height * 0.4
-                )
-                .overlay(
-                    Rectangle()
-                        .stroke(SwiftUI.Color.blue.opacity(0.6), lineWidth: 2)
-                )
+            Color.clear
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(settings.theme.accent.opacity(0.12))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(settings.theme.accent.opacity(0.5), lineWidth: 1.5))
+                .frame(width: isHorizontal ? size.width * 0.45 : nil, height: isHorizontal ? nil : size.height * 0.45)
+                .padding(10)
         }
-        .transition(.opacity)
-        .animation(.easeInOut(duration: 0.15), value: edge)
     }
-    
-    private var isHorizontal: Bool {
-        edge == .left || edge == .right
-    }
-    
+
+    private var isHorizontal: Bool { edge == .left || edge == .right }
+
     private var alignment: Alignment {
         switch edge {
         case .left: return .leading
@@ -287,14 +375,13 @@ struct DropIndicatorOverlay: View {
     }
 }
 
-// MARK: - Split Drop Delegate
-class SplitDropDelegate: DropDelegate {
+final class SplitDropDelegate: DropDelegate {
     let tabManager: TabManager
     @Binding var splitGroups: [SplitGroup]
     @Binding var activeSplitGroupId: UUID?
     @Binding var dropEdge: DropEdge?
     let containerSize: CGSize
-    
+
     init(tabManager: TabManager, splitGroups: Binding<[SplitGroup]>, activeSplitGroupId: Binding<UUID?>, dropEdge: Binding<DropEdge?>, containerSize: CGSize) {
         self.tabManager = tabManager
         self._splitGroups = splitGroups
@@ -302,113 +389,55 @@ class SplitDropDelegate: DropDelegate {
         self._dropEdge = dropEdge
         self.containerSize = containerSize
     }
-    
+
     func validateDrop(info: DropInfo) -> Bool { true }
-    
-    func dropEntered(info: DropInfo) {
-        updateEdge(info: info)
-    }
-    
+    func dropEntered(info: DropInfo) { dropEdge = edge(for: info) }
+    func dropExited(info: DropInfo) { dropEdge = nil }
+
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        updateEdge(info: info)
+        dropEdge = edge(for: info)
         return DropProposal(operation: .copy)
     }
-    
-    func dropExited(info: DropInfo) {
-        dropEdge = nil
-    }
-    
+
     func performDrop(info: DropInfo) -> Bool {
-        let capturedEdge = dropEdge ?? calculateEdge(info: info)
-        
-        var providers = info.itemProviders(for: [UTType.text.identifier])
-        if providers.isEmpty {
-            providers = info.itemProviders(for: [UTType.plainText.identifier])
-        }
-        
-        guard let provider = providers.first else {
+        let edge = dropEdge ?? edge(for: info)
+        guard let provider = info.itemProviders(for: [UTType.text.identifier]).first
+                ?? info.itemProviders(for: [UTType.plainText.identifier]).first else {
             dropEdge = nil
             return false
         }
-        
-        let typeId = provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) 
-            ? UTType.plainText.identifier 
-            : UTType.text.identifier
-        
-        provider.loadItem(forTypeIdentifier: typeId, options: nil) { [weak self] data, error in
+        _ = provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
             DispatchQueue.main.async {
-                guard let self = self else { return }
+                guard let self else { return }
                 defer { self.dropEdge = nil }
-                
-                if error != nil { return }
-                
-                let uuidString: String
-                if let str = data as? String { uuidString = str }
-                else if let d = data as? Data, let s = String(data: d, encoding: .utf8) { uuidString = s }
-                else if let ns = data as? NSString { uuidString = ns as String }
-                else { return }
-                
-                guard let uuid = UUID(uuidString: uuidString),
-                      let droppedTab = self.tabManager.tabs.first(where: { $0.id == uuid }),
-                      let currentActiveId = self.tabManager.activeTabId,
-                      droppedTab.id != currentActiveId else { return }
-                
-                // Check if either tab is already in a split - remove from old split first
-                self.splitGroups.removeAll { $0.contains(droppedTab.id) || $0.contains(currentActiveId) }
-                
-                // Create new split group with next color
-                let nextColorIndex = self.splitGroups.count % SplitGroup.colors.count
-                let direction: SplitDirection = (capturedEdge == .left || capturedEdge == .right) ? .horizontal : .vertical
-                
-                let leftId = (capturedEdge == .left || capturedEdge == .top) ? droppedTab.id : currentActiveId
-                let rightId = (capturedEdge == .left || capturedEdge == .top) ? currentActiveId : droppedTab.id
-                
-                let newGroup = SplitGroup(
-                    id: UUID(),
-                    leftTabId: leftId,
-                    rightTabId: rightId,
-                    direction: direction,
-                    colorIndex: nextColorIndex,
-                    focusedPane: 1
-                )
-                
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    self.splitGroups.append(newGroup)
-                    self.activeSplitGroupId = newGroup.id
+                guard let string = object as? String,
+                      let uuid = UUID(uuidString: string),
+                      let dropped = self.tabManager.tab(with: uuid), !dropped.isSettingsTab,
+                      let current = self.tabManager.activeTabId, dropped.id != current else { return }
+                self.splitGroups.removeAll { $0.contains(dropped.id) || $0.contains(current) }
+                let direction: SplitDirection = (edge == .left || edge == .right) ? .horizontal : .vertical
+                let leadingDropped = edge == .left || edge == .top
+                let group = SplitGroup(id: UUID(),
+                                       leftTabId: leadingDropped ? dropped.id : current,
+                                       rightTabId: leadingDropped ? current : dropped.id,
+                                       direction: direction,
+                                       focusedPane: leadingDropped ? 0 : 1)
+                withAnimation(Motion.smooth) {
+                    self.splitGroups.append(group)
+                    self.activeSplitGroupId = group.id
                 }
+                self.tabManager.setActiveTab(dropped.id)
             }
         }
         return true
     }
-    
-    private func updateEdge(info: DropInfo) {
-        dropEdge = calculateEdge(info: info)
-    }
-    
-    private func calculateEdge(info: DropInfo) -> DropEdge {
-        let loc = info.location
-        let x = loc.x / containerSize.width
-        let y = loc.y / containerSize.height
-        
-        let distToLeft = x
-        let distToRight = 1 - x
-        let distToTop = y
-        let distToBottom = 1 - y
-        
-        let minHorizontal = min(distToLeft, distToRight)
-        let minVertical = min(distToTop, distToBottom)
-        
-        if minHorizontal < minVertical {
-            return distToLeft < distToRight ? .left : .right
-        } else {
-            return distToTop < distToBottom ? .top : .bottom
-        }
-    }
-}
 
-#Preview {
-    TabbedTerminalView()
-        .environmentObject(UserSettings())
-        .frame(width: 1000, height: 700)
-        .background(.black)
+    private func edge(for info: DropInfo) -> DropEdge {
+        let x = info.location.x / max(containerSize.width, 1)
+        let y = info.location.y / max(containerSize.height, 1)
+        if min(x, 1 - x) < min(y, 1 - y) {
+            return x < 0.5 ? .left : .right
+        }
+        return y < 0.5 ? .top : .bottom
+    }
 }

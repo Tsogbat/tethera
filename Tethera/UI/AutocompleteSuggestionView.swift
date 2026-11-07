@@ -1,115 +1,71 @@
 import SwiftUI
 
+/// Completion menu anchored above the input bar.
 struct AutocompleteSuggestionView: View {
+    @EnvironmentObject private var settings: UserSettings
     let suggestions: [AutocompleteSuggestion]
-    let onSuggestionSelected: (AutocompleteSuggestion) -> Void
-    let onArrowNavigation: (Int) -> Void
     @Binding var selectedIndex: Int
-    @EnvironmentObject private var userSettings: UserSettings
-    
-    // Scale dropdown based on user's font size preference
-    private var scaleFactor: CGFloat {
-        userSettings.themeConfiguration.fontSize / 14.0
-    }
-    
-    private var rowHeight: CGFloat {
-        max(36, 32 * scaleFactor)
-    }
-    // Ideal height = 5 items, shrink if fewer, scroll if more
-    private var idealHeight: CGFloat {
-        let itemCount = min(suggestions.count, 5) // Show max 5 items without scroll
-        return CGFloat(itemCount) * rowHeight + 8 // 8 for padding
-    }
-    
+    let onSelect: (AutocompleteSuggestion) -> Void
+    @Namespace private var selection
+
+    private let rowHeight: CGFloat = 30
+    private let visibleRows = 7
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(spacing: 1) {
                     ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
-                        suggestionRow(index: index, suggestion: suggestion)
+                        row(suggestion, index: index)
                             .id(index)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(5)
             }
-            .scrollIndicators(suggestions.count > 5 ? .visible : .hidden)
-            .frame(height: idealHeight) // Exact height based on items
-            .background(suggestionBackground)
-            .shadow(color: (userSettings.themeConfiguration.isDarkMode ? SwiftUI.Color.black : SwiftUI.Color.gray).opacity(0.25), radius: 8, x: 0, y: 4)
-            .onChange(of: selectedIndex) { _, newIndex in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    proxy.scrollTo(newIndex, anchor: .center)
-                }
+            .scrollIndicators(suggestions.count > visibleRows ? .automatic : .never)
+            .frame(height: CGFloat(min(suggestions.count, visibleRows)) * (rowHeight + 1) + 10)
+            .onChange(of: selectedIndex) { _, index in
+                withAnimation(Motion.quick) { proxy.scrollTo(index, anchor: .center) }
             }
         }
+        .glassSurface(RoundedRectangle(cornerRadius: 13, style: .continuous), elevated: true)
     }
-    
-    private func suggestionRow(index: Int, suggestion: AutocompleteSuggestion) -> some View {
-        HStack(spacing: 8 * scaleFactor) {
+
+    private func row(_ suggestion: AutocompleteSuggestion, index: Int) -> some View {
+        let isSelected = index == selectedIndex
+        return HStack(spacing: 9) {
             Image(systemName: suggestion.type.icon)
-                .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                .font(.system(size: 11 * scaleFactor, weight: .medium))
-                .frame(width: 14 * scaleFactor)
-            
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(isSelected ? settings.theme.accent : settings.theme.textTertiary)
+                .frame(width: 14)
             Text(suggestion.text)
-                .font(themeFont(size: userSettings.themeConfiguration.fontSize * 0.9))
-                .foregroundColor(userSettings.themeConfiguration.textColor.color)
+                .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 12.5, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(settings.theme.textPrimary)
                 .lineLimit(1)
-            
-            Spacer()
-            
+            Spacer(minLength: 10)
             if !suggestion.description.isEmpty {
                 Text(suggestion.description)
-                    .font(themeFont(size: userSettings.themeConfiguration.fontSize * 0.7))
-                    .foregroundColor(userSettings.themeConfiguration.textColor.color.opacity(0.5))
+                    .font(Typography.ui(11))
+                    .foregroundStyle(settings.theme.textTertiary)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6 * scaleFactor)
-        .background(
-            RoundedRectangle(cornerRadius: 5)
-                .fill(index == selectedIndex ? userSettings.themeConfiguration.accentColor.color.opacity(0.18) : SwiftUI.Color.clear)
-        )
-        .onTapGesture {
-            onSuggestionSelected(suggestion)
-        }
-        .onHover { isHovered in
-            if isHovered {
-                selectedIndex = index
+        .frame(height: rowHeight)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(settings.theme.accentSoft)
+                    .matchedGeometryEffect(id: "selection", in: selection)
             }
         }
-    }
-    
-    private var suggestionBackground: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(
-                userSettings.themeConfiguration.isDarkMode ?
-                SwiftUI.Color(red: 0.10, green: 0.10, blue: 0.12) : SwiftUI.Color(red: 0.96, green: 0.96, blue: 0.98)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                userSettings.themeConfiguration.accentColor.color.opacity(0.4),
-                                userSettings.themeConfiguration.accentColor.color.opacity(0.15)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-    }
-    
-    private func themeFont(size: CGFloat) -> Font {
-        let family = userSettings.themeConfiguration.fontFamily
-        if FontLoader.shared.isFontAvailable("\(family)-Medium") {
-            return .custom("\(family)-Medium", size: size)
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect(suggestion) }
+        .onHover { inside in
+            if inside {
+                withAnimation(Motion.quick) { selectedIndex = index }
+            }
         }
-        if FontLoader.shared.isFontAvailable(family) {
-            return .custom(family, size: size)
-        }
-        return .system(size: size, design: .monospaced)
+        .animation(Motion.snappy, value: selectedIndex)
     }
 }

@@ -13,7 +13,7 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.0.0")
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.5.1")
     ],
     targets: [
         .executableTarget(
@@ -25,11 +25,16 @@ let package = Package(
                 "Preview Content"
             ],
             resources: [
-                .process("Core/Shaders.metal"),
                 .process("Assets.xcassets"),
                 .process("Fonts"),
-                .copy("Resources/shell")
+                .copy("Resources/shell"),
+                .copy("Resources/Brand")
             ]
+        ),
+        .testTarget(
+            name: "TetheraTests",
+            dependencies: ["Tethera"],
+            path: "Tests/TetheraTests"
         )
     ]
 )

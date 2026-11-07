@@ -1,631 +1,522 @@
 import SwiftUI
 
 struct NativeSettingsView: View {
-    @EnvironmentObject private var userSettings: UserSettings
-    @State private var selectedTab = 0
-    
-    private func terminalFont(size: CGFloat = 13) -> Font {
-        return Font.custom(userSettings.themeConfiguration.fontFamily, size: size)
+    enum Section: String, CaseIterable, Identifiable {
+        case appearance = "Appearance"
+        case terminal = "Terminal"
+        case ai = "AI"
+        case about = "About"
+
+        var id: String { rawValue }
+        var icon: String {
+            switch self {
+            case .appearance: return "paintpalette"
+            case .terminal: return "terminal"
+            case .ai: return "sparkle"
+            case .about: return "info.circle"
+            }
+        }
     }
-    
+
+    @EnvironmentObject private var settings: UserSettings
+    @State private var section: Section = .appearance
+    @Namespace private var pill
+
     var body: some View {
         VStack(spacing: 0) {
-            // Tab selector
-            HStack(spacing: 0) {
-                TabButton(title: "Appearance", isSelected: selectedTab == 0) {
-                    selectedTab = 0
+            HStack(spacing: 4) {
+                ForEach(Section.allCases) { item in
+                    Button {
+                        withAnimation(Motion.snappy) { section = item }
+                    } label: {
+                        Label(item.rawValue, systemImage: item.icon)
+                            .font(Typography.ui(12.5, weight: .medium))
+                            .foregroundStyle(section == item ? settings.theme.textPrimary : settings.theme.textSecondary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background {
+                                if section == item {
+                                    Color.clear
+                                        .glassSurface(Capsule(), tint: settings.theme.accent)
+                                        .matchedGeometryEffect(id: "section", in: pill)
+                                }
+                            }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
-                TabButton(title: "Terminal", isSelected: selectedTab == 1) {
-                    selectedTab = 1
-                }
-                TabButton(title: "AI", isSelected: selectedTab == 2) {
-                    selectedTab = 2
-                }
-                Spacer()
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            
-            Divider()
-                .background(SwiftUI.Color.gray.opacity(0.3))
-            
-            // Content
+            .padding(4)
+            .background(Capsule().fill(settings.theme.surface.opacity(0.7)))
+            .overlay(Capsule().strokeBorder(settings.theme.hairline, lineWidth: 0.5))
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if selectedTab == 0 {
-                        AppearanceSettings()
-                    } else if selectedTab == 1 {
-                        TerminalSettings()
-                    } else {
-                        AISettingsView()
+                VStack(alignment: .leading, spacing: 18) {
+                    switch section {
+                    case .appearance: AppearanceSettings()
+                    case .terminal: TerminalSettings()
+                    case .ai: AISettingsView()
+                    case .about: AboutSettings()
                     }
                 }
-                .padding(20)
+                .frame(maxWidth: 720)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 32)
+                .id(section)
+                .transition(.opacity.combined(with: .offset(y: 6)))
             }
             .scrollIndicators(.hidden)
-            .background(userSettings.themeConfiguration.backgroundColor.color)
         }
-        .background(userSettings.themeConfiguration.backgroundColor.color)
-        .frame(minWidth: 650, minHeight: 550)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Theme Gallery
+// MARK: - Building blocks
 
-struct ThemeGalleryView: View {
-    @EnvironmentObject private var userSettings: UserSettings
-    
+struct SettingsCard<Content: View>: View {
+    @EnvironmentObject private var settings: UserSettings
+    let title: String
+    var subtitle: String? = nil
+    @ViewBuilder let content: Content
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            HStack(spacing: 16) {
-                ForEach(UserSettings.presets) { preset in
-                    ThemeTile(preset: preset, isSelected: userSettings.selectedThemeId == preset.id) {
-                        userSettings.applyPreset(preset)
-                    }
-                    .frame(width: 150)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(Typography.ui(13.5, weight: .semibold))
+                    .foregroundStyle(settings.theme.textPrimary)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(Typography.ui(11.5))
+                        .foregroundStyle(settings.theme.textTertiary)
                 }
             }
-            .padding(.horizontal, 2)
+            content
         }
-        .frame(height: 120)
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassSurface(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+struct SettingsRow<Accessory: View>: View {
+    @EnvironmentObject private var settings: UserSettings
+    let title: String
+    var detail: String? = nil
+    @ViewBuilder let accessory: Accessory
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Typography.ui(12.5, weight: .medium))
+                    .foregroundStyle(settings.theme.textPrimary)
+                if let detail {
+                    Text(detail)
+                        .font(Typography.ui(11))
+                        .foregroundStyle(settings.theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 12)
+            accessory
+        }
+    }
+}
+
+// MARK: - Appearance
+
+struct AppearanceSettings: View {
+    @EnvironmentObject private var settings: UserSettings
+
+    var body: some View {
+        SettingsCard(title: "Theme", subtitle: "Colors for the window, blocks and the terminal's 16 ANSI colors.") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                ForEach(UserSettings.presets) { preset in
+                    ThemeTile(preset: preset, isSelected: settings.selectedThemeId == preset.id) {
+                        withAnimation(.easeInOut(duration: 0.25)) { settings.applyPreset(preset) }
+                    }
+                }
+            }
+        }
+
+        SettingsCard(title: "Text") {
+            SettingsRow(title: "Font") {
+                Picker("", selection: $settings.themeConfiguration.fontFamily) {
+                    ForEach(UserSettings.fontOptions, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 180)
+            }
+            SettingsRow(title: "Size", detail: "⌘+ and ⌘− work anywhere.") {
+                HStack(spacing: 10) {
+                    Slider(value: $settings.themeConfiguration.fontSize, in: 10...24, step: 1)
+                        .frame(width: 160)
+                    Text("\(Int(settings.themeConfiguration.fontSize)) pt")
+                        .font(Typography.ui(11.5).monospacedDigit())
+                        .foregroundStyle(settings.theme.textSecondary)
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+            SettingsRow(title: "Line spacing") {
+                HStack(spacing: 10) {
+                    Slider(value: $settings.themeConfiguration.lineSpacing, in: 1.0...1.8, step: 0.05)
+                        .frame(width: 160)
+                    Text(String(format: "%.2f", settings.themeConfiguration.lineSpacing))
+                        .font(Typography.ui(11.5).monospacedDigit())
+                        .foregroundStyle(settings.theme.textSecondary)
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+        }
+
+        SettingsCard(title: "Window") {
+            SettingsRow(title: "Glass opacity", detail: "Lower values let more of the desktop blur through.") {
+                HStack(spacing: 10) {
+                    Slider(value: $settings.terminal.windowOpacity, in: 0.55...1.0, step: 0.01)
+                        .frame(width: 160)
+                    Text("\(Int(settings.terminal.windowOpacity * 100))%")
+                        .font(Typography.ui(11.5).monospacedDigit())
+                        .foregroundStyle(settings.theme.textSecondary)
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+        }
     }
 }
 
 struct ThemeTile: View {
+    @EnvironmentObject private var settings: UserSettings
     let preset: ThemePreset
     let isSelected: Bool
     let onSelect: () -> Void
-    
+    @State private var hovering = false
+
     var body: some View {
+        let palette = preset.configuration.effectivePalette
         Button(action: onSelect) {
-            VStack(spacing: 10) {
-                ZStack(alignment: .bottomTrailing) {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(preset.configuration.backgroundColor.color)
-                        .frame(height: 90)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(
-                                    isSelected ? preset.configuration.accentColor.color : SwiftUI.Color.gray.opacity(0.2),
-                                    lineWidth: isSelected ? 2 : 1
-                                )
-                        )
-                    HStack(spacing: 6) {
-                        Text("Aa")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(preset.configuration.textColor.color)
-                            .padding(6)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(preset.configuration.backgroundColor.color.opacity(0.5))
-                            )
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(preset.configuration.accentColor.color)
-                            .frame(width: 20, height: 10)
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Text("~/code").foregroundStyle(palette.foreground.color.opacity(0.45))
+                        Text("main").foregroundStyle(palette.green.color)
                     }
-                    .padding(8)
-                }
-                Text(preset.name)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct TabButton: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-    @EnvironmentObject private var userSettings: UserSettings
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.custom(userSettings.themeConfiguration.fontFamily, size: 13).weight(.medium))
-                .foregroundColor(isSelected ? .primary : .secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? userSettings.themeConfiguration.accentColor.color.opacity(0.12) : SwiftUI.Color.clear)
-        )
-    }
-}
-
-struct AppearanceSettings: View {
-    @EnvironmentObject private var userSettings: UserSettings
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Theme Gallery - primary way to change appearance
-            SettingsGroup(title: "Theme Gallery", icon: "paintpalette") {
-                ThemeGalleryView()
-            }
-            
-            // Line Spacing setting (moved out of removed Theme section)
-            SettingsGroup(title: "Text Display", icon: "text.alignleft") {
-                VStack(alignment: .leading, spacing: 16) {
-                    SliderRow(
-                        title: "Line Spacing",
-                        icon: "text.line.first.and.arrowtriangle.forward",
-                        value: Binding(
-                            get: { userSettings.themeConfiguration.lineSpacing },
-                            set: { newValue in
-                                userSettings.themeConfiguration.lineSpacing = newValue
-                                userSettings.saveSettings()
-                            }
-                        ),
-                        range: 1.0...2.0,
-                        step: 0.1,
-                        suffix: ""
-                    )
-                }
-            }
-            
-            SettingsGroup(title: "Typography", icon: "textformat") {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Font")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Picker("", selection: Binding(
-                            get: { userSettings.themeConfiguration.fontFamily },
-                            set: { newValue in
-                                userSettings.themeConfiguration.fontFamily = newValue
-                                userSettings.saveSettings()
-                            }
-                        )) {
-                            ForEach(UserSettings.fontOptions, id: \.self) { font in
-                                Text(font).tag(font)
-                            }
+                    .font(.system(size: 8.5, weight: .medium, design: .monospaced))
+                    Text("git status")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(palette.foreground.color)
+                    HStack(spacing: 3) {
+                        ForEach(1..<7) { index in
+                            RoundedRectangle(cornerRadius: 2).fill(palette.ansi[index].color).frame(width: 12, height: 6)
                         }
-                        .pickerStyle(MenuPickerStyle())
-                        .frame(width: 150)
                     }
-                    
-                    HStack {
-                        Text("Font Size")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Slider(
-                            value: Binding(
-                                get: { Double(userSettings.themeConfiguration.fontSize) },
-                                set: { newValue in
-                                    userSettings.themeConfiguration.fontSize = newValue
-                                    userSettings.saveSettings()
-                                }
-                            ),
-                            in: 8...24,
-                            step: 1
-                        )
-                        .frame(width: 100)
-                        Text("\(Int(userSettings.themeConfiguration.fontSize))")
-                            .font(.custom("JetBrains Mono", size: 12))
-                            .foregroundColor(.secondary)
-                            .frame(width: 20)
-                    }
-                    
-                    HStack {
-                        Text("Padding")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Slider(
-                            value: Binding(
-                                get: { userSettings.themeConfiguration.padding },
-                                set: { newValue in
-                                    userSettings.themeConfiguration.padding = newValue
-                                    userSettings.saveSettings()
-                                }
-                            ),
-                            in: 0...20,
-                            step: 1
-                        )
-                        .frame(width: 100)
-                        Text("\(Int(userSettings.themeConfiguration.padding))")
-                            .font(.custom("JetBrains Mono", size: 12))
-                            .foregroundColor(.secondary)
-                            .frame(width: 20)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(palette.background.color))
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(preset.configuration.accentColor.color).frame(width: 8, height: 8).padding(8)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(isSelected ? settings.theme.accent : settings.theme.border, lineWidth: isSelected ? 2 : 0.75)
+                )
+                .scaleEffect(hovering ? 1.02 : 1)
+
+                HStack {
+                    Text(preset.name)
+                        .font(Typography.ui(12, weight: isSelected ? .semibold : .medium))
+                        .foregroundStyle(settings.theme.textPrimary)
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(settings.theme.accent)
+                            .transition(.scale.combined(with: .opacity))
                     }
                 }
             }
         }
+        .buttonStyle(.plain)
+        .onHover { inside in withAnimation(Motion.snappy) { hovering = inside } }
+        .animation(Motion.bouncy, value: isSelected)
     }
 }
+
+// MARK: - Terminal
 
 struct TerminalSettings: View {
-    @EnvironmentObject private var userSettings: UserSettings
-    
+    @EnvironmentObject private var settings: UserSettings
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            SettingsGroup(title: "Behavior", icon: "gear") {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Enable autocompletion")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { userSettings.developerSettings.autocompletionEnabled },
-                            set: { newValue in
-                                userSettings.developerSettings.autocompletionEnabled = newValue
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .toggleStyle(SwitchToggleStyle())
-                    }
-                    
-                    HStack {
-                        Text("Show line numbers")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { userSettings.developerSettings.showLineNumbers },
-                            set: { newValue in
-                                userSettings.developerSettings.showLineNumbers = newValue
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .toggleStyle(SwitchToggleStyle())
-                    }
-                    
-                    HStack {
-                        Text("Enable syntax highlighting")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { userSettings.developerSettings.syntaxHighlighting },
-                            set: { newValue in
-                                userSettings.developerSettings.syntaxHighlighting = newValue
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .toggleStyle(SwitchToggleStyle())
-                    }
-                    
-                    HStack {
-                        Text("Auto indent")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { userSettings.developerSettings.autoIndent },
-                            set: { newValue in
-                                userSettings.developerSettings.autoIndent = newValue
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .toggleStyle(SwitchToggleStyle())
-                    }
-                    
-                    HStack {
-                        Text("Word wrap")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { userSettings.developerSettings.wordWrap },
-                            set: { newValue in
-                                userSettings.developerSettings.wordWrap = newValue
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .toggleStyle(SwitchToggleStyle())
-                    }
+        SettingsCard(title: "Cursor & keyboard") {
+            SettingsRow(title: "Cursor shape") {
+                Picker("", selection: $settings.terminal.cursorShape) {
+                    ForEach(CursorShape.allCases) { Text($0.title).tag($0) }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 220)
             }
-            
-            SettingsGroup(title: "Formatting", icon: "text.justify") {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Tab size")
-                            .font(.custom("JetBrains Mono", size: 13))
-                        Spacer()
-                        Picker("", selection: Binding(
-                            get: { userSettings.developerSettings.tabSize },
-                            set: { newValue in
-                                userSettings.developerSettings.tabSize = newValue
-                                userSettings.saveSettings()
-                            }
-                        )) {
-                            Text("2").tag(2)
-                            Text("4").tag(4)
-                            Text("8").tag(8)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .frame(width: 100)
-                    }
-                }
+            SettingsRow(title: "Blinking cursor") {
+                Toggle("", isOn: $settings.terminal.cursorBlink).toggleStyle(.switch).labelsHidden()
+            }
+            SettingsRow(title: "Option key acts as Meta", detail: "Needed for Alt-shortcuts in vim, emacs and many TUIs.") {
+                Toggle("", isOn: $settings.terminal.optionAsMeta).toggleStyle(.switch).labelsHidden()
+            }
+            SettingsRow(title: "Inline suggestions", detail: "Ghost text from your history (→ to accept) and the Tab menu.") {
+                Toggle("", isOn: $settings.terminal.autocompletion).toggleStyle(.switch).labelsHidden()
+            }
+        }
+
+        SettingsCard(title: "Output") {
+            SettingsRow(title: "Collapse output longer than", detail: "Long blocks show the end first, with a button for the rest.") {
+                Stepper("\(settings.terminal.collapseThreshold) lines", value: $settings.terminal.collapseThreshold, in: 50...5_000, step: 50)
+                    .font(Typography.ui(12).monospacedDigit())
+            }
+            SettingsRow(title: "Scrollback while running", detail: "Lines kept for a single running command.") {
+                Stepper("\(settings.terminal.scrollbackLines) lines", value: $settings.terminal.scrollbackLines, in: 1_000...100_000, step: 1_000)
+                    .font(Typography.ui(12).monospacedDigit())
+            }
+        }
+
+        SettingsCard(title: "Shell", subtitle: "zsh and bash are supported. New tabs use the change.") {
+            SettingsRow(title: "Shell path", detail: "Leave empty to use your login shell (\(ShellEnvironment.loginShell)).") {
+                TextField("/bin/zsh", text: $settings.terminal.shellPath)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 200)
             }
         }
     }
 }
 
-struct SettingsGroup<Content: View>: View {
-    let title: String
-    let icon: String?
-    let content: Content
-    @EnvironmentObject private var userSettings: UserSettings
-    
-    init(title: String, icon: String? = nil, @ViewBuilder content: () -> Content) {
-        self.title = title
-        self.icon = icon
-        self.content = content()
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                if let icon = icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                }
-                Text(title)
-                    .font(.custom(userSettings.themeConfiguration.fontFamily, size: 15).weight(.semibold))
-                    .foregroundColor(.primary)
-            }
-            
-            VStack(alignment: .leading, spacing: 12) {
-                content
-            }
-            .padding(.leading, icon != nil ? 24 : 0)
-        }
-        .padding(16)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [.white.opacity(0.15), .white.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            }
-        )
-        .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 3)
-    }
-}
-
-
-struct SliderRow: View {
-    let title: String
-    let icon: String?
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let step: Double
-    let suffix: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                if let icon = icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                Text(title)
-                    .font(.custom("JetBrains Mono", size: 13))
-                Spacer()
-                Text(String(format: "%.1f", value) + suffix)
-                    .font(.custom("JetBrains Mono", size: 12))
-                    .foregroundColor(.secondary)
-            }
-            
-            Slider(value: $value, in: range, step: step)
-        }
-    }
-}
-
-// MARK: - AI Settings View (Stage 2-6: AI Layer Configuration)
+// MARK: - AI
 
 struct AISettingsView: View {
-    @EnvironmentObject private var userSettings: UserSettings
-    
+    @EnvironmentObject private var settings: UserSettings
+    @ObservedObject private var detector = AgentDetector.shared
+    @State private var testResult: [AgentCLI: TestState] = [:]
+
+    enum TestState: Equatable {
+        case running
+        case passed(TimeInterval)
+        case failed(String)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Master Toggle
-            SettingsGroup(title: "AI Assistant", icon: "brain") {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Enable AI Features")
-                                .font(.custom("JetBrains Mono", size: 13))
-                            Text("AI never auto-executes commands")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
+        SettingsCard(title: "AI assistant", subtitle: "Tethera drives the AI CLIs you're already signed in to — no API keys. Nothing the AI suggests ever runs without you pressing Enter.") {
+            SettingsRow(title: "Enable AI features") {
+                Toggle("", isOn: $settings.aiSettings.isEnabled).toggleStyle(.switch).labelsHidden()
+            }
+            if settings.aiSettings.isEnabled {
+                SettingsRow(title: "Suggest a fix when a command fails", detail: "Runs one quick request with the failed command and its output.") {
+                    Toggle("", isOn: $settings.aiSettings.autoFixOnFailure).toggleStyle(.switch).labelsHidden()
+                }
+                SettingsRow(title: "Share recent output as context", detail: "Recent blocks are included when you ask a question.") {
+                    HStack(spacing: 10) {
+                        if settings.aiSettings.includeOutputContext {
+                            Stepper("\(settings.aiSettings.contextBlockCount) blocks", value: $settings.aiSettings.contextBlockCount, in: 1...12)
+                                .font(Typography.ui(12).monospacedDigit())
                         }
-                        Spacer()
-                        Toggle("", isOn: Binding(
-                            get: { userSettings.aiSettings.isEnabled },
-                            set: { newValue in
-                                userSettings.aiSettings.isEnabled = newValue
-                                userSettings.saveSettings()
-                            }
-                        ))
-                        .toggleStyle(SwitchToggleStyle())
+                        Toggle("", isOn: $settings.aiSettings.includeOutputContext).toggleStyle(.switch).labelsHidden()
                     }
-                    
-                    if userSettings.aiSettings.isEnabled {
-                        Divider()
-                        
-                        // Provider Selection
-                        HStack {
-                            HStack(spacing: 8) {
-                                Image(systemName: userSettings.aiSettings.provider.icon)
-                                    .foregroundColor(userSettings.themeConfiguration.accentColor.color)
-                                Text("AI Provider")
-                                    .font(.custom("JetBrains Mono", size: 13))
-                            }
-                            Spacer()
-                            Picker("", selection: Binding(
-                                get: { userSettings.aiSettings.provider },
-                                set: { newValue in
-                                    userSettings.aiSettings.provider = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )) {
-                                ForEach(AIProvider.allCases, id: \.self) { provider in
-                                    Text(provider.displayName).tag(provider)
-                                }
-                            }
-                            .pickerStyle(MenuPickerStyle())
-                            .frame(width: 150)
-                        }
-                    }
+                }
+                SettingsRow(title: "Warn about destructive commands", detail: "Shows a warning chip for rm -r, sudo, kill and similar.") {
+                    Toggle("", isOn: $settings.aiSettings.warnOnDestructiveOps).toggleStyle(.switch).labelsHidden()
                 }
             }
-            
-            if userSettings.aiSettings.isEnabled {
-                // Features
-                SettingsGroup(title: "Features", icon: "sparkles") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        NativeToggleRow(
-                            title: "Inline Command Help",
-                            description: "Show explanations for commands",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.showInlineHelp },
-                                set: { newValue in
-                                    userSettings.aiSettings.showInlineHelp = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                        
-                        NativeToggleRow(
-                            title: "Error Explanations",
-                            description: "Explain command failures",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.showErrorExplanations },
-                                set: { newValue in
-                                    userSettings.aiSettings.showErrorExplanations = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                        
-                        NativeToggleRow(
-                            title: "Block Summaries",
-                            description: "Auto-summarize long output",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.enableBlockSummaries },
-                                set: { newValue in
-                                    userSettings.aiSettings.enableBlockSummaries = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                        
-                        NativeToggleRow(
-                            title: "Command Generation",
-                            description: "Generate commands from prompts",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.enableCommandGeneration },
-                                set: { newValue in
-                                    userSettings.aiSettings.enableCommandGeneration = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                    }
+        }
+
+        SettingsCard(title: "Providers", subtitle: "Pick the CLI that answers. Fast model: commands and fixes. Chat model: questions and explanations.") {
+            HStack {
+                Spacer()
+                Button {
+                    Task { await detector.refresh() }
+                } label: {
+                    Label(detector.isRefreshing ? "Detecting…" : "Detect again", systemImage: "arrow.triangle.2.circlepath")
+                        .font(Typography.ui(11.5, weight: .medium))
                 }
-                
-                // Safety & Privacy
-                SettingsGroup(title: "Safety & Privacy", icon: "shield.fill") {
-                    VStack(alignment: .leading, spacing: 16) {
-                        NativeToggleRow(
-                            title: "Offline Fallback",
-                            description: "Use man pages when offline",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.enableOfflineFallback },
-                                set: { newValue in
-                                    userSettings.aiSettings.enableOfflineFallback = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                        
-                        NativeToggleRow(
-                            title: "Allow Network Calls",
-                            description: "Enable AI API requests",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.allowNetworkCalls },
-                                set: { newValue in
-                                    userSettings.aiSettings.allowNetworkCalls = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                        
-                        Divider()
-                        
-                        NativeToggleRow(
-                            title: "Warn on Destructive Commands",
-                            description: "Alert before rm, sudo, kill, etc.",
-                            isOn: Binding(
-                                get: { userSettings.aiSettings.warnOnDestructiveOps },
-                                set: { newValue in
-                                    userSettings.aiSettings.warnOnDestructiveOps = newValue
-                                    userSettings.saveSettings()
-                                }
-                            )
-                        )
-                    }
+                .buttonStyle(.plain)
+                .foregroundStyle(settings.theme.accent)
+                .disabled(detector.isRefreshing)
+            }
+            VStack(spacing: 10) {
+                ForEach(AgentCLI.allCases) { provider in
+                    ProviderRow(provider: provider,
+                                status: detector.status(for: provider),
+                                models: detector.models[provider] ?? [],
+                                isSelected: settings.aiSettings.provider == provider,
+                                test: testResult[provider],
+                                onSelect: { withAnimation(Motion.snappy) { settings.aiSettings.provider = provider } },
+                                onTest: { runTest(provider) })
                 }
-                
-                // Safety Notice
-                HStack(spacing: 12) {
-                    Image(systemName: "info.circle.fill")
-                        .foregroundColor(.blue)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("AI Safety Rules")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("AI never auto-executes commands. You always see and confirm before execution.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
+            }
+        }
+        .task { if detector.models[.opencode] == nil { await detector.loadModels(for: .opencode) } }
+    }
+
+    private func runTest(_ provider: AgentCLI) {
+        testResult[provider] = .running
+        let started = Date()
+        let request = AgentRequest(provider: provider, prompt: "Reply with exactly: OK", system: "",
+                                   model: settings.aiSettings.model(for: provider, role: .fast),
+                                   workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path, timeout: 90)
+        Task {
+            let result = await AgentRunner.complete(request)
+            withAnimation(Motion.snappy) {
+                switch result {
+                case .success: testResult[provider] = .passed(Date().timeIntervalSince(started))
+                case .failure(let failure): testResult[provider] = .failed(failure.hint ?? failure.message)
                 }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(SwiftUI.Color.blue.opacity(0.1))
-                )
             }
         }
     }
 }
 
-struct NativeToggleRow: View {
-    let title: String
-    let description: String
-    @Binding var isOn: Bool
-    
+struct ProviderRow: View {
+    @EnvironmentObject private var settings: UserSettings
+    let provider: AgentCLI
+    let status: AgentDetector.Status?
+    let models: [String]
+    let isSelected: Bool
+    let test: AISettingsView.TestState?
+    let onSelect: () -> Void
+    let onTest: () -> Void
+
+    private var installed: Bool { status?.isInstalled ?? false }
+
+    private var fastModel: Binding<String> {
+        Binding(get: { settings.aiSettings.models[provider.rawValue]?.fast ?? "" },
+                set: { settings.aiSettings.models[provider.rawValue, default: ProviderModels()].fast = $0 })
+    }
+
+    private var chatModel: Binding<String> {
+        Binding(get: { settings.aiSettings.models[provider.rawValue]?.chat ?? "" },
+                set: { settings.aiSettings.models[provider.rawValue, default: ProviderModels()].chat = $0 })
+    }
+
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.custom("JetBrains Mono", size: 13))
-                Text(description)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 11) {
+                Button(action: onSelect) {
+                    Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                        .font(.system(size: 15))
+                        .foregroundStyle(isSelected ? settings.theme.accent : settings.theme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .disabled(!installed)
+
+                AgentBadge(agent: provider, size: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(provider.displayName)
+                            .font(Typography.ui(13, weight: .semibold))
+                            .foregroundStyle(settings.theme.textPrimary)
+                        if let version = status?.version {
+                            Text("v\(version)")
+                                .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 10.5))
+                                .foregroundStyle(settings.theme.textTertiary)
+                        }
+                    }
+                    Text(installed ? provider.tagline : "Not installed")
+                        .font(Typography.ui(11))
+                        .foregroundStyle(installed ? settings.theme.textTertiary : settings.theme.warning)
+                }
+                Spacer()
+                testBadge
+                if installed {
+                    PillButton(title: "Test", action: onTest)
+                    PillButton(title: "Sign in", systemImage: "person.crop.circle") {
+                        AppCommands.shared.send(.runInNewTab(provider.loginCommand))
+                    }
+                }
             }
-            Spacer()
-            Toggle("", isOn: $isOn)
-                .toggleStyle(SwitchToggleStyle())
+            if isSelected && installed {
+                HStack(spacing: 10) {
+                    modelField("Fast model", binding: fastModel)
+                    modelField("Chat model", binding: chatModel)
+                }
+                .padding(.leading, 26)
+                .transition(.opacity.combined(with: .offset(y: -4)))
+            }
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isSelected ? settings.theme.accentSoft.opacity(0.6) : settings.theme.surface.opacity(0.5))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(isSelected ? settings.theme.accent.opacity(0.4) : settings.theme.hairline, lineWidth: 0.75)
+        )
+        .opacity(installed ? 1 : 0.6)
+        .animation(Motion.snappy, value: isSelected)
+    }
+
+    @ViewBuilder
+    private var testBadge: some View {
+        switch test {
+        case .running:
+            ProgressView().controlSize(.small)
+        case .passed(let seconds):
+            Label(String(format: "%.1fs", seconds), systemImage: "checkmark.circle.fill")
+                .font(Typography.ui(11, weight: .medium))
+                .foregroundStyle(settings.theme.success)
+                .transition(.scale.combined(with: .opacity))
+        case .failed(let message):
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(settings.theme.danger)
+                .help(message)
+                .transition(.scale.combined(with: .opacity))
+        case nil:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func modelField(_ label: String, binding: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(Typography.ui(10.5, weight: .medium))
+                .foregroundStyle(settings.theme.textTertiary)
+            if !models.isEmpty {
+                Picker("", selection: binding) {
+                    Text("Default").tag("")
+                    ForEach(models, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+            } else {
+                TextField(provider.modelPlaceholder, text: binding)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Typography.mono(settings.themeConfiguration.fontFamily, size: 11.5))
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
+// MARK: - About
 
-#Preview {
-    NativeSettingsView()
-        .environmentObject(UserSettings())
-        .frame(width: 650, height: 550)
+struct AboutSettings: View {
+    @EnvironmentObject private var settings: UserSettings
+
+    var body: some View {
+        VStack(spacing: 14) {
+            TetheraMark(size: 96)
+                .shadow(color: Color(red: 0.48, green: 0.36, blue: 1).opacity(0.35), radius: 26, y: 12)
+            Text("Tethera")
+                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .foregroundStyle(settings.theme.textPrimary)
+            Text("A block terminal for macOS, built on SwiftTerm.")
+                .font(Typography.ui(12.5))
+                .foregroundStyle(settings.theme.textSecondary)
+            Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev") · AGPL-3.0")
+                .font(Typography.ui(11))
+                .foregroundStyle(settings.theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .glassSurface(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
 }
-

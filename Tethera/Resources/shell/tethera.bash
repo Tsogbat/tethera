@@ -1,53 +1,44 @@
-# Tethera Terminal - Bash Integration
-# This file provides OSC 133 shell integration for block-based terminal
+# Tethera — bash integration
+# Emits OSC 133 semantic prompt marks and OSC 7 working-directory updates so
+# Tethera can split the session into blocks. Loaded through Tethera's --rcfile shim.
 
-# OSC 133 escape sequences for semantic shell integration
-# A = Prompt start, B = Command start, C = Output start, D = Command end
+[[ $- == *i* ]] || return 0
+[[ -n "${__tethera_integrated-}" ]] && return 0
+__tethera_integrated=1
+__tethera_at_prompt=0
+__tethera_command_running=0
+__tethera_status=0
 
-__tethera_prompt_start() {
-    printf '\033]133;A\007'
+__tethera_osc() {
+    builtin printf '\e]%s\a' "$1"
 }
 
-__tethera_command_start() {
-    printf '\033]133;B\007'
+__tethera_save_status() {
+    __tethera_status=$?
 }
 
-__tethera_output_start() {
-    printf '\033]133;C\007'
-}
-
-__tethera_command_end() {
-    local exit_code=$?
-    printf '\033]133;D;%d\007' "$exit_code"
-    # Send OSC 7 with current working directory for directory tracking
-    printf '\033]7;file://%s%s\007' "$(hostname)" "$(pwd)"
-    return $exit_code
-}
-
-# Install hooks for bash
-if [[ -n "$BASH_VERSION" ]]; then
-    # PROMPT_COMMAND runs before each prompt
-    __tethera_prompt_command() {
-        __tethera_command_end
-        __tethera_prompt_start
-    }
-    
-    # Prepend to existing PROMPT_COMMAND
-    if [[ -z "$PROMPT_COMMAND" ]]; then
-        PROMPT_COMMAND="__tethera_prompt_command"
-    else
-        PROMPT_COMMAND="__tethera_prompt_command;$PROMPT_COMMAND"
+__tethera_prompt_command() {
+    if [[ $__tethera_command_running == 1 ]]; then
+        __tethera_osc "133;D;${__tethera_status}"
+        __tethera_command_running=0
     fi
-    
-    # DEBUG trap runs before each command (like preexec in zsh)
-    __tethera_debug_trap() {
-        # Only trigger on actual commands, not PROMPT_COMMAND
-        if [[ "$BASH_COMMAND" != "__tethera_prompt_command" ]] && \
-           [[ "$BASH_COMMAND" != "__tethera_command_end" ]] && \
-           [[ "$BASH_COMMAND" != "__tethera_prompt_start" ]]; then
-            __tethera_command_start
-            __tethera_output_start
-        fi
-    }
-    trap '__tethera_debug_trap' DEBUG
-fi
+    __tethera_osc "7;file://${HOSTNAME}${PWD}"
+    __tethera_osc "133;A"
+    __tethera_at_prompt=1
+    return $__tethera_status
+}
+
+__tethera_debug_trap() {
+    [[ $__tethera_at_prompt == 1 ]] || return 0
+    [[ -n "${COMP_LINE-}" ]] && return 0
+    case "$BASH_COMMAND" in
+        __tethera_save_status*|__tethera_prompt_command*) return 0 ;;
+    esac
+    __tethera_at_prompt=0
+    __tethera_command_running=1
+    __tethera_osc "133;B"
+    __tethera_osc "133;C"
+}
+
+trap '__tethera_debug_trap' DEBUG
+PROMPT_COMMAND="__tethera_save_status${PROMPT_COMMAND:+;$PROMPT_COMMAND};__tethera_prompt_command"
