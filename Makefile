@@ -18,6 +18,7 @@ dmg: app
 
 # Run the unit and real-shell tests
 test:
+	@swift build --product tethera-cli
 	@swift test
 
 # Clean build artifacts

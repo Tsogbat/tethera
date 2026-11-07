@@ -74,6 +74,31 @@ struct TerminalPalette: Hashable, Codable {
 
     // MARK: Presets
 
+    /// Graphite: neutral greys, colors that read on near-black without glowing.
+    static let graphite = TerminalPalette(
+        ["#1A1A1D", "#E5484D", "#4FB477", "#F5A524", "#6E9BD8", "#B48EAD", "#5FB3B3", "#C9C7C3",
+         "#4A4A50", "#FF6369", "#6BD18F", "#FFC24B", "#8DB4EE", "#CDA6C6", "#7FCECE", "#EDEBE8"],
+        foreground: "#E8E6E3", background: "#0E0E0F")
+
+    /// Paper: warm off-white with ink-dark colors that keep AA contrast.
+    static let paper = TerminalPalette(
+        ["#1A1A1A", "#B3261E", "#2E7D4F", "#9A5B00", "#2457A5", "#8A3D8F", "#0F7470", "#6B6964",
+         "#55524D", "#D03A30", "#36925D", "#B86E00", "#3168C2", "#A04FA6", "#178A85", "#8F8B84"],
+        foreground: "#1A1A1A", background: "#F7F6F3")
+
+    /// Palettes offered in Settings. "auto" follows the appearance (Graphite or Paper).
+    static let named: [(id: String, name: String, palette: TerminalPalette)] = [
+        ("graphite", "Graphite", .graphite),
+        ("paper", "Paper", .paper),
+        ("dracula", "Dracula", .dracula),
+        ("nord", "Nord", .nord),
+        ("gruvbox", "Gruvbox", .gruvboxDark),
+        ("monokai", "Monokai", .monokai),
+        ("one-dark", "One Dark", .oneDark),
+        ("solarized", "Solarized Dark", .solarizedDark),
+        ("catppuccin", "Catppuccin Mocha", .catppuccinMocha),
+    ]
+
     static let tetheraDark = TerminalPalette(
         ["#1C1F27", "#FF6B70", "#7EE0A1", "#F5C66B", "#6CA8FF", "#C792FF", "#5FD7E8", "#C9CDD6",
          "#5B6170", "#FF8C8F", "#9BF0B9", "#FFD88A", "#8EBDFF", "#D8ADFF", "#84E6F2", "#F4F5F8"],

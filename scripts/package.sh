@@ -15,8 +15,19 @@ DMG="$DIST/Tethera-macOS.dmg"
 
 echo "==> Building Tethera $VERSION ($BUILD_NUMBER)"
 if [ "${UNIVERSAL:-1}" = "1" ]; then
-    swift build -c release --arch arm64 --arch x86_64
-    PRODUCTS=".build/apple/Products/Release"
+    # One native build per architecture, merged with lipo. (`--arch arm64 --arch x86_64` goes
+    # through the Xcode build system, which can't resolve SwiftTerm's build plugin.)
+    for arch in arm64 x86_64; do
+        swift build -c release --triple "$arch-apple-macosx14.0"
+    done
+    ARM="$(swift build -c release --triple arm64-apple-macosx14.0 --show-bin-path)"
+    X86="$(swift build -c release --triple x86_64-apple-macosx14.0 --show-bin-path)"
+    PRODUCTS=".build/universal"
+    rm -rf "$PRODUCTS" && mkdir -p "$PRODUCTS"
+    for binary in Tethera tethera-cli; do
+        lipo -create "$ARM/$binary" "$X86/$binary" -output "$PRODUCTS/$binary"
+    done
+    cp -R "$ARM/Tethera_Tethera.bundle" "$PRODUCTS/"
 else
     swift build -c release
     PRODUCTS="$(swift build -c release --show-bin-path)"
@@ -24,8 +35,10 @@ fi
 
 echo "==> Assembling $APP"
 rm -rf "$DIST"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$PRODUCTS/Tethera" "$APP/Contents/MacOS/Tethera"
+# The session daemon and CLI. Named `tethera` inside the bundle (the app looks for it here).
+cp "$PRODUCTS/tethera-cli" "$APP/Contents/Helpers/tethera"
 # Bundle.tethera looks for the SwiftPM resource bundle in Contents/Resources.
 cp -R "$PRODUCTS/Tethera_Tethera.bundle" "$APP/Contents/Resources/"
 
@@ -59,6 +72,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 echo "==> Signing (ad-hoc)"
+codesign --force --sign - "$APP/Contents/Helpers/tethera"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 

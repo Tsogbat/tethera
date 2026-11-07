@@ -1,4 +1,5 @@
 import Foundation
+import TetheraKit
 import OSLog
 
 /// The user's login-shell environment, captured once in the background.
@@ -62,18 +63,8 @@ final class ShellEnvironment: @unchecked Sendable {
         return String(cString: shell)
     }
 
-    /// Session markers a parent agent sets for its own children. Inherited by our shells, they
-    /// make a `claude` run inside Tethera believe it is nested in the session that launched us.
-    static func removingParentAgentMarkers(_ env: [String: String]) -> [String: String] {
-        env.filter { key, _ in
-            !(key == "CLAUDECODE" || key == "CLAUDE_PID" || key == "CLAUDE_EFFORT"
-              || key.hasPrefix("CLAUDE_CODE_SESSION") || key.hasPrefix("CLAUDE_CODE_MESSAGING")
-              || key == "CLAUDE_CODE_ENTRYPOINT" || key == "CLAUDE_CODE_CHILD_SESSION" || key == "CLAUDE_CODE_EXECPATH")
-        }
-    }
-
     private static func capture() -> [String: String] {
-        var fallback = removingParentAgentMarkers(ProcessInfo.processInfo.environment)
+        var fallback = ShellLaunch.removingParentAgentMarkers(ProcessInfo.processInfo.environment)
         if fallback["LANG"] == nil { fallback["LANG"] = "en_US.UTF-8" }
 
         let begin = "__TETHERA_ENV_BEGIN__"

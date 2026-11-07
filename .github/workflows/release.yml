@@ -22,8 +22,10 @@ jobs:
           xcode-version: latest-stable
 
       - name: Test
-        # The real-shell tests depend on the runner's login shell setup; they run locally.
-        run: swift test --skip ShellSessionTests
+        # The daemon test runs the real `tethera` helper, which `swift test` doesn't build itself.
+        run: |
+          swift build --product tethera-cli
+          swift test
 
       - name: Package
         run: scripts/package.sh "${GITHUB_REF_NAME#v}"

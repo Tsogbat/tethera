@@ -1,118 +1,109 @@
 # Tethera Architecture
 
-Tethera is a SwiftUI macOS app (SwiftPM, no Xcode project). Each tab runs the user's login shell in a real pseudo-terminal. Shell integration marks command boundaries with OSC 133, and Tethera turns each command into a block. While a command runs, its bytes feed a live SwiftTerm emulator. When it ends, the screen is captured as styled text and the emulator is reused for the next command.
+Tethera has two processes:
 
-AI features run the coding CLIs the user is already signed in to (OpenCode, Claude Code, Codex, Hermes, Gemini, Ollama) as headless subprocesses. There are no API keys and no network code in the app.
+- **The app** (`Tethera`, SwiftUI + AppKit) renders sessions and the agent UI.
+- **The session daemon** (`tethera daemon`, bundled as `Contents/Helpers/tethera`) owns every PTY.
 
-## Data flow
-
-```text
- keys / paste                                         OSC 133 A·B·C·D, OSC 7
- ───────────────┐                                    ┌──────────────────────────┐
-                ▼                                    │                          │
-  InputBarView ─▶ BlockTerminalViewModel ─submit──▶ ShellSession (forkpty) ─▶ zsh/bash
-                     ▲        │                      │  bytes
-                     │        │                      ▼
-                     │        │               OSC133Splitter ── events ──┐
-                     │        │                      │ output bytes      │
-                     │        ▼                      ▼                   │
-                     │   blocks: [TerminalBlock]   KittyKeyboardFilter   │
-                     │        ▲                      ▼                   │
-                     │        │ snapshot      LiveTerminal (SwiftTerm) ◀─┘ keys while running
-                     │        └──── StyledText ◀─────┘
-                     │
-                     └── AIAssistant ─▶ AgentRunner ─▶ opencode / claude / codex / … (headless)
-```
-
-1. **Submit.** The view model appends a running block at once and sends the line to the shell (`⌃U` + text + `↩`, bracketed paste for multi-line).
-2. **Split.** `OSC133Splitter` is a byte-level state machine. It drops the prompt and echo (A→C), emits events for C (output starts), D (exit code) and OSC 7 (cwd), and passes every other escape sequence through untouched. It handles sequences split across reads.
-3. **Render live.** Output bytes go to `LiveTerminal`, a SwiftTerm `TerminalView` sized to the pane, so colors, `\r` progress bars and cursor movement behave like any terminal. Keys typed while a command runs go straight to the PTY.
-4. **Full-pane.** Known TUIs and agents (`vim`, `htop`, `less`, `ssh`, `claude`, `codex`, `opencode` …), or any program that switches to the alternate screen, take over the pane.
-5. **Snapshot.** On D, `StyledText.capture` reads scrollback and screen into a run-length list of styled spans. The block keeps that plus plain text for search, copy and AI context.
-
-## Source layout
+Sessions live in the daemon, so they keep running when the app quits. The app attaches to them over a Unix socket.
 
 ```text
-Tethera/
-├── Core/
-│   ├── TerminalApp.swift          App, menu commands and shortcuts, window setup
-│   ├── BlockTerminalViewModel     One session: shell, emulator, blocks, history, AI
-│   ├── TerminalBlock.swift        Block model (command / AI / system), Codable
-│   ├── Shell/
-│   │   ├── ShellSession           forkpty via SwiftTerm LocalProcess, resize, non-blocking exit
-│   │   ├── ShellEnvironment       Login-shell env capture (PATH from Finder launches)
-│   │   └── OSC133Splitter         Byte stream → semantic events
-│   ├── Terminal/
-│   │   ├── LiveTerminal           SwiftTerm view, geometry, focus, scroll routing
-│   │   ├── KittyKeyboardFilter    Drops kitty keyboard CSI-u sequences (see below)
-│   │   ├── StyledText             Emulator buffer → styled spans → AttributedString
-│   │   └── TerminalPalette        16-color ANSI palettes
-│   ├── AI/
-│   │   ├── AgentCLI               Providers: argv, login command, models, interactive programs
-│   │   ├── AgentDetector          Finds installed CLIs and versions
-│   │   ├── AgentRunner            Process + output parsers → AsyncStream<AgentEvent>
-│   │   └── AIAssistant            Prompts, context, command extraction, destructive warnings
-│   ├── AutocompleteEngine         Ghost text and the completion menu
-│   ├── CommandHistoryManager      History (+ ~/.zsh_history), search, debounced saves
-│   ├── GitService                 Branch, dirty, ahead/behind in one `git status`
-│   └── MediaService               `preview <file>`
-├── Models/                        Tabs, splits, settings (themes, terminal, AI)
-├── UI/
-│   ├── Blocks/                    BlockView, AIBlockView, LiveTerminalHost
-│   ├── Input/                     InputBarView, CommandEditor (NSTextView)
-│   ├── Design/                    Tokens, typography, motion, glass, AgentBadge
-│   ├── TerminalPaneView           Block list, full-pane view, welcome
-│   └── TabBarView, CommandPaletteView, SearchOverlayView, NativeSettingsView …
-└── Resources/
-    ├── shell/                     tethera.zsh, tethera.bash
-    └── Brand/                     App icon
+ Tethera.app                                            tethera daemon (one per user)
+ ┌──────────────────────────────┐   framed protocol    ┌─────────────────────────────────────────┐
+ │ Sidebar · Panes · Inspector  │◀──── d.sock 0600 ───▶│ SessionHost × N                         │
+ │ DaemonClient ─ sessions[]    │  control: JSON       │   forkpty(login shell)  ◀── input       │
+ │ SessionTerminal (SwiftTerm,  │  data: output frames │   headless SwiftTerm Terminal  (record) │
+ │   Metal) per session         │  snapshot on attach  │   QueryFilter → clients                 │
+ └──────────────────────────────┘                      │   PromptScanner (OSC 133)               │
+        ▲                                              │   ProcessInspector (foreground agent)   │
+        │ tethera hook <agent>  (agent hooks, stdin)   │   OSC 7501 / hooks → AgentInfo          │
+        └──────────────────────────────────────────────│ sessions.json + snapshots/ (cold restore)│
+                                                       └─────────────────────────────────────────┘
 ```
 
-## Shell integration
+## Packages
 
-zsh starts with `ZDOTDIR` pointing at generated shims in `~/Library/Application Support/Tethera/shell/zsh`. Each shim sources the user's real file, then `.zshrc` loads `tethera.zsh` and restores the user's `ZDOTDIR`. Bash uses `--rcfile` with a shim that mimics login startup. Nothing is typed into the shell, so there is no startup race. The scripts:
-
-- emit OSC 133 A/B/C/D (exit code on D) and OSC 7 with `$HOST`
-- guard against double loading
-- turn off `PROMPT_SP`, since blocks are separate and the `%` marker would leak into output
-
-The PTY gets `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=Tethera` and a UTF-8 `LANG`. Session markers inherited from a parent agent (for example `CLAUDECODE` when launched from Claude Code) are removed, so a `claude` run inside Tethera isn't treated as nested.
-
-## Terminal emulator notes
-
-- **PTY size.** The emulator is sized to the pane: the full pane height, so programs see a real screen. Inline blocks clip to the rows in use. SwiftTerm's `sizeChanged` drives `TIOCSWINSZ`, and the initial PTY size is read from the emulator, so the two never disagree.
-- **Kitty keyboard protocol.** SwiftTerm 1.5 treats every `CSI … u` as "restore cursor" and ignores the `?`/`>`/`<`/`=` marker. Claude Code, Codex and OpenCode send `CSI ? u` at startup and then redraw with relative cursor moves, so their screens tore. `KittyKeyboardFilter` drops these sequences, and apps fall back to legacy keys.
-- **Interrupts.** Exit codes 130/137/143 count as interrupted, and so does leaving an interactive program. Neither triggers ✦ Fix.
-
-## AI
-
-`AIAssistant` builds a prompt with OS, shell, cwd, git state and the tail of recent blocks (plus any attached blocks). `AgentRunner` runs the selected CLI with the user's login environment, `NO_COLOR=1` and stdin from `/dev/null`, then streams `.update` and `.finished`/`.failed` events. Tools are always off or read-only:
-
-| Provider | Headless call |
+| Target | Role |
 | --- | --- |
-| OpenCode | `opencode run --format json --agent plan [-m model]` |
-| Claude Code | `claude -p --tools "" --output-format stream-json --verbose --include-partial-messages --no-session-persistence` |
-| Codex | `codex exec --json --ephemeral --skip-git-repo-check -s read-only -C <cwd>` |
-| Hermes | `hermes -z <prompt> --ignore-rules` |
-| Gemini | `gemini -o stream-json` |
-| Ollama | `ollama run <model>` |
+| `TetheraKit` | Wire protocol (`Frame`, `FrameDecoder`, `ControlMessage`), models (`SessionInfo`, `AgentInfo`, `AgentKind`), `FramedSocket`/`UnixSocket`/`DaemonLauncher`, `ShellLaunch` (login shell + OSC 133 integration via `ZDOTDIR` / `--rcfile`), `HookMapper`, `AgentIntegrations`. |
+| `CPTY` | `forkpty` + exec in C: resets every signal and the signal mask, and closes inherited fds in the child. Swift can't run safely between fork and exec. |
+| `TetheraDaemon` | `Daemon` (socket server, routing, timers, persistence), `SessionHost`, `VTSnapshot`, `QueryFilter`, `PromptScanner`, `ProcessInspector`. |
+| `TetheraCLI` → `tethera` | `daemon`, `list`, `new`, `attach`, `rename`, `close`, `shutdown`, `hook`, `statusline`, `title`. |
+| `Tethera` | The app: `DaemonClient`, `Workspace` (panes, focus, layout), `SessionTerminal` (SwiftTerm view per session), views. |
 
-Failures map to hints (not installed, signed out, rate-limited). Settings → AI has Sign in buttons that open the CLI's login in a new tab.
+## The daemon is the terminal of record
 
-- **`#` generate.** Puts one command in the editor, never runs it, and flags destructive commands.
-- **`?` ask.** Streams an AI block rendered as Markdown, with Insert/Run on code blocks.
-- **✦ Fix.** Runs once after a failure, if enabled. It shows a suggestion row and ghost text, and is cancelled when the user types.
+Each session feeds its output into a headless SwiftTerm `Terminal`. That emulator:
+
+- **Answers every query** a program sends: DA, DSR, DECRQM, color queries, kitty keyboard, and the OSC 7501 probe. `QueryFilter` strips those queries from what clients receive, so a client never answers too. Without this, the program would read duplicate replies as typed input.
+- **Serves snapshots.** On attach, `VTSnapshot` serializes the scrollback, screen, SGR attributes, cursor, scroll region and input modes (alt screen, bracketed paste, mouse, application cursor, kitty flags; cursor visibility via DECRQM) as VT sequences. A fresh client replays them and shows the same screen. Then a brief size nudge makes full-screen agents redraw.
+- **Keeps PTYs drained.** PTYs are drained even with no client attached, so a slow client never blocks a shell. A client that falls 32 MB behind is dropped and reattaches with a snapshot.
+
+## Protocol
+
+Each frame is `[u32 length][u8 kind][payload]`. The kinds are:
+
+- **control:** a JSON `ControlMessage`
+- **output:** session id, sequence number, bytes
+- **snapshot:** same layout as output
+- **input:** session id, bytes
+
+Control messages: `hello`/`welcome` (protocol version), `list`/`sessions`, `subscribe`, `create`/`created`, `attach`, `detach`, `resize`, `signal`, `rename`, `reorder`, `close`, `hook`, `updated`, `removed`, `shutdown`, `error`.
+
+**Security.** The socket is `~/Library/Application Support/Tethera/d.sock`, mode 0600, and the daemon checks every caller with `getpeereid`. There is no TCP listener. Remote access will reuse the same protocol over SSH stdio: `tethera attach` already works from any terminal.
+
+**Lifecycle.**
+- The app starts the daemon detached (`posix_spawn` with `POSIX_SPAWN_SETSID`) when the socket is missing. A lock file keeps it to one daemon per user.
+- ⌘Q leaves the daemon running. ⌥⌘Q sends `shutdown`.
+- Every 5 s the daemon saves `sessions.json` and a VT snapshot of each changed session. After a reboot, sessions come back *cold* and revive on attach with their history and folder.
+
+## Agent awareness
+
+`SessionInfo.agent` is driven by these sources, strongest first:
+
+1. **Hooks.** `tethera hook <source> [event]` runs inside the agent's process tree. It reads the session from `TETHERA_SESSION_ID`/`TETHERA_SOCKET`, timestamps the event (background hooks can arrive out of order), and forwards it. `HookMapper` turns Claude Code, Codex, Antigravity, Hermes and OpenCode payloads into `AgentUpdate`s: working, needs you (permission/question/auth), done, error, tool, model, context %, cost.
+2. **OSC 7501 Program Status.** Claude Code reports `idle|working|blocked|done|error` itself once the terminal answers its probe; the daemon's emulator answers it.
+3. **OSC 9/99/777 and BEL.** These bump `attention` for notifications.
+4. **The foreground process.** `tcgetpgrp` on the PTY, then `proc_pidpath` and `KERN_PROCARGS2`, identify the agent, including Node and Python agents by their arguments. Output activity marks it working; two seconds of quiet means waiting. The agent is forgotten only when the shell itself is back in front.
+
+`AgentIntegrations` writes the hooks:
+
+| Agent | What it writes |
+| --- | --- |
+| Claude Code | `~/.claude/settings.json` hooks; background hooks, except an in-line permission hook that prints nothing. Optionally wraps the status line: the wrapper reports the JSON, then runs the user's saved command. |
+| Codex | `~/.codex/hooks.json` |
+| Antigravity | `~/.gemini/config/hooks.json`, plus a `title` command for live state |
+| Hermes | A marked block appended to `~/.hermes/config.yaml`, never rewritten |
+| OpenCode | A plugin file Tethera owns |
+
+Every change is previewed as a diff, backed up, and reversible. Hooks point at `~/.local/bin/tethera`, a stable link with no spaces, because Hermes runs hook commands without a shell.
+
+## Shell support
+
+Sessions run the user's login shell:
+
+- **zsh:** loaded through a `ZDOTDIR` shim that sources the user's own files.
+- **bash:** loaded with `--rcfile`.
+
+Tethera's script only emits OSC 133 prompt marks and OSC 7 cwd; the user's rc files are never edited. The PTY environment adds `TERM_PROGRAM=Tethera`, `TETHERA_SESSION_ID` and `TETHERA_SOCKET`, and drops session markers inherited from a parent agent, such as `CLAUDECODE`.
+
+## Rendering
+
+The renderer is SwiftTerm 1.99.1, pinned, on its 2.0 track with Metal enabled. It sits behind `TerminalSurface`, so libghostty can be benchmarked later. Each session's view stays attached while it's on screen and for the six most recently used sessions; the rest detach and reattach from a snapshot. Other details:
+
+- **Nerd Font icons** fall back to the bundled Symbols Nerd Font through SwiftTerm's glyph-fallback provider.
+- **Ligatures** are off: a terminal draws one character per cell.
 
 ## Building and releasing
 
 ```bash
-make run     # debug build
-make test    # unit tests + real-shell tests
-make app     # dist/Tethera.app + dist/Tethera-macOS.dmg (universal, ad-hoc signed)
+make run      # debug build
+make test     # protocol, filters, snapshot round-trips, hook mapping, config merges, a real daemon + zsh session
+make app      # dist/Tethera.app + dist/Tethera-macOS.dmg
 ```
 
-`scripts/package.sh` puts the SwiftPM resource bundle in `Contents/Resources`. `Bundle.tethera` looks there first, because SwiftPM's generated `Bundle.module` only checks the `.app` root (which code signing forbids) and the build folder.
+`scripts/package.sh` builds arm64 and x86_64 separately with SwiftPM's native build system and merges them with `lipo`. It copies `tethera-cli` to `Contents/Helpers/tethera`, signs the helper and then the app, and creates the DMG.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`. It tests, packages, and publishes `Tethera-macOS.dmg` to the GitHub Release, using `.github/release-notes/<tag>.md` as the body. The website in `docs/` is served by GitHub Pages and links to `releases/latest/download/Tethera-macOS.dmg`.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, packages and publishes to the GitHub Release. The website is `docs/` on GitHub Pages.
 
-Debug builds include `DebugHooks` (`TETHERA_SNAPSHOT_DIR`, `TETHERA_SCRIPT`). These script the app and capture its own window for screenshots, without needing Screen Recording permission.
+Debug builds include `DebugHooks` (`TETHERA_SNAPSHOT_DIR`, `TETHERA_SCRIPT`) for scripted runs and window captures. `TETHERA_HOME` points the app and daemon at an isolated session store for tests.

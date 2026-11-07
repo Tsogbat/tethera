@@ -1,6 +1,7 @@
 import Foundation
+import TetheraKit
 
-/// Finds which AI CLIs are installed and their versions.
+/// Finds which agent CLIs are installed, through the login shell's PATH, and their versions.
 @MainActor
 final class AgentDetector: ObservableObject {
     static let shared = AgentDetector()
@@ -11,70 +12,50 @@ final class AgentDetector: ObservableObject {
         var isInstalled: Bool { path != nil }
     }
 
-    @Published private(set) var statuses: [AgentCLI: Status] = [:]
+    /// The agents Tethera offers in "New session", in menu order.
+    static let launchable: [AgentKind] = [.claude, .codex, .opencode, .hermes, .antigravity, .gemini, .ollama]
+
+    @Published private(set) var statuses: [AgentKind: Status] = [:]
     @Published private(set) var isRefreshing = false
-    @Published private(set) var models: [AgentCLI: [String]] = [:]
 
     private init() {
         Task { await refresh() }
     }
 
-    func status(for provider: AgentCLI) -> Status? {
-        statuses[provider]
+    func status(for kind: AgentKind) -> Status? {
+        statuses[kind]
+    }
+
+    var installed: [AgentKind] {
+        Self.launchable.filter { statuses[$0]?.isInstalled == true }
     }
 
     func refresh() async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-        await withTaskGroup(of: (AgentCLI, Status).self) { group in
-            for provider in AgentCLI.allCases {
+        await withTaskGroup(of: (AgentKind, Status).self) { group in
+            for kind in Self.launchable {
                 group.addTask {
-                    guard let path = await ShellEnvironment.shared.resolve(provider.binary) else {
-                        return (provider, Status(path: nil, version: nil))
+                    guard let path = await ShellEnvironment.shared.resolve(kind.command) else {
+                        return (kind, Status(path: nil, version: nil))
                     }
                     let output = await Self.run(path, ["--version"], timeout: 8)
-                    return (provider, Status(path: path, version: Self.parseVersion(output)))
+                    return (kind, Status(path: path, version: Self.parseVersion(output)))
                 }
             }
-            for await (provider, status) in group {
-                statuses[provider] = status
+            for await (kind, status) in group {
+                statuses[kind] = status
             }
         }
     }
 
-    /// Models the provider can list itself (OpenCode, Ollama).
-    func loadModels(for provider: AgentCLI) async {
-        var resolved = statuses[provider]?.path
-        if resolved == nil { resolved = await ShellEnvironment.shared.resolve(provider.binary) }
-        guard let path = resolved else { return }
-        let output: String
-        switch provider {
-        case .opencode:
-            output = await Self.run(path, ["models"], timeout: 20)
-            models[provider] = output.split(separator: "\n")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { $0.contains("/") && !$0.contains(" ") }
-                .sorted { lhs, rhs in
-                    // Free models first — that's why people pick OpenCode.
-                    let lFree = lhs.hasPrefix("opencode/"), rFree = rhs.hasPrefix("opencode/")
-                    return lFree != rFree ? lFree : lhs < rhs
-                }
-        case .ollama:
-            output = await Self.run(path, ["list"], timeout: 10)
-            models[provider] = output.split(separator: "\n").dropFirst()
-                .compactMap { $0.split(separator: " ").first.map(String.init) }
-        default:
-            break
-        }
-    }
-
-    private nonisolated static func parseVersion(_ output: String) -> String? {
-        let firstLine = ANSIStripper.strip(output).split(separator: "\n").first.map(String.init) ?? ""
+    nonisolated static func parseVersion(_ output: String) -> String? {
+        let firstLine = output.split(separator: "\n").first.map(String.init) ?? ""
         guard let regex = try? NSRegularExpression(pattern: "\\d+\\.\\d+(?:\\.\\d+)?"),
               let match = regex.firstMatch(in: firstLine, range: NSRange(firstLine.startIndex..., in: firstLine)),
               let range = Range(match.range, in: firstLine) else {
-            return firstLine.isEmpty ? nil : String(firstLine.prefix(32))
+            return nil
         }
         return String(firstLine[range])
     }

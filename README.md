@@ -5,8 +5,8 @@
 <h1 align="center">Tethera</h1>
 
 <p align="center">
-  A block-based terminal for macOS.<br>
-  Blocks for every command. AI from the CLIs you already use — no API keys.
+  A terminal for running and supervising AI coding agents.<br>
+  Your shell, persistent sessions, and one place to see what every agent is doing.
 </p>
 
 <p align="center">
@@ -16,55 +16,79 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screens/hero.png" alt="Tethera with command blocks, an AI fix suggestion and an AI answer">
+  <img src="docs/assets/screens/v04-hero.png" alt="Tethera: a sessions sidebar with OpenCode working and Claude Code waiting, split terminal panes, and the agent inspector">
 </p>
 
-## What's new in 0.3
+## Why
 
-Tethera 0.3 is a rewrite of the terminal core and the UI.
+Coding agents run in terminals, and you end up with five of them in five tabs, checking each one to see if it's waiting on you. Tethera is a terminal built for that:
 
-| v0.2 | v0.3 |
-| :---: | :---: |
-| <img src="docs/assets/screens/before.png" alt="Tethera 0.2"> | <img src="docs/assets/screens/after.png" alt="Tethera 0.3"> |
+- **Sessions persist.** Every session lives in a small background daemon, so your shells — and the agents running in them — keep going when you quit the app, and come back exactly as they were. After a reboot they return with their history and folder.
+- **Agent-aware.** The sidebar shows which agent runs in which session and what it's doing: working, waiting, **needs you**, done, error. You get a notification and a Dock badge when one needs you, and ⇧⌘U takes you there.
+- **A real terminal.** Your own zsh or bash, exactly as you configured it, in fast GPU-rendered panes (SwiftTerm with Metal). TUIs, `vim`, `ssh`, Nerd Font prompts — everything works.
 
-- **A real terminal underneath.** Every tab runs your login shell in a pseudo-terminal (SwiftTerm). Output streams live with full ANSI color, and keys go to the running program, so `vim`, `htop`, `less`, `ssh`, REPLs and `sudo` prompts all work.
-- **Agents run inside.** `claude`, `codex`, `opencode`, `hermes`, `gemini` and other TUIs open full-pane with working keys, resize and mouse; finished sessions collapse back into a block.
-- **AI from your own logins.** Tethera drives the coding CLIs you're already signed in to — OpenCode (free models, the default), Claude Code, Codex, Hermes, Gemini or local Ollama.
-- **Race-free shell integration** for zsh and bash (OSC 133 / OSC 7), so blocks split exactly at command boundaries.
-- **New design**: flat blocks with cwd · branch · duration headers, title-bar tabs, a floating input bar, Liquid Glass on macOS 26, and nine themes with full 16-color palettes.
+## Agents
 
-## Features
-
-**Blocks**
-- Every command is a block: working directory, git branch, duration and an exit-code pill when it fails.
-- Hover a block to rerun, edit, copy the command or output, explain or fix it with AI, or attach it to your next AI question.
-- Long output collapses to its last lines, with a button to show the rest; Markdown output renders; `preview <file>` shows images inline.
-
-**AI** (uses the CLI you pick in the input bar; tools are always off or read-only)
-- `#` + plain English → a shell command in the editor. It never runs until you press ↩.
-- `?` + a question → an answer block about your session, with Insert / Run on code.
-- **✦ Fix** — when a command fails, a suggested fix appears under the block and as ghost text.
-- **Send to agent** opens Claude Code, Codex, OpenCode, Hermes or Gemini in the pane, seeded with the block.
-
-**Editing**
-- Ghost-text completion from your history (including `~/.zsh_history`), commands and subcommands; Tab for the menu, → to accept.
-- Multi-line input with ⇧↩, ↑/↓ history, ⌃R history search.
-
-| AI provider | How Tethera calls it | Sign in with |
+| Agent | Works out of the box | With Connect (Settings → Agents) |
 | --- | --- | --- |
-| OpenCode *(default, free models)* | `opencode run --format json --agent plan` | `opencode auth login` |
-| Claude Code | `claude -p --tools "" --output-format stream-json` | `claude` → `/login` |
-| Codex | `codex exec --json -s read-only --ephemeral` | `codex login` |
-| Hermes | `hermes -z` | `hermes setup` |
-| Gemini CLI | `gemini -o stream-json` | `gemini` |
-| Ollama | `ollama run <model>` | — (local) |
+| Claude Code | state from its own status reports (OSC 7501) | tool calls, permission requests, finished turns; model, context and cost from your status line (which keeps working unchanged) |
+| Codex | detected, working/waiting | approvals, finished turns (trust the hooks once in `/hooks`) |
+| OpenCode | detected, working/waiting | permission requests, finished turns (a small plugin) |
+| Hermes | detected, working/waiting | tool calls, approvals, turn results (approve the hooks once) |
+| Antigravity (`agy`) | detected, working/waiting | tool confirmation, cost, finished turns |
+| Gemini CLI, Aider, … | detected, working/waiting | — |
+| Ollama | `ollama launch claude/codex/opencode` from **+** runs agents on local models | — |
 
-Settings → AI shows which CLIs are installed, lets you pick models, and has a Test button.
+Connect shows the exact change to each config file before writing it, saves a backup, and Disconnect removes only Tethera's entries. Agents always run with your own logins — Tethera has no accounts or API keys.
+
+Agents start inside a shell, so when one exits, the session (and its scrollback) stays.
+
+## The window
+
+- **Sidebar** — every session, named after its folder until you rename it (double-click). Amber marks a session that needs you; a spinner, one that's working.
+- **Panes** — ⌘D / ⇧⌘D split; ⌘W closes a pane but the session keeps running.
+- **Inspector** (⌥⌘I) — the agent's state, message, current tool, model / context / cost, and Interrupt; a Git tab to stage, commit, fetch, pull and push.
+- **Agents overview** (⇧⌘A) — one table of every session, sorted by what needs you.
+- **Command palette** (⌘K) — sessions, new agent sessions, splits, settings.
+
+<p align="center">
+  <img src="docs/assets/screens/v04-overview.png" width="49%" alt="Agents overview">
+  <img src="docs/assets/screens/v04-light.png" width="49%" alt="Paper (light) theme">
+</p>
+
+## Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| ⌘T | New shell session |
+| ⌘K / ⌘P | Command palette |
+| ⇧⌘A | Agents overview |
+| ⇧⌘U | Go to the session that needs you |
+| ⌘] / ⌘[ · ⌘1…⌘9 | Next / previous session · session by position |
+| ⌘D / ⇧⌘D | Split right / down |
+| ⌘W | Close pane (the session keeps running) |
+| ⌥⌘W | End session |
+| ⇧⌘R | Rename session |
+| ⌥⌘I | Inspector |
+| ⌘+ / ⌘- / ⌘0 | Font size |
+| ⌘Q | Quit — sessions keep running |
+| ⌥⌘Q | Quit and end all sessions |
+
+## The `tethera` command
+
+The session daemon is also a CLI (linked at `~/.local/bin/tethera` once you connect an agent):
+
+```bash
+tethera list                         # sessions, their agents and state
+tethera new --name api --attach      # a new session, attached to this terminal
+tethera attach api                   # attach from any terminal (⌃\ detaches) — also over SSH
+tethera close api
+```
 
 ## Install
 
 1. [Download **Tethera-macOS.dmg**](https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg), open it, and drag Tethera to Applications.
-2. The build isn't notarized yet, so the first time, right-click Tethera.app → **Open** → **Open**. Or:
+2. The build isn't notarized yet, so the first time, right-click Tethera.app → **Open** → **Open**, or:
    ```bash
    xattr -dr com.apple.quarantine /Applications/Tethera.app
    ```
@@ -77,35 +101,19 @@ Requires macOS 14 Sonoma or later, on Apple silicon or Intel.
 git clone https://github.com/Tsogbat/tethera.git
 cd tethera
 make run          # debug build
-make test         # unit + real-shell tests
+make test         # unit, protocol, daemon and real-shell tests
 make app          # dist/Tethera.app and dist/Tethera-macOS.dmg (universal)
 ```
 
 Needs Xcode 26 (Swift 6.2).
 
-## Keyboard shortcuts
+## What's next
 
-| Shortcut | Action |
-| --- | --- |
-| ⌘T / ⌘W | New tab / close tab |
-| ⌘D / ⌘⇧D | Split right / split down |
-| ⌘P | Command palette |
-| ⌘F, ⌃R | Search history |
-| ⌘K | Clear blocks |
-| ⌘I | Toggle AI mode |
-| ⌘↑ / ⌘↓ | Select previous / next block |
-| ⌘⇧C | Copy selected block |
-| ⌘+ / ⌘- / ⌘0 | Font size |
-| ⌘, | Settings |
-| ⌃C | Interrupt the running command |
-
-## Built-in commands
-
-| Command | Description |
-| --- | --- |
-| `clear` | Clear all blocks |
-| `exit`, `quit` | Close the tab |
-| `preview <file>`, `show <file>` | Show an image inline |
+- Built-in code editor and file, image, PDF and video viewers
+- A browser your agents can drive (via MCP)
+- Music controls in the status bar
+- Agent workflows: run, monitor and debug agents across git worktrees
+- Remote control of your sessions
 
 ## Architecture
 
@@ -113,4 +121,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 
-GNU Affero General Public License v3 — see [LICENCE.TXT](LICENCE.TXT).
+GNU Affero General Public License v3 — see [LICENCE.TXT](LICENCE.TXT). Bundled fonts: Geist Mono, IBM Plex Mono and JetBrains Mono (SIL OFL 1.1); Symbols Nerd Font (MIT).
