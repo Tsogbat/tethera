@@ -19,6 +19,9 @@ struct TitleBar: View {
             } else {
                 Spacer()
             }
+            if let session = workspace.focusedSession {
+                SessionToolButtons(session: session)
+            }
             HStack(spacing: 2) {
                 IconButton(systemName: "rectangle.split.2x1", help: "Split right (⌘D)") { workspace.split(.horizontal) }
                 IconButton(systemName: "rectangle.split.1x2", help: "Split down (⇧⌘D)") { workspace.split(.vertical) }
@@ -32,6 +35,40 @@ struct TitleBar: View {
         .background(WindowDragArea())
         .background(theme.bg.color)
         .overlay(alignment: .bottom) { Rectangle().fill(theme.hairline.color).frame(height: 1) }
+    }
+}
+
+/// "Preview :5173" when a dev server is up, and the session's live changes.
+struct SessionToolButtons: View {
+    let session: SessionInfo
+    @ObservedObject private var previews = PreviewDetector.shared
+    @ObservedObject private var git = GitMonitor.shared
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let url = previews.urls[session.id] {
+                Button {
+                    PreviewDetector.shared.open(for: session.id)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "play.rectangle").font(.system(size: 10.5, weight: .medium))
+                        Text("Preview :\(url.port.map(String.init) ?? "")").font(TypeScale.ui(11.5, .medium))
+                    }
+                    .foregroundStyle(theme.text.color)
+                    .padding(.horizontal, 7)
+                    .frame(height: 22)
+                    .background(RoundedRectangle(cornerRadius: Metrics.controlRadius).strokeBorder(theme.hairline.color))
+                }
+                .buttonStyle(.plain)
+                .help("Open \(url.absoluteString) beside this session")
+            }
+            if git.status(for: session.cwd)?.info.isDirty == true {
+                IconButton(systemName: "plusminus", help: "Changes (⇧⌘E)") {
+                    Workspace.shared.open(.changes(session.id), besideSession: session.id)
+                }
+            }
+        }
     }
 }
 
@@ -171,6 +208,15 @@ struct PaneView: View {
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
             case .session(let id):
                 TerminalHost(sessionID: id, paneID: pane.id)
+            case .file(let path):
+                FilePane(path: path, paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .browser(let id):
+                BrowserPane(tabID: id, paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .changes(let id):
+                ChangesPane(sessionID: id, paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
             }
         }
         .frame(minWidth: 240, minHeight: 120)
@@ -258,7 +304,8 @@ struct StatusBar: View {
             if let agent = workspace.focusedSession?.agent {
                 Text(agentDetail(agent))
             }
-            Text("\(client.sessions.count) sessions")
+            NowPlayingItem()
+            Text(client.sessions.count == 1 ? "1 session" : "\(client.sessions.count) sessions")
             Text("⌘K").foregroundStyle(theme.text3.color.opacity(0.8))
         }
         .font(TypeScale.ui(11))

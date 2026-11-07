@@ -115,6 +115,9 @@ struct CommandPalette: View {
         }
         items.append(Item(id: "home", title: "Home", shortcut: "⇧⌘H") { workspace.showHome() })
         items.append(Item(id: "new", title: "New Shell", shortcut: "⌘T") { workspace.newSession() })
+        items.append(Item(id: "open-file", title: "Open File…", shortcut: "⌘O") { workspace.chooseFileToOpen() })
+        items.append(Item(id: "browser", title: "New Browser Tab", shortcut: "⌘L") { workspace.newBrowserTab() })
+        items.append(Item(id: "changes", title: "Show Changes", shortcut: "⇧⌘E") { workspace.showChanges() })
         for kind in detector.installed where kind != .ollama {
             items.append(Item(id: "agent-\(kind)", title: "New \(kind.displayName) Session", detail: kind.command, agent: kind) {
                 workspace.newSession(agent: kind)

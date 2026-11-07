@@ -6,6 +6,7 @@ import TetheraKit
 struct AgentSettings: View {
     @ObservedObject private var detector = AgentDetector.shared
     @State private var connected: [AgentIntegrations.Target: Bool] = [:]
+    @State private var browserConnected: [AgentIntegrations.Target: Bool] = [:]
     @State private var statusLineConnected = false
     @State private var wrapStatusLine = true
     @State private var review: Review?
@@ -15,7 +16,13 @@ struct AgentSettings: View {
         let target: AgentIntegrations.Target
         let connecting: Bool
         let plan: AgentIntegrations.Plan
-        var id: String { "\(target.rawValue)-\(connecting)" }
+        var browser = false
+        var id: String { "\(target.rawValue)-\(connecting)-\(browser)" }
+        var title: String {
+            browser
+                ? "\(connecting ? "Add the browser to" : "Remove the browser from") \(AgentSettings.browserAgent(target).displayName)"
+                : "\(connecting ? "Connect" : "Disconnect") \(target.kind.displayName)"
+        }
     }
 
     var body: some View {
@@ -32,6 +39,16 @@ struct AgentSettings: View {
                 }
             } footer: {
                 Text("Claude Code reports its state to Tethera on its own. Connecting adds small hooks so every agent reports what it's doing — tool calls, permission requests, finished turns — and you get notified when one needs you. Tethera shows each change before writing it and keeps a backup.")
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                ForEach(AgentIntegrations.Target.allCases, id: \.self) { target in
+                    browserRow(target)
+                }
+            } header: {
+                Text("Browser for agents")
+            } footer: {
+                Text("Adds `tethera mcp` as an MCP server, so an agent can open pages in a Tethera tab beside its session, read them, click and type, and take screenshots: handy for checking the app it's building. You watch every step.")
                     .foregroundStyle(.secondary)
             }
             if let error {
@@ -87,9 +104,48 @@ struct AgentSettings: View {
         .padding(.vertical, 2)
     }
 
+    /// The agent whose config the browser goes into: `~/.gemini/settings.json` is Gemini CLI's.
+    static func browserAgent(_ target: AgentIntegrations.Target) -> AgentKind {
+        target == .antigravity ? .gemini : target.kind
+    }
+
+    @ViewBuilder
+    private func browserRow(_ target: AgentIntegrations.Target) -> some View {
+        let agent = Self.browserAgent(target)
+        let installed = detector.status(for: agent)?.isInstalled == true
+        HStack(spacing: 10) {
+            SessionGlyph(agent: agent, size: 14, color: .primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(agent.displayName)
+                Text((AgentIntegrations.mcpConfigFile(target).path as NSString).abbreviatingWithTildeInPath)
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if browserConnected[target] == true {
+                Label("Added", systemImage: "checkmark").labelStyle(.titleAndIcon).font(.caption).foregroundStyle(.secondary)
+                Button("Remove") { prepareBrowser(target, connecting: false) }.controlSize(.small)
+            } else if installed {
+                Button("Add…") { prepareBrowser(target, connecting: true) }.controlSize(.small)
+            } else {
+                Text("Not installed").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func prepareBrowser(_ target: AgentIntegrations.Target, connecting: Bool) {
+        error = nil
+        let executable = detector.status(for: Self.browserAgent(target))?.path
+        let plan = connecting
+            ? AgentIntegrations.mcpConnectPlan(target, agentExecutable: executable)
+            : AgentIntegrations.mcpDisconnectPlan(target, agentExecutable: executable)
+        review = Review(target: target, connecting: connecting, plan: plan, browser: true)
+    }
+
     private func reload() {
         for target in AgentIntegrations.Target.allCases {
             connected[target] = AgentIntegrations.isConnected(target)
+            browserConnected[target] = AgentIntegrations.isMCPConnected(target)
         }
         statusLineConnected = AgentIntegrations.isStatusLineConnected()
     }
@@ -109,7 +165,8 @@ struct AgentSettings: View {
             self.review = nil
             reload()
         } catch {
-            self.error = "Couldn't update \(review.target.configFile.path): \(error.localizedDescription)"
+            let file = review.browser ? AgentIntegrations.mcpConfigFile(review.target) : review.target.configFile
+            self.error = "Couldn't update \(file.path): \(error.localizedDescription)"
             self.review = nil
         }
     }
@@ -123,7 +180,7 @@ private struct PlanReview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("\(review.connecting ? "Connect" : "Disconnect") \(review.target.kind.displayName)")
+            Text(review.title)
                 .font(.headline)
             if let manual = review.plan.manualSteps {
                 Text(manual)
@@ -145,15 +202,28 @@ private struct PlanReview: View {
                 }
             }
             .frame(maxHeight: 320)
+            ForEach(Array(review.plan.commands.enumerated()), id: \.offset) { _, command in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Runs").font(.system(.caption, design: .monospaced).weight(.semibold))
+                    Text(command.map { $0.contains(" ") ? "'\($0)'" : $0 }.joined(separator: " "))
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.06)))
+                }
+            }
             if let note = review.plan.note {
                 Text(note).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Text("A backup of each file is saved next to it before writing.")
-                .font(.caption).foregroundStyle(.secondary)
+            if !review.plan.changes.isEmpty {
+                Text("A backup of each file is saved next to it before writing.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Spacer()
                 Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
-                Button(review.connecting ? "Connect" : "Disconnect", action: confirm)
+                Button(review.browser ? (review.connecting ? "Add" : "Remove") : (review.connecting ? "Connect" : "Disconnect"), action: confirm)
                     .keyboardShortcut(.defaultAction)
                     .disabled(!review.plan.hasChanges)
             }

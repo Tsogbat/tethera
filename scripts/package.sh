@@ -66,6 +66,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSAppleEventsUsageDescription</key><string>Tethera controls Music and Spotify from its status bar (play, pause, next) and shows the artwork.</string>
     <key>NSHumanReadableCopyright</key><string>Copyright © $(date +%Y) Tethera contributors.</string>
 </dict>
 </plist>

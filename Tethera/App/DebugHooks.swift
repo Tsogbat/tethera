@@ -8,7 +8,8 @@ import TetheraKit
 ///
 /// Steps: a shell line (typed into the focused session with ↩), `@type:<text>`, `@keys:<text>`
 /// (`\e`, `\r`, `\x03` escapes), `@new`, `@agent:<kind>`, `@split`, `@select:<n>`, `@palette`,
-/// `@overview`, `@inspector`, `@close`, `@home`, `@about` (captures about.png), `@appearance:<dark|light>`, `@wait:<sec>`, `@shot:<name>`, `@quit`.
+/// `@overview`, `@inspector`, `@close`, `@home`, `@about` (captures about.png), `@open:<path>`, `@preview`,
+/// `@changes`, `@closepane`, `@appearance:<dark|light>`, `@wait:<sec>`, `@shot:<name>`, `@quit`.
 @MainActor
 enum DebugHooks {
     static func runIfRequested() {
@@ -57,6 +58,26 @@ enum DebugHooks {
                 workspace.panes.append(pane)
                 workspace.focus(pane: pane.id)
             }
+        } else if step.hasPrefix("@open:") {
+            workspace.open(path: (String(step.dropFirst(6)) as NSString).expandingTildeInPath, besideSession: workspace.focusedSessionID)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        } else if step == "@preview" {
+            if let id = workspace.focusedSessionID { PreviewDetector.shared.open(for: id) }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        } else if step == "@changes" {
+            workspace.showChanges()
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+        } else if step == "@dumpeditor" {
+            func walk(_ view: NSView, _ depth: Int) {
+                if view is NSScrollView || view is NSTextView || view is NSRulerView || String(describing: Swift.type(of: view)).contains("Hosting") && depth < 6 {
+                    let frame = view.convert(view.bounds, to: nil)
+                    print("[dump] \(String(repeating: " ", count: depth))\(Swift.type(of: view)) frame=\(frame) hidden=\(view.isHidden) \((view as? NSTextView).map { "len=\($0.string.count) color=\(String(describing: $0.textColor)) tv.frame=\($0.frame)" } ?? "")")
+                }
+                view.subviews.forEach { walk($0, depth + 1) }
+            }
+            if let content = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) })?.contentView { walk(content, 0) }
+        } else if step == "@closepane" {
+            workspace.closeFocusedPane()
         } else if step == "@home" {
             workspace.showHome()
             try? await Task.sleep(nanoseconds: 800_000_000)

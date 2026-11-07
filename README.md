@@ -27,6 +27,27 @@ Coding agents run in terminals, and you end up with five of them in five tabs, c
 - **Agent-aware.** The sidebar shows which agent runs in which session and what it's doing: working, waiting, **needs you**, done, error. You get a notification and a Dock badge when one needs you, and ⇧⌘U takes you there.
 - **A real terminal.** Your own zsh or bash, exactly as you configured it, in fast GPU-rendered panes (SwiftTerm with Metal). TUIs, `vim`, `ssh`, Nerd Font prompts — everything works.
 - **Home.** Where Tethera opens: start any agent, pick up a recent folder, see which integrations are connected and who's running — with a little 3D computer whose keys you can press.
+- **Your tools, beside the agent.** The repo's changes as they happen, a preview of the app it's building, a browser it can drive, an editor and viewers for the files it makes, and your music.
+
+## Tools
+
+Tools open as panes beside the session that needs them.
+
+| Tool | What it does |
+| --- | --- |
+| **Changes** (⇧⌘E) | The session's repository, live: files newest-first, the diff of the selected one; stage, open or discard. |
+| **Preview** | When a dev server starts in a session, **Preview :PORT** appears in the title bar; one click opens it beside the session. ⌘-click a localhost link does the same. |
+| **Browser** (⌘L) | A real browser tab. Settings → Agents → *Browser for agents* adds `tethera mcp` to Claude Code, Codex, OpenCode, Hermes or Gemini, so the agent can open pages, read them, click, type and take screenshots (Playwright MCP's tool names) while you watch. |
+| **Editor** | Your terminal font, line numbers, highlighting, find, ⌃G go to line, ⌘S. When an agent changes a file you have open, it reloads — or asks, if you've edited it too. |
+| **Viewers** | Images, PDFs, video and audio, rendered Markdown, and Quick Look for everything else. |
+| **Music** | What's playing in Music or Spotify, in the status bar, with play/pause and skip. |
+
+Open anything with ⌘O, the palette, or `tethera open <file|folder|url>` from a session.
+
+<p align="center">
+  <img src="docs/assets/screens/v06-preview.png" width="49%" alt="A dev server with its preview open beside it">
+  <img src="docs/assets/screens/v06-changes.png" width="49%" alt="The Changes pane">
+</p>
 
 ## Agents
 
@@ -66,6 +87,10 @@ Agents start inside a shell, so when one exits, the session (and its scrollback)
 | ⌘T | New shell session |
 | ⌥⌘1…⌥⌘4 | New Claude Code, Codex, OpenCode or Hermes session |
 | ⇧⌘O | New shell in a folder |
+| ⌘O | Open a file |
+| ⌘L | New browser tab |
+| ⇧⌘E | Changes |
+| ⌘S · ⌃G | Save · go to line (editor) |
 | ⌘K / ⌘P | Command palette |
 | ⇧⌘A | Agents overview |
 | ⇧⌘U | Go to the session that needs you |
@@ -88,6 +113,9 @@ tethera list                         # sessions, their agents and state
 tethera new --name api --attach      # a new session, attached to this terminal
 tethera attach api                   # attach from any terminal (⌃\ detaches) — also over SSH
 tethera close api
+tethera open src/app.ts              # open a file (or folder, or URL) beside this session
+tethera changes                      # this session's live diff
+tethera mcp                          # the browser, as an MCP server for agents
 ```
 
 ## Install
@@ -114,10 +142,8 @@ Needs Xcode 26 (Swift 6.2). The icon is rendered from the same SceneKit model as
 
 ## What's next
 
-- Built-in code editor and file, image, PDF and video viewers
-- A browser your agents can drive (via MCP)
-- Music controls in the status bar
 - Agent workflows: run, monitor and debug agents across git worktrees
+- Git and Homebrew panels
 - Remote control of your sessions
 
 ## Architecture

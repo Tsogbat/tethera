@@ -40,6 +40,12 @@ struct TetheraCommands: Commands {
             }
             Button("New Shell in Folder…") { SessionActions.newSessionInChosenFolder() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+            Button("Open File…") { Workspace.shared.chooseFileToOpen() }
+                .keyboardShortcut("o", modifiers: .command)
+            Button("New Browser Tab") { Workspace.shared.newBrowserTab() }
+                .keyboardShortcut("l", modifiers: .command)
+            Button("Show Changes") { Workspace.shared.showChanges() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             Divider()
             Button("Split Right") { Workspace.shared.split(.horizontal) }
                 .keyboardShortcut("d", modifiers: .command)
@@ -58,6 +64,10 @@ struct TetheraCommands: Commands {
                 .keyboardShortcut("q", modifiers: .command)
             Button("Quit and End All Sessions") { AppDelegate.quitEndingSessions() }
                 .keyboardShortcut("q", modifiers: [.command, .option])
+        }
+        CommandGroup(replacing: .saveItem) {
+            Button("Save") { NSApp.sendAction(#selector(EditorTextView.saveDocument(_:)), to: nil, from: nil) }
+                .keyboardShortcut("s", modifiers: .command)
         }
         CommandGroup(replacing: .appInfo) {
             Button("About Tethera") { AboutWindow.show() }
@@ -105,7 +115,7 @@ struct TetheraCommands: Commands {
 
     @MainActor
     private func closePaneOrWindow() {
-        if Workspace.shared.panes.count > 1 {
+        if Workspace.shared.panes.count > 1 || Workspace.shared.panes.first?.content.isTool == true {
             Workspace.shared.closeFocusedPane()
         } else {
             NSApp.keyWindow?.performClose(nil)
@@ -131,6 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             let client = DaemonClient.shared
             client.onUpdate = { [weak self] session, previous in self?.notifyIfNeeded(session, previous: previous) }
             client.connect()
+            Self.startAppServer()
+            _ = NowPlaying.shared
             if Self.canNotify {
                 UNUserNotificationCenter.current().delegate = self
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
@@ -144,6 +156,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             guard let window = note.object as? NSWindow else { return }
             MainActor.assumeIsolated { Self.configure(window) }
         })
+    }
+
+    /// `tethera open` and the browser tools reach the app here.
+    @MainActor
+    private static func startAppServer() {
+        let server = AppServer.shared
+        server.register("open") { request in
+            let params = (try? JSONSerialization.jsonObject(with: Data(request.params.utf8))) as? [String: Any] ?? [:]
+            let session = request.session.flatMap(UUID.init(uuidString:))
+            let workspace = Workspace.shared
+            if let raw = params["url"] as? String, let url = BrowserTab.resolve(raw) {
+                let tab = BrowserStore.shared.newTab(url: url)
+                BrowserStore.shared.assign(tab, to: session)
+                workspace.open(.browser(tab.id), besideSession: session)
+            } else if let path = params["path"] as? String {
+                guard FileManager.default.fileExists(atPath: path) else {
+                    return AppChannel.Response(id: request.id, error: "No such file: \(path)")
+                }
+                workspace.open(path: path, besideSession: session)
+            } else if params["changes"] as? Bool == true, let session {
+                workspace.open(.changes(session), besideSession: session)
+            } else {
+                return AppChannel.Response(id: request.id, error: "Nothing to open.")
+            }
+            NSApp.activate(ignoringOtherApps: true)
+            return AppChannel.Response(id: request.id, text: "ok")
+        }
+        BrowserTools.register(on: server)
+        server.start()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { AppServer.shared.stop() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -22,8 +22,10 @@ public enum AgentIntegrations {
         public let manualSteps: String?
         /// What the user still has to do in the agent (trust, consent, restart).
         public let note: String?
+        /// Commands run after the files are written (an agent's own `mcp add`), as argv.
+        public var commands: [[String]] = []
 
-        public var hasChanges: Bool { changes.contains { $0.before != ($0.after ?? "") } }
+        public var hasChanges: Bool { !commands.isEmpty || changes.contains { $0.before != ($0.after ?? "") } }
     }
 
     public enum Target: String, CaseIterable, Sendable {
@@ -335,6 +337,22 @@ public enum AgentIntegrations {
         for (url, data) in plan.sideFiles {
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
+        }
+        for command in plan.commands where !command.isEmpty {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: command[0])
+            process.arguments = Array(command.dropFirst())
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            process.standardInput = FileHandle.nullDevice
+            try process.run()
+            let output = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw NSError(domain: "Tethera", code: Int(process.terminationStatus),
+                              userInfo: [NSLocalizedDescriptionKey: String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)])
+            }
         }
     }
 

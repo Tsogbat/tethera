@@ -43,6 +43,8 @@ struct Preferences: Codable, Equatable {
     var sidebarWidth: Double = 236
     /// Open to Home instead of the last layout.
     var openHomeOnLaunch = false
+    /// Music or Spotify's current track in the status bar.
+    var showNowPlaying = true
 
     init() {}
 
@@ -63,6 +65,7 @@ struct Preferences: Codable, Equatable {
         showInspector = (try? c.decode(Bool.self, forKey: .showInspector)) ?? d.showInspector
         sidebarWidth = (try? c.decode(Double.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
         openHomeOnLaunch = (try? c.decode(Bool.self, forKey: .openHomeOnLaunch)) ?? d.openHomeOnLaunch
+        showNowPlaying = (try? c.decode(Bool.self, forKey: .showNowPlaying)) ?? d.showNowPlaying
     }
 }
 
@@ -76,7 +79,7 @@ final class PreferencesStore: ObservableObject {
     }
 
     private init() {
-        if let data = UserDefaults.standard.data(forKey: Self.key),
+        if let data = AppDefaults.store.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode(Preferences.self, from: data) {
             value = decoded
         } else {
@@ -86,7 +89,7 @@ final class PreferencesStore: ObservableObject {
 
     private func save() {
         if let data = try? JSONEncoder().encode(value) {
-            UserDefaults.standard.set(data, forKey: Self.key)
+            AppDefaults.store.set(data, forKey: Self.key)
         }
     }
 

@@ -47,6 +47,8 @@ private struct GeneralSettings: View {
             }
             Section {
                 Toggle("Notify me when an agent needs me or finishes", isOn: $store.value.notifyWhenAgentsNeedYou)
+                Toggle("Open to Home", isOn: $store.value.openHomeOnLaunch)
+                Toggle("Show what's playing in Music or Spotify", isOn: $store.value.showNowPlaying)
             } footer: {
                 Text("Sessions keep running when you quit Tethera (⌘Q). To stop them all, use Quit and End All Sessions (⌥⌘Q).")
                     .foregroundStyle(.secondary)

@@ -25,10 +25,10 @@ Sessions live in the daemon, so they keep running when the app quits. The app at
 
 | Target | Role |
 | --- | --- |
-| `TetheraKit` | Wire protocol (`Frame`, `FrameDecoder`, `ControlMessage`), models (`SessionInfo`, `AgentInfo`, `AgentKind`), `FramedSocket`/`UnixSocket`/`DaemonLauncher`, `ShellLaunch` (login shell + OSC 133 integration via `ZDOTDIR` / `--rcfile`), `HookMapper`, `AgentIntegrations`. |
+| `TetheraKit` | Wire protocol (`Frame`, `FrameDecoder`, `ControlMessage`), models (`SessionInfo`, `AgentInfo`, `AgentKind`), `FramedSocket`/`UnixSocket`/`DaemonLauncher`, `ShellLaunch` (login shell + OSC 133 integration via `ZDOTDIR` / `--rcfile`), `HookMapper`, `AgentIntegrations` (hooks and the browser MCP server), `AppChannel`. |
 | `CPTY` | `forkpty` + exec in C: resets every signal and the signal mask, and closes inherited fds in the child. Swift can't run safely between fork and exec. |
 | `TetheraDaemon` | `Daemon` (socket server, routing, timers, persistence), `SessionHost`, `VTSnapshot`, `QueryFilter`, `PromptScanner`, `ProcessInspector`. |
-| `TetheraCLI` → `tethera` | `daemon`, `list`, `new`, `attach`, `rename`, `close`, `shutdown`, `hook`, `statusline`, `title`. |
+| `TetheraCLI` → `tethera` | `daemon`, `list`, `new`, `attach`, `rename`, `close`, `shutdown`, `hook`, `statusline`, `title`, `open`, `changes`, `mcp`. |
 | `Tethera` | The app: `DaemonClient`, `Workspace` (panes, focus, layout), `SessionTerminal` (SwiftTerm view per session), Home, views. |
 
 ## The daemon is the terminal of record
@@ -96,9 +96,25 @@ The renderer is SwiftTerm 1.99.1, pinned, on its 2.0 track with Metal enabled. I
 
 ## Panes and Home
 
-A pane shows a `PaneContent`: `.home`, or `.session(id)`. The layout (panes, axis, focus) is saved in the app's defaults; layouts from 0.4, which only had a session id, migrate on read. With no sessions the window shows Home, rather than starting a shell on its own.
+A pane shows a `PaneContent`: `.home`, `.session(id)`, `.file(path)`, `.browser(tab)` or `.changes(session)`. Tools open beside the session that asked for them (`Workspace.open(_:besideSession:)`), up to four panes. The layout (panes, axis, focus) is saved in the app's defaults; layouts from 0.4, which only had a session id, migrate on read. With no sessions the window shows Home, rather than starting a shell on its own.
 
 Home is SwiftUI lists, plus `RetroComputerView`: an `SCNView` of the model in `Views/Retro/RetroComputer.swift` (plain SceneKit, built from boxes and a swept tube). It renders only while its window is key and visible, floats once when it appears, and then holds still, so an idle Home costs nothing. The same model renders the app icon (`scripts/render_icon.sh`), and the website's three.js scene uses the same dimensions.
+
+## Tools
+
+| Tool | How |
+| --- | --- |
+| Editor | `NSTextView` (TextKit 1) with a line-number gutter beside the scroll view; `SyntaxHighlighter` colors with a few regexes per language as temporary attributes. `EditorDocument` watches the file (`DispatchSource`, re-armed after atomic renames): a clean buffer reloads, a dirty one shows Reload / Keep Mine / Compare. |
+| Viewers | ImageIO, PDFKit, AVKit, `AttributedString(markdown:)`, and `QLPreviewView` for the rest. |
+| Changes | `git status`/`git diff` re-run on FSEvents from the repo (git's own bookkeeping ignored), files sorted by modification time. |
+| Browser | `WKWebView` tabs in `BrowserStore`, with a non-persistent data store. `PreviewDetector` spots dev-server URLs in session output (colors stripped first). |
+| Music | Music and Spotify post their state as distributed notifications; controls and artwork go through AppleScript. |
+
+**The app channel.** Things only the app can do (open a pane, drive a browser tab) go over a second socket, `app.sock` (0600, `getpeereid`), with one JSON object per line: `AppChannel` in TetheraKit, `AppServer` in the app. `tethera open` and `tethera mcp` use it. The daemon isn't involved, so it works whatever version of the daemon is running.
+
+**`tethera mcp`** is a stdio MCP server (JSON-RPC, protocol `2025-06-18`) exposing Playwright MCP's browser tools. Each call goes to the app, which acts in the tab beside the calling session (`TETHERA_SESSION_ID`). Snapshots are an accessibility-style outline with `ref`s, built by a script injected into the page. Settings → Agents adds it to each agent's config with the same preview/backup/undo as hooks (Claude Code through its own `claude mcp add`).
+
+A custom `TETHERA_HOME` also gets its own defaults suite (`AppDefaults`), so test runs never touch the layout or preferences of the Tethera you use.
 
 ## Building and releasing
 

@@ -11,8 +11,11 @@ import TetheraKit
 ///     tethera rename <name|id> <new>     rename a session
 ///     tethera close <name|id>            end a session
 ///     tethera shutdown                   end every session and stop the daemon
+///     tethera open <file|folder|url>     open in Tethera, beside this session
+///     tethera changes                    show this session's live diff
+///     tethera mcp                        the browser MCP server for agents (stdio)
 
-let version = "0.5.0"
+let version = "0.6.0"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 
@@ -244,6 +247,32 @@ case "statusline":
     HookRelay.runSavedStatusLine(for: source, input: payload)
     exit(0)
 
+case "open", "changes":
+    // Opens in the app beside the session this runs in. Paths are relative to here.
+    var params: [String: Any] = [:]
+    if command == "changes" {
+        params["changes"] = true
+    } else {
+        guard let target = arguments.first else { fail("usage: tethera open <file|folder|url>") }
+        if target.contains("://") || target.hasPrefix("localhost") || target.hasPrefix("127.0.0.1") {
+            params["url"] = target
+        } else {
+            let expanded = (target as NSString).expandingTildeInPath
+            let absolute = expanded.hasPrefix("/") ? expanded : (FileManager.default.currentDirectoryPath as NSString).appendingPathComponent(expanded)
+            params["path"] = (absolute as NSString).standardizingPath
+        }
+    }
+    do {
+        let connection = try MCPServer.connect()
+        let response = try connection.call("open", params: params, session: ProcessInfo.processInfo.environment["TETHERA_SESSION_ID"])
+        if let error = response.error { fail(error) }
+    } catch {
+        fail(error.localizedDescription)
+    }
+
+case "mcp":
+    MCPServer.run(version: version)
+
 case "version", "--version":
     print("tethera \(version)")
 
@@ -257,5 +286,8 @@ default:
       tethera rename <name|id> <new name>
       tethera close <name|id>
       tethera shutdown                    end every session and stop the daemon
+      tethera open <file|folder|url>      open in Tethera beside this session
+      tethera changes                     this session's live diff
+      tethera mcp                         browser tools for agents (MCP over stdio)
     """)
 }

@@ -66,8 +66,11 @@ final class SessionTerminal: NSObject, TerminalSurface, TerminalViewDelegate {
 
     private func receive(_ frame: Frame) {
         switch frame {
-        case .snapshot(_, _, let bytes), .output(_, _, let bytes):
+        case .snapshot(_, _, let bytes):
             feed(bytes)
+        case .output(_, _, let bytes):
+            feed(bytes)
+            PreviewDetector.shared.scan(sessionID, bytes)
         default:
             break
         }
@@ -129,9 +132,22 @@ final class SessionTerminal: NSObject, TerminalSurface, TerminalViewDelegate {
     func iTermContent(source: TerminalView, content: ArraySlice<UInt8>) {}
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 
+    /// ⌘-click: local servers and files open in Tethera beside the session; other links in
+    /// your default browser.
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
-        guard let url = URL(string: link), ["http", "https", "file", "mailto"].contains(url.scheme?.lowercased() ?? "") else { return }
-        NSWorkspace.shared.open(url)
+        guard let url = URL(string: link), let scheme = url.scheme?.lowercased(), ["http", "https", "file", "mailto"].contains(scheme) else { return }
+        let session = sessionID
+        MainActor.assumeIsolated {
+            if scheme == "file" {
+                Workspace.shared.open(path: url.path, besideSession: session)
+            } else if ["localhost", "127.0.0.1", "0.0.0.0", "::1"].contains(url.host ?? "") {
+                let tab = BrowserStore.shared.newTab(url: url)
+                BrowserStore.shared.assign(tab, to: session)
+                Workspace.shared.open(.browser(tab.id), besideSession: session)
+            } else {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     func clipboardCopy(source: TerminalView, content: Data) {

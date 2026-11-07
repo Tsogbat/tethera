@@ -252,7 +252,7 @@ h2 {
 .rows-wide { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; }
 .rows-wide li { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; border-bottom: 1px solid var(--line); }
 .rows-next { grid-row: 2; }
-.rows-next { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rows-next { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .prop-slot { width: 100%; height: 300px; }
 .prop-cap {

@@ -59,7 +59,10 @@ struct RootView: View {
             }
         }
         .animation(.easeOut(duration: 0.16), value: store.value.showInspector)
-        .onChange(of: client.sessions) { _, _ in workspace.sessionsChanged() }
+        .onChange(of: client.sessions) { _, sessions in
+            workspace.sessionsChanged()
+            PreviewDetector.shared.sessionsChanged(sessions.map { .init(id: $0.id, running: $0.isCommandRunning) })
+        }
         .onChange(of: client.hasLoaded) { _, _ in workspace.sessionsChanged() }
         .onChange(of: store.value) { _, _ in TerminalStore.shared.applyPreferences() }
         .onChange(of: systemScheme) { _, _ in TerminalStore.shared.applyPreferences() }
