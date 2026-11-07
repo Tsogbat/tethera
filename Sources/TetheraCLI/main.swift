@@ -12,7 +12,7 @@ import TetheraKit
 ///     tethera close <name|id>            end a session
 ///     tethera shutdown                   end every session and stop the daemon
 
-let version = "0.4.0"
+let version = "0.5.0"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 

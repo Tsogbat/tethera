@@ -29,7 +29,7 @@ Sessions live in the daemon, so they keep running when the app quits. The app at
 | `CPTY` | `forkpty` + exec in C: resets every signal and the signal mask, and closes inherited fds in the child. Swift can't run safely between fork and exec. |
 | `TetheraDaemon` | `Daemon` (socket server, routing, timers, persistence), `SessionHost`, `VTSnapshot`, `QueryFilter`, `PromptScanner`, `ProcessInspector`. |
 | `TetheraCLI` → `tethera` | `daemon`, `list`, `new`, `attach`, `rename`, `close`, `shutdown`, `hook`, `statusline`, `title`. |
-| `Tethera` | The app: `DaemonClient`, `Workspace` (panes, focus, layout), `SessionTerminal` (SwiftTerm view per session), views. |
+| `Tethera` | The app: `DaemonClient`, `Workspace` (panes, focus, layout), `SessionTerminal` (SwiftTerm view per session), Home, views. |
 
 ## The daemon is the terminal of record
 
@@ -94,6 +94,12 @@ The renderer is SwiftTerm 1.99.1, pinned, on its 2.0 track with Metal enabled. I
 - **Nerd Font icons** fall back to the bundled Symbols Nerd Font through SwiftTerm's glyph-fallback provider.
 - **Ligatures** are off: a terminal draws one character per cell.
 
+## Panes and Home
+
+A pane shows a `PaneContent`: `.home`, or `.session(id)`. The layout (panes, axis, focus) is saved in the app's defaults; layouts from 0.4, which only had a session id, migrate on read. With no sessions the window shows Home, rather than starting a shell on its own.
+
+Home is SwiftUI lists, plus `RetroComputerView`: an `SCNView` of the model in `Views/Retro/RetroComputer.swift` (plain SceneKit, built from boxes and a swept tube). It renders only while its window is key and visible, floats once when it appears, and then holds still, so an idle Home costs nothing. The same model renders the app icon (`scripts/render_icon.sh`), and the website's three.js scene uses the same dimensions.
+
 ## Building and releasing
 
 ```bash
@@ -101,6 +107,8 @@ make run      # debug build
 make test     # protocol, filters, snapshot round-trips, hook mapping, config merges, a real daemon + zsh session
 make app      # dist/Tethera.app + dist/Tethera-macOS.dmg
 ```
+
+`scripts/render_icon.sh icon` regenerates the app icon set, the bundled brand icon and the website icons from the 3D model; `preview <png>` renders a contact sheet at every size.
 
 `scripts/package.sh` builds arm64 and x86_64 separately with SwiftPM's native build system and merges them with `lipo`. It copies `tethera-cli` to `Contents/Helpers/tethera`, signs the helper and then the app, and creates the DMG.
 

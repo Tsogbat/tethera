@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screens/v04-hero.png" alt="Tethera: a sessions sidebar with OpenCode working and Claude Code waiting, split terminal panes, and the agent inspector">
+  <img src="docs/assets/screens/v05-hero.png" alt="Tethera's Home: a small 3D retro computer above lists to start an agent, recent folders, connected agents and running sessions">
 </p>
 
 ## Why
@@ -26,6 +26,7 @@ Coding agents run in terminals, and you end up with five of them in five tabs, c
 - **Sessions persist.** Every session lives in a small background daemon, so your shells — and the agents running in them — keep going when you quit the app, and come back exactly as they were. After a reboot they return with their history and folder.
 - **Agent-aware.** The sidebar shows which agent runs in which session and what it's doing: working, waiting, **needs you**, done, error. You get a notification and a Dock badge when one needs you, and ⇧⌘U takes you there.
 - **A real terminal.** Your own zsh or bash, exactly as you configured it, in fast GPU-rendered panes (SwiftTerm with Metal). TUIs, `vim`, `ssh`, Nerd Font prompts — everything works.
+- **Home.** Where Tethera opens: start any agent, pick up a recent folder, see which integrations are connected and who's running — with a little 3D computer whose keys you can press.
 
 ## Agents
 
@@ -45,22 +46,26 @@ Agents start inside a shell, so when one exits, the session (and its scrollback)
 
 ## The window
 
-- **Sidebar** — every session, named after its folder until you rename it (double-click). Amber marks a session that needs you; a spinner, one that's working.
+- **Home** (⇧⌘H) — start a shell or any agent (⌥⌘1…4), recent folders, integrations, and every running session, needs-you first.
+- **Sidebar** — every session, named after its folder until you rename it (double-click). A solid dot and bold name mark a session that needs you; a spinner, one that's working. The look is monochrome: red only ever means an error.
 - **Panes** — ⌘D / ⇧⌘D split; ⌘W closes a pane but the session keeps running.
 - **Inspector** (⌥⌘I) — the agent's state, message, current tool, model / context / cost, and Interrupt; a Git tab to stage, commit, fetch, pull and push.
 - **Agents overview** (⇧⌘A) — one table of every session, sorted by what needs you.
 - **Command palette** (⌘K) — sessions, new agent sessions, splits, settings.
 
 <p align="center">
-  <img src="docs/assets/screens/v04-overview.png" width="49%" alt="Agents overview">
-  <img src="docs/assets/screens/v04-light.png" width="49%" alt="Paper (light) theme">
+  <img src="docs/assets/screens/v05-overview.png" width="49%" alt="Agents overview">
+  <img src="docs/assets/screens/v05-light.png" width="49%" alt="Paper (light) theme">
 </p>
 
 ## Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
+| ⇧⌘H | Home |
 | ⌘T | New shell session |
+| ⌥⌘1…⌥⌘4 | New Claude Code, Codex, OpenCode or Hermes session |
+| ⇧⌘O | New shell in a folder |
 | ⌘K / ⌘P | Command palette |
 | ⇧⌘A | Agents overview |
 | ⇧⌘U | Go to the session that needs you |
@@ -105,7 +110,7 @@ make test         # unit, protocol, daemon and real-shell tests
 make app          # dist/Tethera.app and dist/Tethera-macOS.dmg (universal)
 ```
 
-Needs Xcode 26 (Swift 6.2).
+Needs Xcode 26 (Swift 6.2). The icon is rendered from the same SceneKit model as Home: `scripts/render_icon.sh icon`.
 
 ## What's next
 

@@ -2,28 +2,45 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tethera — the terminal for coding agents</title>
-<meta name="description" content="Tethera is a free, open-source macOS terminal for running and supervising AI coding agents. Sessions keep running when you quit, and a sidebar shows which agent is working, waiting or needs you. No API keys, no account.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tethera — the terminal for AI agents</title>
+<meta name="description" content="Tethera is a free, open-source macOS terminal for running and supervising AI coding agents. Sessions keep running when you quit, and the sidebar shows which agent is working, waiting or needs you.">
 <link rel="canonical" href="https://tsogbat.github.io/tethera/">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#E7E4DE" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E0E0F" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F7F6F3" media="(prefers-color-scheme: light)">
 
+<!-- =====================================================================
+     SCREENSHOTS — every screenshot on the page is listed here.
+     To swap in new captures (e.g. assets/screens/v05-hero.png), change the
+     paths below. Set a section's src to '' to hide its figure.
+     og:image / twitter:image tags right below must mirror `og` by hand:
+     link previews are read by crawlers that don't run JavaScript.
+     ===================================================================== -->
+<script>
+window.TETHERA_SHOTS = {
+  // End of the hero zoom: the display becomes this screenshot.
+  hero:     { src: 'assets/screens/v05-hero.png', w: 2400, h: 1568,
+              alt: 'Tethera’s Home: a small 3D computer showing one agent needs you, above lists to start an agent, recent folders, connected agents and running sessions.' },
+  // Social preview (mirror in og:image and twitter:image below).
+  og:       'assets/screens/v05-hero.png',
+  // Optional figures under sections. Empty = hidden.
+  home:     { src: 'assets/screens/v05-light.png', w: 2400, h: 1568, alt: 'Home: start an agent, recent folders, running sessions and connected integrations.' },
+  agents:   { src: 'assets/screens/v05-overview.png', w: 2400, h: 1568, alt: 'The Agents overview: every session in one table, sorted by what needs you.' },
+  terminal: { src: '', w: 2400, h: 1568, alt: 'Two split terminal panes running zsh.' }
+};
+</script>
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Tethera">
 <meta property="og:url" content="https://tsogbat.github.io/tethera/">
-<meta property="og:title" content="Tethera — the terminal for coding agents">
-<meta property="og:description" content="Run Claude Code, Codex, OpenCode and more in sessions that keep running when you quit — and see which agent needs you. Free and open source for macOS.">
-<meta property="og:image" content="https://tsogbat.github.io/tethera/assets/screens/v04-hero.png">
-<meta property="og:image:width" content="2400">
-<meta property="og:image:height" content="1568">
-<meta property="og:image:alt" content="The Tethera window: a sessions sidebar with OpenCode working and Claude Code waiting, two split terminal panes, and the agent inspector.">
+<meta property="og:title" content="Tethera — the terminal for AI agents">
+<meta property="og:description" content="Run Claude Code, Codex, OpenCode and more in sessions that keep going when you quit — and see which agent needs you. Free and open source for macOS.">
+<meta property="og:image" content="https://tsogbat.github.io/tethera/assets/screens/v05-hero.png">
+<meta property="og:image:alt" content="Tethera’s Home: a small 3D computer above lists of agents, folders and running sessions.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Tethera — the terminal for coding agents">
+<meta name="twitter:title" content="Tethera — the terminal for AI agents">
 <meta name="twitter:description" content="Sessions that outlive the app, and a sidebar that shows which agent needs you. Free and open source for macOS.">
-<meta name="twitter:image" content="https://tsogbat.github.io/tethera/assets/screens/v04-hero.png">
-<meta name="twitter:image:alt" content="The Tethera window: a sessions sidebar with OpenCode working and Claude Code waiting, two split terminal panes, and the agent inspector.">
+<meta name="twitter:image" content="https://tsogbat.github.io/tethera/assets/screens/v05-hero.png">
 
 <link rel="icon" type="image/png" sizes="64x64" href="assets/icon-64.png">
 <link rel="icon" type="image/png" sizes="256x256" href="assets/icon-256.png">
@@ -31,995 +48,252 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="site.css">
 
-<script>document.documentElement.classList.add('js')</script>
-
-<style>
-/* ---------- Tokens: Graphite (dark) ---------- */
-:root {
-  color-scheme: dark;
-  --bg: #0E0E0F;
-  --surface: #141416;
-  --raised: #1D1D20;
-  --line: #26262A;
-  --line-2: #34343A;
-  --text: #E8E6E3;
-  --text-2: #9A9792;
-  --text-3: #66645F;
-  --accent: #F5A524;
-  --accent-hover: #FFB43F;
-  --on-accent: #0E0E0F;
-  --nav-bg: rgba(14, 14, 15, .86);
-
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
-  --ease: cubic-bezier(.2, .7, .2, 1);
-}
-
-/* ---------- Tokens: Paper (light) ---------- */
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg: #F7F6F3;
-    --surface: #F0EEEA;
-    --raised: #E7E5E0;
-    --line: #E0DDD7;
-    --line-2: #D0CDC6;
-    --text: #1A1A1A;
-    --text-2: #5C5954;
-    --text-3: #8E8B85;
-    --accent: #B86E00;
-    --accent-hover: #C47A0A;
-    --on-accent: #0E0E0F;
-    --nav-bg: rgba(247, 246, 243, .88);
+<script>document.documentElement.classList.add('js');</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
   }
 }
-
-/* ---------- Base ---------- */
-*, *::before, *::after { box-sizing: border-box; }
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  background-color: var(--bg);
-  overflow-x: hidden;
-}
-@media (prefers-reduced-motion: no-preference) {
-  html { scroll-behavior: smooth; }
-}
-body {
-  margin: 0;
-  min-width: 320px;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: 16px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-img { display: block; max-width: 100%; height: auto; }
-figure { margin: 0; }
-a { color: inherit; }
-h1, h2, h3, h4 { color: var(--text); font-family: var(--font-display); font-weight: 600; }
-p, li { text-wrap: pretty; }
-code, pre { font-family: var(--font-mono); }
-::selection { background: rgba(154, 151, 146, .32); }
-
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
-.sr-only {
-  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-}
-.skip {
-  position: absolute; left: 16px; top: -100px; z-index: 100;
-  padding: 10px 14px; border-radius: 6px; background: var(--surface); color: var(--text);
-  border: 1px solid var(--line-2); text-decoration: none; font-weight: 600;
-}
-.skip:focus { top: 12px; }
-
-.container { width: min(1120px, 100% - 48px); margin-inline: auto; }
-@media (max-width: 600px) { .container { width: calc(100% - 32px); } }
-
-/* Inline code + keys */
-p code, li code, td code, figcaption code {
-  font-size: .875em; padding: 1px 5px; border-radius: 4px;
-  color: var(--text); background: var(--raised); border: 1px solid var(--line);
-}
-kbd {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 22px; height: 22px; padding: 0 6px;
-  font: 500 12.5px/1 var(--font-ui); font-variant-numeric: tabular-nums; letter-spacing: .04em;
-  color: var(--text); background: var(--raised);
-  border: 1px solid var(--line-2); border-radius: 4px; white-space: nowrap; vertical-align: 1px;
-}
-.kb-or { margin: 0 6px; color: var(--text-2); font-size: 13px; }
-
-/* Monochrome agent glyphs */
-.glyph {
-  width: 16px; height: 16px; flex: none;
-  fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round;
-}
-
-/* ---------- Buttons ---------- */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  height: 40px; padding: 0 16px; border-radius: 6px;
-  font: 600 15px/1 var(--font-ui); letter-spacing: -.005em; text-decoration: none; white-space: nowrap;
-  border: 1px solid transparent; cursor: pointer;
-  transition: background-color .15s, border-color .15s, color .15s;
-}
-.btn svg { width: 16px; height: 16px; flex: none; }
-.btn-sm { height: 32px; padding: 0 12px; font-size: 13.5px; }
-.btn-sm svg { width: 14px; height: 14px; }
-.btn-lg { height: 44px; padding: 0 20px; font-size: 15.5px; }
-.btn-primary { color: var(--on-accent); background: var(--accent); }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-ghost { color: var(--text); background: transparent; border-color: var(--line-2); }
-.btn-ghost:hover { background: var(--raised); }
-
-/* ---------- Nav ---------- */
-.nav {
-  position: sticky; top: 0; z-index: 50;
-  background: var(--nav-bg);
-  -webkit-backdrop-filter: saturate(140%) blur(12px);
-  backdrop-filter: saturate(140%) blur(12px);
-  border-bottom: 1px solid transparent;
-  transition: border-color .2s;
-}
-.nav.is-scrolled, .nav.is-open { border-bottom-color: var(--line); }
-.nav-inner { display: flex; align-items: center; gap: 16px; height: 56px; }
-.brand {
-  display: inline-flex; align-items: center; gap: 10px; flex: none;
-  text-decoration: none; font-weight: 600; font-size: 16px; letter-spacing: -.015em;
-}
-.brand img { width: 28px; height: 28px; }
-.nav-primary { margin-left: auto; }
-.nav-links { display: flex; gap: 2px; list-style: none; margin: 0; padding: 0; }
-.nav-links a {
-  display: block; padding: 6px 10px; border-radius: 6px;
-  color: var(--text-2); text-decoration: none; font-size: 14px; font-weight: 500;
-  transition: color .15s, background-color .15s;
-}
-.nav-links a:hover { color: var(--text); background: var(--raised); }
-.nav-actions { display: flex; align-items: center; gap: 8px; }
-.nav-toggle {
-  display: none; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: 6px; padding: 0;
-  border: 1px solid var(--line-2); background: transparent; color: var(--text); cursor: pointer;
-}
-.nav-toggle span { position: relative; display: block; width: 14px; height: 1.5px; background: currentColor; transition: background-color .2s; }
-.nav-toggle span::before, .nav-toggle span::after {
-  content: ""; position: absolute; left: 0; width: 14px; height: 1.5px; background: currentColor;
-  transition: transform .2s var(--ease);
-}
-.nav-toggle span::before { transform: translateY(-4.5px); }
-.nav-toggle span::after { transform: translateY(4.5px); }
-.nav.is-open .nav-toggle span { background: transparent; }
-.nav.is-open .nav-toggle span::before { transform: rotate(45deg); }
-.nav.is-open .nav-toggle span::after { transform: rotate(-45deg); }
-
-@media (max-width: 860px) {
-  html:not(.js) .nav-links { display: none; }
-  .js .nav-toggle { display: inline-flex; }
-  .js .nav-links {
-    position: absolute; top: calc(100% + 1px); left: 0; right: 0;
-    flex-direction: column; gap: 0; padding: 8px 16px 16px;
-    background: var(--bg); border-bottom: 1px solid var(--line);
-    opacity: 0; visibility: hidden; transform: translateY(-4px);
-    transition: opacity .18s var(--ease), transform .2s var(--ease), visibility 0s linear .2s;
-  }
-  .js .nav.is-open .nav-links { opacity: 1; visibility: visible; transform: none; transition: opacity .18s var(--ease), transform .2s var(--ease); }
-  .nav-links a { padding: 12px 4px; font-size: 16px; color: var(--text); border-radius: 0; border-bottom: 1px solid var(--line); }
-  .nav-links li:last-child a { border-bottom: 0; }
-  .nav-links a:hover { background: transparent; }
-}
-@media (max-width: 339px) {
-  .brand span { display: none; }
-}
-
-/* ---------- Sections ---------- */
-.section { padding-block: clamp(64px, 9vw, 120px) 0; scroll-margin-top: 40px; }
-.section > .container { border-top: 1px solid var(--line); padding-top: clamp(28px, 4vw, 44px); }
-.sec-head {
-  display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 0 32px;
-  margin-bottom: clamp(36px, 5vw, 56px);
-}
-.sec-head > div { max-width: 700px; }
-.eyebrow {
-  margin: 4px 0 16px; display: flex; gap: 10px;
-  font: 500 12px/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2);
-}
-.eyebrow .num { color: var(--text-3); }
-h2 {
-  margin: 0 0 14px;
-  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.625rem); line-height: 1.1; letter-spacing: -.028em;
-  text-wrap: balance;
-}
-.lead-2 { margin: 0; color: var(--text-2); font-size: clamp(1.03rem, .98rem + .25vw, 1.125rem); line-height: 1.6; }
-@media (max-width: 820px) {
-  .sec-head { grid-template-columns: minmax(0, 1fr); }
-  .eyebrow { margin-top: 0; }
-}
-
-/* ---------- Hero ---------- */
-.hero { padding: clamp(56px, 9vw, 112px) 0 0; }
-.hero-mark { width: 44px; height: 44px; margin: 0 0 28px; }
-.kicker { margin: 0 0 18px; font: 500 13px/1.5 var(--font-mono); color: var(--text-2); }
-.hero h1 {
-  max-width: 900px; margin: 0 0 22px;
-  font-size: clamp(2.25rem, 1.35rem + 3.9vw, 4.25rem); line-height: 1.03; letter-spacing: -.04em;
-  text-wrap: balance;
-}
-.hero h1 .line { display: block; }
-.hero h1 .line + .line { color: var(--text-2); }
-.cursor {
-  display: inline-block; width: .42em; height: .78em; margin-left: .1em; vertical-align: -.04em;
-  background: var(--accent); border-radius: 1px;
-  animation: blink 1.1s steps(1) 6;
-}
-@keyframes blink { 50% { opacity: 0; } }
-.lead { max-width: 640px; margin: 0 0 32px; color: var(--text-2); font-size: clamp(1.0625rem, 1rem + .35vw, 1.1875rem); line-height: 1.6; }
-.cta-row { display: flex; flex-wrap: wrap; gap: 10px; }
-.meta-line {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
-  margin: 18px 0 0; color: var(--text-2); font: 400 13px/1.5 var(--font-mono);
-}
-.meta-line .dot { color: var(--text-3); }
-.meta-line a { color: var(--text-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
-.meta-line a:hover { color: var(--text); text-decoration-color: currentColor; }
-@media (max-width: 480px) {
-  .cta-row { flex-direction: column; }
-  .cta-row .btn { width: 100%; }
-}
-
-.hero-shot { width: min(1200px, 100% - 24px); margin: clamp(40px, 6vw, 64px) auto 0; }
-
-/* Screenshots are transparent PNGs with baked-in window shadows: no frames */
-.shot { position: relative; }
-.shot img { width: 100%; height: auto; }
-.shot.is-missing img { visibility: hidden; }
-.shot.is-missing::after {
-  content: "Screenshot: " attr(data-shot-name);
-  position: absolute; inset: 6%; display: grid; place-items: center;
-  border: 1px dashed var(--line-2); border-radius: 8px;
-  color: var(--text-2); font: 500 13px var(--font-mono); background: var(--surface);
-}
-
-/* ---------- Works with ---------- */
-.strip { padding: clamp(32px, 5vw, 56px) 0 0; }
-.strip-inner {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 14px 32px;
-  padding-block: 20px; border-block: 1px solid var(--line);
-}
-.strip-label { margin: 0; flex: none; font: 500 12px/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
-.works { display: flex; flex-wrap: wrap; gap: 10px 26px; list-style: none; margin: 0; padding: 0; }
-.works li { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-size: 15px; font-weight: 500; letter-spacing: -.01em; white-space: nowrap; }
-.works .glyph { color: var(--text-2); }
-.strip-note { margin: 14px 0 0; color: var(--text-2); font-size: 14.5px; }
-
-/* ---------- Layout helpers ---------- */
-.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
-.split-wide-right { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
-@media (max-width: 900px) { .split, .split-wide-right { grid-template-columns: minmax(0, 1fr); } }
-
-.panel { min-width: 0; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
-
-/* Fact lists (hairline-separated, no cards) */
-.facts { list-style: none; margin: 0; padding: 0; }
-.facts > li { padding: 18px 0; border-top: 1px solid var(--line); }
-.facts > li:first-child { border-top: 0; padding-top: 0; }
-.facts h3 { margin: 0 0 4px; font-size: 16.5px; line-height: 1.35; letter-spacing: -.012em; }
-.facts p { margin: 0; color: var(--text-2); font-size: 15px; }
-
-.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: clamp(32px, 4vw, 48px); border-top: 1px solid var(--line); }
-.cols > div { padding: 22px 24px 0 0; }
-.cols > div + div { padding-left: 24px; border-left: 1px solid var(--line); }
-.cols h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 16.5px; line-height: 1.35; letter-spacing: -.012em; }
-.cols p { margin: 0; color: var(--text-2); font-size: 15px; }
-@media (max-width: 860px) {
-  .cols { grid-template-columns: minmax(0, 1fr); }
-  .cols > div, .cols > div + div { padding: 18px 0; border-left: 0; }
-  .cols > div + div { border-top: 1px solid var(--line); }
-}
-
-/* ---------- Sessions: lifecycle table ---------- */
-.life { width: 100%; border-collapse: collapse; font-size: 15px; }
-.life caption {
-  caption-side: top; text-align: left; padding: 14px 18px 12px; border-bottom: 1px solid var(--line);
-  font: 500 12px/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2);
-}
-.life th, .life td { text-align: left; vertical-align: top; padding: 14px 18px; border-top: 1px solid var(--line); }
-.life tbody tr:first-child th, .life tbody tr:first-child td { border-top: 0; }
-.life th { width: 44%; font-weight: 500; color: var(--text); }
-.life th kbd { margin-right: 8px; }
-.life td { color: var(--text-2); }
-@media (max-width: 520px) {
-  .life th, .life td { display: block; width: auto; }
-  .life td { padding-top: 0; border-top: 0; }
-}
-
-/* ---------- Agents: sidebar illustration ---------- */
-.sidebar-mock { padding: 0; overflow: hidden; }
-.sm-head {
-  display: flex; justify-content: space-between; padding: 14px 16px 8px;
-  font: 500 11.5px/1.5 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--text-2);
-}
-.sm-list { list-style: none; margin: 0; padding: 0 8px 8px; }
-.sm-row { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 6px; }
-.sm-row.is-needs { background: var(--raised); }
-.sm-row .glyph { color: var(--text-2); }
-.sm-main { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.35; }
-.sm-name { font-weight: 600; font-size: 14.5px; color: var(--text); }
-.sm-sub { font-size: 13px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sm-foot { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--text-2); }
-.sm-foot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--text-2); }
-.sidebar-figure figcaption { margin-top: 10px; color: var(--text-2); font-size: 13.5px; }
-
-.st { width: 14px; height: 14px; flex: none; display: inline-grid; place-items: center; color: var(--text-2); }
-.st svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.st-working::before {
-  content: ""; width: 11px; height: 11px; border-radius: 50%;
-  border: 1.6px solid var(--line-2); border-top-color: var(--text);
-  animation: spin .9s linear infinite;
-}
-.st-waiting::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 1.6px solid var(--text-2); }
-.st-needs::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.st-error { color: var(--text); }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.state-key { display: flex; flex-wrap: wrap; gap: 8px 18px; list-style: none; margin: 18px 0 0; padding: 0; color: var(--text-2); font-size: 13.5px; }
-.state-key li { display: inline-flex; align-items: center; gap: 7px; }
-
-/* Settings row */
-.connect { margin-top: clamp(48px, 7vw, 88px); align-items: center; }
-.connect .shot { max-width: 520px; margin-inline: auto; }
-.connect h3 { margin: 0 0 10px; font-size: clamp(1.25rem, 1.1rem + .6vw, 1.5rem); line-height: 1.2; letter-spacing: -.02em; }
-.connect > div > p { margin: 0 0 22px; color: var(--text-2); }
-.checks { list-style: none; margin: 0; padding: 0; }
-.checks li { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); color: var(--text-2); font-size: 15px; }
-.checks li:last-child { border-bottom: 1px solid var(--line); }
-.checks strong { color: var(--text); font-weight: 600; }
-.checks svg { flex: none; width: 16px; height: 16px; margin-top: 4px; fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-
-/* ---------- Gallery ---------- */
-.gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(28px, 4vw, 48px) clamp(16px, 3vw, 32px); }
-.gallery .g-main { grid-column: 1 / -1; }
-.gallery figcaption { margin-top: 4px; padding-inline: 4%; color: var(--text-2); font-size: 15px; }
-.gallery figcaption strong { display: inline-flex; align-items: center; gap: 8px; margin-right: 6px; color: var(--text); font-weight: 600; }
-@media (max-width: 720px) {
-  .gallery { grid-template-columns: minmax(0, 1fr); }
-  .gallery figcaption { padding-inline: 0; }
-}
-
-/* ---------- Compare ---------- */
-.compare-legend {
-  display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  margin: 0 0 6px; padding-inline: 4%;
-  font: 500 13px/1.5 var(--font-mono); color: var(--text-2);
-}
-.compare-legend .is-new { color: var(--text); }
-.compare-hint { display: inline-flex; align-items: center; gap: 6px; font: 400 13px/1.5 var(--font-ui); color: var(--text-2); }
-.compare-hint svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.compare {
-  --pos: 50%;
-  position: relative; aspect-ratio: 2400 / 1568;
-  cursor: ew-resize; touch-action: pan-y; -webkit-user-select: none; user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.compare-img {
-  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
-  pointer-events: none; -webkit-user-drag: none;
-}
-.compare-before { clip-path: inset(0 calc(100% - var(--pos)) 0 0); }
-.compare-after { clip-path: inset(0 0 0 var(--pos)); }
-.compare-handle { position: absolute; z-index: 2; top: 2%; bottom: 2%; left: var(--pos); width: 0; outline: none; }
-.compare-handle::before {
-  content: ""; position: absolute; top: 0; bottom: 0; left: -1px; width: 2px;
-  background: var(--text); opacity: .85;
-}
-.compare-knob {
-  position: absolute; top: 50%; left: 0; width: 32px; height: 32px; transform: translate(-50%, -50%);
-  display: grid; place-items: center; border-radius: 6px;
-  color: var(--text); background: var(--raised); border: 1px solid var(--line-2);
-}
-.compare-knob svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.compare-handle:focus-visible .compare-knob { outline: 2px solid var(--accent); outline-offset: 2px; }
-.compare.is-missing .compare-img { visibility: hidden; }
-.compare.is-missing::after {
-  content: "Screenshots: v03.png / v04-hero.png"; position: absolute; inset: 6%; display: grid; place-items: center; z-index: 1;
-  border: 1px dashed var(--line-2); border-radius: 8px; color: var(--text-2); font: 500 13px var(--font-mono); background: var(--surface);
-}
-@media (max-width: 520px) { .compare-hint { display: none; } }
-
-/* ---------- Shortcuts ---------- */
-.kb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 clamp(24px, 4vw, 56px); align-items: start; }
-.kb { width: 100%; border-collapse: collapse; }
-.kb caption {
-  caption-side: top; text-align: left; padding: 0 0 10px;
-  font: 500 12px/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2);
-}
-.kb th, .kb td { padding: 11px 0; border-top: 1px solid var(--line); vertical-align: middle; }
-.kb tr:last-child th, .kb tr:last-child td { border-bottom: 1px solid var(--line); }
-.kb th { text-align: left; font-weight: 400; font-size: 15px; color: var(--text); }
-.kb th small { display: block; font-size: 13px; color: var(--text-2); }
-.kb td { text-align: right; white-space: nowrap; padding-left: 16px; }
-@media (max-width: 820px) { .kb-grid { grid-template-columns: minmax(0, 1fr); gap: 36px; } }
-
-/* ---------- Code blocks ---------- */
-.code {
-  display: flex; align-items: flex-start; gap: 10px; padding: 12px 12px 12px 16px;
-  border-radius: 8px; background: var(--surface); border: 1px solid var(--line); color: var(--text);
-}
-.code pre { flex: 1; min-width: 0; margin: 0; padding: 3px 0; overflow-x: auto; font-size: 13.5px; line-height: 1.75; }
-.code .p { color: var(--text-3); -webkit-user-select: none; user-select: none; }
-.code .c { color: var(--text-2); }
-.copy {
-  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 6px; cursor: pointer;
-  font: 500 12.5px/1 var(--font-ui); color: var(--text-2); background: transparent; border: 1px solid var(--line-2);
-  transition: background-color .15s, color .15s;
-}
-.copy:hover { background: var(--raised); color: var(--text); }
-.copy svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.copy .i-check { display: none; }
-.copy.is-copied { color: var(--text); }
-.copy.is-copied .i-copy { display: none; }
-.copy.is-copied .i-check { display: block; }
-@media (max-width: 420px) { .copy .copy-label { display: none; } .copy { width: 30px; padding: 0; justify-content: center; } }
-
-.cli-cmds { display: grid; gap: 0; margin: 0; }
-.cli-cmds > div { padding: 16px 0; border-top: 1px solid var(--line); }
-.cli-cmds > div:last-child { border-bottom: 1px solid var(--line); }
-.cli-cmds dt { font: 500 14px/1.5 var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
-.cli-cmds dd { margin: 4px 0 0; color: var(--text-2); font-size: 15px; }
-.cli-note { margin: 20px 0 0; color: var(--text-2); font-size: 15px; }
-
-/* ---------- Next ---------- */
-.next-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 clamp(24px, 4vw, 56px); }
-.next-list li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; padding: 18px 0; border-top: 1px solid var(--line); }
-.next-tag { font: 500 12px/1.9 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
-.next-list h3 { margin: 0 0 2px; font-size: 16.5px; letter-spacing: -.012em; line-height: 1.4; }
-.next-list p { margin: 0; color: var(--text-2); font-size: 15px; }
-@media (max-width: 760px) { .next-list { grid-template-columns: minmax(0, 1fr); } }
-
-/* ---------- Install ---------- */
-.install-cta { margin-top: 28px; }
-.install-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-.install-grid .panel { padding: clamp(20px, 3vw, 28px); }
-.panel h3 { margin: 0 0 4px; font-size: 18px; letter-spacing: -.015em; }
-.panel > p { margin: 0; color: var(--text-2); font-size: 15px; }
-.steps { list-style: none; counter-reset: s; display: grid; gap: 22px; margin: 24px 0 0; padding: 0; }
-.steps > li { counter-increment: s; position: relative; padding-left: 38px; min-width: 0; }
-.steps > li::before {
-  content: counter(s); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 6px;
-  display: grid; place-items: center; font: 500 12.5px/1 var(--font-mono);
-  color: var(--text); background: var(--raised); border: 1px solid var(--line-2);
-}
-.steps h4 { margin: 0 0 4px; font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
-.steps p { margin: 0; color: var(--text-2); font-size: 15px; }
-.steps p + p, .steps p + .code, .steps .note + p { margin-top: 10px; }
-.steps .code { margin-top: 10px; }
-.steps a { color: var(--text); text-underline-offset: 3px; }
-.note {
-  margin-top: 8px; padding: 10px 14px; border-radius: 6px;
-  background: var(--raised); border-left: 2px solid var(--text-2); color: var(--text-2); font-size: 14.5px;
-}
-.note strong { color: var(--text); font-weight: 600; }
-.req { list-style: none; display: grid; gap: 8px; margin: 12px 0 0; padding: 0; }
-.req li { display: flex; gap: 10px; color: var(--text-2); font-size: 15px; }
-.req svg { flex: none; width: 16px; height: 16px; margin-top: 4px; fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.panel-sub { margin: 24px 0 0; padding-top: 20px; border-top: 1px solid var(--line); }
-.panel-sub h4 { margin: 0; font-size: 15px; font-weight: 600; }
-@media (max-width: 900px) { .install-grid { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 420px) { .steps > li { padding-left: 34px; } }
-
-/* ---------- Footer ---------- */
-.footer { margin-top: clamp(80px, 10vw, 128px); border-top: 1px solid var(--line); padding: 40px 0 36px; }
-.footer-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 24px 48px; }
-.footer-brand p { margin: 10px 0 0; max-width: 360px; color: var(--text-2); font-size: 14.5px; }
-.footer-links { display: flex; flex-wrap: wrap; gap: 8px 24px; list-style: none; margin: 0; padding: 0; }
-.footer-links a { color: var(--text-2); text-decoration: none; font-size: 14.5px; font-weight: 500; }
-.footer-links a:hover { color: var(--text); }
-.footer-bottom {
-  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px;
-  margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 13.5px;
-}
-.footer-bottom a { color: var(--text); text-underline-offset: 3px; }
-
-/* Phones: let transparent-margin screenshots use the gutters */
-@media (max-width: 600px) {
-  .hero-shot { width: 100%; }
-  .gallery .shot img, .connect .shot img { width: calc(100% + 24px); max-width: none; margin-inline: -12px; }
-  .compare-wrap .compare { margin-inline: -12px; }
-}
-
-/* ---------- Reveal ---------- */
-.js .reveal {
-  opacity: 0; transform: translateY(8px);
-  transition: opacity .6s var(--ease), transform .6s var(--ease);
-  transition-delay: var(--d, 0ms);
-}
-.js .reveal.is-in { opacity: 1; transform: none; }
-
-@media (prefers-reduced-motion: reduce) {
-  .js .reveal { opacity: 1; transform: none; transition: none; }
-  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
-}
-</style>
+</script>
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js">
+<link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.core.js">
+<script type="module" src="js/scene.js"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<!-- Monochrome agent glyphs (stroke = currentColor) -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="g-claude" viewBox="0 0 16 16"><path d="M8 1.75v12.5M1.75 8h12.5M3.6 3.6l8.8 8.8M12.4 3.6l-8.8 8.8"/></symbol>
-  <symbol id="g-codex" viewBox="0 0 16 16"><path d="m2.75 4.25 3.75 3.75-3.75 3.75M8.75 12h4.5"/></symbol>
-  <symbol id="g-opencode" viewBox="0 0 16 16"><rect x="3.25" y="2.25" width="9.5" height="11.5" rx=".75"/><rect x="6" y="7" width="4" height="4.25" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="g-hermes" viewBox="0 0 16 16"><path d="M2 6.25 13.75 3.5M3 9.25 14 6.75M4.75 12.25 14 10"/></symbol>
-  <symbol id="g-agy" viewBox="0 0 16 16"><path d="M2.75 14C2.75 7.5 5 2.5 8 2.5s5.25 5 5.25 11.5"/><circle cx="8" cy="10.25" r="1" fill="currentColor" stroke="none"/></symbol>
-  <symbol id="g-gemini" viewBox="0 0 16 16"><path d="M8 1.5C8.4 4.9 11.1 7.6 14.5 8 11.1 8.4 8.4 11.1 8 14.5 7.6 11.1 4.9 8.4 1.5 8 4.9 7.6 7.6 4.9 8 1.5Z"/></symbol>
-  <symbol id="g-ollama" viewBox="0 0 16 16"><path d="M4.75 14.25V9.6c0-1.3.55-2.4 1.25-2.9V3.1c0-.75.3-1.35.75-1.35s.75.6.75 1.35v2.5a3.4 3.4 0 0 1 1 0V3.1c0-.75.3-1.35.75-1.35s.75.6.75 1.35v3.6c.7.5 1.25 1.6 1.25 2.9v4.65"/><path d="M6.9 10.6h2.2"/></symbol>
-  <symbol id="g-shell" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="m4.5 6.25 2 1.75-2 1.75M8 10h3"/></symbol>
-</svg>
+<div class="stage" aria-hidden="true"><canvas id="stage"></canvas></div>
 
 <header class="nav" data-nav>
-  <div class="container nav-inner">
+  <div class="wrap nav-inner">
     <a class="brand" href="#top" aria-label="Tethera, back to top">
-      <img src="assets/icon-64.png" width="28" height="28" alt="">
+      <img src="assets/icon-64.png" width="26" height="26" alt="">
       <span>Tethera</span>
     </a>
-    <nav class="nav-primary" aria-label="Primary">
-      <ul class="nav-links" id="nav-menu">
-        <li><a href="#sessions">Sessions</a></li>
-        <li><a href="#agents">Agents</a></li>
-        <li><a href="#shortcuts">Shortcuts</a></li>
-        <li><a href="#cli">CLI</a></li>
-        <li><a href="#install">Install</a></li>
-        <li><a href="https://github.com/Tsogbat/tethera">GitHub</a></li>
-      </ul>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#sessions">Sessions</a>
+      <a href="#agents">Agents</a>
+      <a href="#home">Home</a>
+      <a href="#cli">CLI</a>
+      <a href="https://github.com/Tsogbat/tethera">GitHub</a>
     </nav>
     <div class="nav-actions">
-      <a class="btn btn-primary btn-sm" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
-        Download
-      </a>
-      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-menu" aria-label="Open menu"><span></span></button>
+      <button class="snd" type="button" data-sound aria-pressed="true" aria-label="Key sounds" title="Key sounds">
+        <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6M18 6.8a7.4 7.4 0 0 1 0 10.4"/></svg>
+        <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5m0-5-5 5"/></svg>
+      </button>
+      <a class="btn btn-sm" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">Download</a>
     </div>
   </div>
 </header>
 
 <main id="main">
 
-<!-- ================= Hero ================= -->
-<section class="hero" id="top" aria-labelledby="hero-title">
-  <div class="container">
-    <img class="hero-mark reveal" src="assets/icon-256.png" srcset="assets/icon-256.png 256w, assets/icon.png 1024w" sizes="44px" width="44" height="44" alt="Tethera app icon">
-    <p class="kicker reveal">Tethera 0.4 for macOS</p>
-    <h1 id="hero-title" class="reveal" style="--d:60ms">
-      <span class="line">Run your coding agents.</span>
-      <span class="line">Know when one needs&nbsp;you.<span class="cursor" aria-hidden="true"></span></span>
-    </h1>
-    <p class="lead reveal" style="--d:120ms">Tethera is a fast, native terminal built for running and supervising AI coding agents. Every session lives in a background daemon, so your agents keep going after you quit — and the sidebar shows which one is working, waiting, or needs&nbsp;you.</p>
-    <div class="cta-row reveal" style="--d:180ms">
-      <a class="btn btn-primary btn-lg" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
-        Download for Mac
-      </a>
-      <a class="btn btn-ghost btn-lg" href="https://github.com/Tsogbat/tethera">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
-        View on GitHub
-      </a>
+<!-- ================= Hero (pinned; the 3D timeline runs over it) ================= -->
+<section class="hero" id="top" aria-labelledby="hero-title" data-hero>
+  <div class="hero-pin">
+    <div class="wrap hero-copy" data-hero-copy>
+      <h1 id="hero-title">The terminal for your AI&nbsp;agents.</h1>
+      <p class="hero-sub">Run Claude Code, Codex and the rest in sessions that keep going when you quit — and see at a glance which one needs&nbsp;you.</p>
+      <div class="cta">
+        <a class="btn btn-lg" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
+          Download for Mac
+        </a>
+        <a class="btn btn-lg btn-ghost" href="https://github.com/Tsogbat/tethera">
+          <svg viewBox="0 0 16 16" aria-hidden="true" class="fill"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
+        </a>
+      </div>
+      <p class="meta">macOS 14+ <i>·</i> Apple silicon &amp; Intel <i>·</i> free</p>
+      <div class="keys-a11y" role="group" aria-label="Press a key on the 3D keyboard to change what the computer’s screen shows">
+        <button type="button" data-key="t" aria-label="t: boot screen">t</button>
+        <button type="button" data-key="esc" aria-label="esc: Home">esc</button>
+        <button type="button" data-key="return" aria-label="return: start Claude Code in a session">return</button>
+        <button type="button" data-key="cmd" aria-label="Command key">⌘</button>
+        <button type="button" data-key="k" aria-label="K: command palette">K</button>
+        <button type="button" data-key="d" aria-label="D: split the session into two panes">D</button>
+      </div>
     </div>
-    <p class="meta-line reveal" style="--d:240ms">
-      <span>v0.4.0</span><span class="dot" aria-hidden="true">·</span>
-      <span>macOS 14+</span><span class="dot" aria-hidden="true">·</span>
-      <span>Apple silicon &amp; Intel</span><span class="dot" aria-hidden="true">·</span>
-      <a href="https://github.com/Tsogbat/tethera/releases">All releases</a>
-    </p>
-  </div>
 
-  <figure class="hero-shot shot reveal" style="--d:300ms" data-shot-name="v04-hero.png">
-    <img data-shot src="assets/screens/v04-hero.png" width="2400" height="1568" fetchpriority="high" decoding="async"
-         alt="The Tethera window. A sessions sidebar lists four sessions, with OpenCode working in one and Claude Code waiting in another. Two terminal panes are split side by side, one running zsh and one running OpenCode, and the inspector on the right shows the agent's state.">
-  </figure>
-</section>
+    <img class="hero-still" data-still alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard." width="2400" height="1499">
+    <noscript><img class="hero-still is-on" src="assets/hero-still.png" alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard."></noscript>
 
-<!-- ================= Works with ================= -->
-<section class="strip" aria-labelledby="strip-title">
-  <div class="container">
-    <div class="strip-inner reveal">
-      <h2 id="strip-title" class="strip-label">Works with</h2>
-      <ul class="works">
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-claude"/></svg>Claude Code</li>
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-codex"/></svg>Codex</li>
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-opencode"/></svg>OpenCode</li>
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-hermes"/></svg>Hermes</li>
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-agy"/></svg>Antigravity</li>
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-gemini"/></svg>Gemini</li>
-        <li><svg class="glyph" aria-hidden="true"><use href="#g-ollama"/></svg>Ollama</li>
-      </ul>
-    </div>
-    <p class="strip-note reveal" style="--d:80ms">Agents run with your own logins — no API keys, no account. Launch any of them from <strong>+</strong> in the sidebar; Ollama starts with <code>ollama launch</code> and your local models.</p>
+    <div class="hero-shot" data-hero-shot><img data-shot="hero" decoding="async" alt=""></div>
+    <p class="cue" data-cue aria-hidden="true"><span>Scroll</span></p>
   </div>
 </section>
 
-<!-- ================= Persistent sessions ================= -->
-<section class="section" id="sessions" aria-labelledby="sessions-title">
-  <div class="container">
+<!-- Shown instead of the zoom when motion is reduced or 3D isn't available -->
+<figure class="hero-figure wrap"><img data-shot="hero" loading="lazy" decoding="async" alt=""></figure>
+
+<!-- ================= 01 Sessions ================= -->
+<section class="sec" id="sessions" aria-labelledby="sessions-title">
+  <div class="wrap grid">
     <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">01</span>Sessions</p>
-      <div>
-        <h2 id="sessions-title" class="reveal" style="--d:60ms">Quit the app. Your agents keep working.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">Every session lives in <code>tethera</code>, a background daemon — not in the window. Quit with <kbd><span aria-hidden="true">⌘Q</span><span class="sr-only">Command Q</span></kbd> and your sessions, and the agents running in them, carry on. Open Tethera again and they’re exactly as you left them.</p>
-      </div>
+      <p class="eyebrow"><span>01</span>Sessions that persist</p>
+      <h2 id="sessions-title">Quit the app. Your agents keep working.</h2>
+      <p class="lede">Every session lives in a small background daemon, not in the window. Quit Tethera and your shells — and the agents running in them — carry&nbsp;on.</p>
     </div>
-
-    <div class="split split-wide-right">
-      <ul class="facts reveal">
-        <li>
-          <h3>Outlives the agent</h3>
-          <p>Agents launched from <strong>+</strong> start inside a shell, so the session is still there when the agent exits.</p>
-        </li>
-        <li>
-          <h3>Named after its folder</h3>
-          <p>A session takes its folder’s name until you rename it with <kbd><span aria-hidden="true">⇧⌘R</span><span class="sr-only">Shift Command R</span></kbd>.</p>
-        </li>
-        <li>
-          <h3>Reachable from any shell</h3>
-          <p>The <a href="#cli"><code>tethera</code> CLI</a> lists your sessions and attaches to them — over SSH too.</p>
-        </li>
-      </ul>
-
-      <div class="panel reveal" style="--d:100ms">
-        <table class="life">
-          <caption>What happens to your sessions</caption>
-          <tbody>
-            <tr>
-              <th scope="row"><kbd><span aria-hidden="true">⌘Q</span><span class="sr-only">Command Q</span></kbd>Quit Tethera</th>
-              <td>The window closes. Sessions and their agents keep running.</td>
-            </tr>
-            <tr>
-              <th scope="row">Open Tethera again</th>
-              <td>Every session is back exactly as it was.</td>
-            </tr>
-            <tr>
-              <th scope="row">Restart your Mac</th>
-              <td>Sessions return with their history and folder.</td>
-            </tr>
-            <tr>
-              <th scope="row"><kbd><span aria-hidden="true">⌥⌘Q</span><span class="sr-only">Option Command Q</span></kbd>Quit and end all</th>
-              <td>Tethera quits and ends every session.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="prop">
+      <div class="prop-slot" data-prop="palette" aria-hidden="true"></div>
+      <p class="prop-cap"><kbd>⌘K</kbd> Jump to any session</p>
     </div>
-  </div>
-</section>
-
-<!-- ================= Agent awareness ================= -->
-<section class="section" id="agents" aria-labelledby="agents-title">
-  <div class="container">
-    <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">02</span>Agent-aware</p>
-      <div>
-        <h2 id="agents-title" class="reveal" style="--d:60ms">See what every agent is doing.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">The sessions sidebar shows which agent runs where, and what it’s doing right now. When one needs you, Tethera tells you — even when it’s in the background.</p>
-      </div>
-    </div>
-
-    <div class="split">
-      <figure class="sidebar-figure reveal">
-        <div class="panel sidebar-mock">
-          <div class="sm-head" aria-hidden="true"><span>Sessions</span><span>5</span></div>
-          <ul class="sm-list" aria-label="Example sessions and their states">
-            <li class="sm-row is-needs">
-              <svg class="glyph" aria-hidden="true"><use href="#g-claude"/></svg>
-              <span class="sm-main"><span class="sm-name">release-notes</span><span class="sm-sub">Claude Code · needs you</span></span>
-              <span class="st st-needs" aria-hidden="true"></span>
-            </li>
-            <li class="sm-row">
-              <svg class="glyph" aria-hidden="true"><use href="#g-opencode"/></svg>
-              <span class="sm-main"><span class="sm-name">website</span><span class="sm-sub">OpenCode · working</span></span>
-              <span class="st st-working" aria-hidden="true"></span>
-            </li>
-            <li class="sm-row">
-              <svg class="glyph" aria-hidden="true"><use href="#g-codex"/></svg>
-              <span class="sm-main"><span class="sm-name">api</span><span class="sm-sub">Codex · waiting</span></span>
-              <span class="st st-waiting" aria-hidden="true"></span>
-            </li>
-            <li class="sm-row">
-              <svg class="glyph" aria-hidden="true"><use href="#g-hermes"/></svg>
-              <span class="sm-main"><span class="sm-name">docs</span><span class="sm-sub">Hermes · done</span></span>
-              <span class="st st-done" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="m2.5 6.25 2.25 2.25L9.5 3.5"/></svg></span>
-            </li>
-            <li class="sm-row">
-              <svg class="glyph" aria-hidden="true"><use href="#g-agy"/></svg>
-              <span class="sm-main"><span class="sm-name">infra</span><span class="sm-sub">Antigravity · error</span></span>
-              <span class="st st-error" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="m3 3 6 6M9 3 3 9"/></svg></span>
-            </li>
-          </ul>
-          <div class="sm-foot">Sessions persist when you quit</div>
-        </div>
-        <figcaption>The five states an agent can be in: working, waiting, needs you, done and error.</figcaption>
-      </figure>
-
-      <ul class="facts reveal" style="--d:100ms">
-        <li>
-          <h3>Claude Code reports in on its own</h3>
-          <p>Claude Code tells Tethera its state itself, over <code>OSC 7501</code>.</p>
-        </li>
-        <li>
-          <h3>One-click Connect for the rest</h3>
-          <p>Settings → Agents adds hooks for Claude Code, Codex, OpenCode, Hermes and Antigravity (<code>agy</code>), so Tethera sees tool calls, permission requests and finished turns.</p>
-        </li>
-        <li>
-          <h3>Called back when it matters</h3>
-          <p>A notification and a Dock badge when an agent needs you. <kbd><span aria-hidden="true">⇧⌘U</span><span class="sr-only">Shift Command U</span></kbd> jumps straight to it.</p>
-        </li>
-      </ul>
-    </div>
-
-    <div class="split connect">
-      <figure class="shot reveal" data-shot-name="v04-settings.png">
-        <img data-shot src="assets/screens/v04-settings.png" width="2400" height="2357" loading="lazy" decoding="async"
-             alt="Settings, Agents tab: Claude Code, Codex, OpenCode, Hermes and Antigravity each have a Connect button, with Gemini and Ollama listed below. Claude Code has a switch to also show model, context and cost.">
-      </figure>
-      <div class="reveal" style="--d:100ms">
-        <h3>Your configs, never changed behind your back.</h3>
-        <p>Connect adds hooks to each agent’s own config. You see exactly what changes before it happens, and you can always go back.</p>
-        <ul class="checks">
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span><strong>Shown as a diff first.</strong> Every config change is previewed before it’s written.</span></li>
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span><strong>Backed up.</strong> The original file is kept.</span></li>
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span><strong>Reversible.</strong> Undo a connection whenever you like.</span></li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= Overview / inspector / palette ================= -->
-<section class="section" id="tour" aria-labelledby="tour-title">
-  <div class="container">
-    <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">03</span>At a glance</p>
-      <div>
-        <h2 id="tour-title" class="reveal" style="--d:60ms">Every session, one keystroke away.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">One table for all of your agents, an inspector for the one you’re in, and a palette for everything else.</p>
-      </div>
-    </div>
-
-    <div class="gallery">
-      <figure class="shot g-main reveal" data-shot-name="v04-overview.png">
-        <img data-shot src="assets/screens/v04-overview.png" width="2400" height="1568" loading="lazy" decoding="async"
-             alt="The Agents overview over the Tethera window: a table of four sessions with columns for session, agent, state, time in state, message and folder.">
-        <figcaption><strong>Agents overview <kbd><span aria-hidden="true">⇧⌘A</span><span class="sr-only">Shift Command A</span></kbd></strong>Every session in one table: its agent, state, how long it’s been there, its latest message and folder.</figcaption>
-      </figure>
-      <figure class="shot reveal" data-shot-name="v04-palette.png">
-        <img data-shot src="assets/screens/v04-palette.png" width="2400" height="1568" loading="lazy" decoding="async"
-             alt="The command palette, searching sessions and commands: the four open sessions, then New Shell and new Claude Code, Codex, OpenCode, Hermes and Antigravity sessions.">
-        <figcaption><strong>Command palette <kbd><span aria-hidden="true">⌘K</span><span class="sr-only">Command K</span></kbd></strong>Jump to any session, or start a new shell or agent.</figcaption>
-      </figure>
-      <figure class="shot reveal" style="--d:100ms" data-shot-name="v04-light.png">
-        <img data-shot src="assets/screens/v04-light.png" width="2400" height="1568" loading="lazy" decoding="async"
-             alt="Tethera in the light Paper theme, with the sessions sidebar and two split panes.">
-        <figcaption><strong>Paper theme</strong>Graphite for dark, Paper for light, plus classic palettes.</figcaption>
-      </figure>
-    </div>
-
-    <div class="cols">
-      <div class="reveal">
-        <h3>Inspector <kbd><span aria-hidden="true">⌥⌘I</span><span class="sr-only">Option Command I</span></kbd></h3>
-        <p>The Agent tab shows state, message and tool — plus model, context and cost once the agent is connected — and can interrupt it. The Git tab stages, commits, fetches, pulls and pushes.</p>
-      </div>
-      <div class="reveal" style="--d:80ms">
-        <h3>A real terminal underneath</h3>
-        <p>Classic, fast panes on SwiftTerm with Metal GPU rendering, running your own zsh or bash — configured your way. Split with <kbd><span aria-hidden="true">⌘D</span><span class="sr-only">Command D</span></kbd> and <kbd><span aria-hidden="true">⇧⌘D</span><span class="sr-only">Shift Command D</span></kbd>.</p>
-      </div>
-      <div class="reveal" style="--d:160ms">
-        <h3>Fonts that just work</h3>
-        <p>Nerd Font icons render out of the box. Geist Mono, IBM Plex Mono and JetBrains Mono come bundled.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= Before / After ================= -->
-<section class="section" id="compare" aria-labelledby="compare-title">
-  <div class="container">
-    <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">04</span>v0.3 → v0.4</p>
-      <div>
-        <h2 id="compare-title" class="reveal" style="--d:60ms">From block terminal to agent terminal.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">v0.3 wrapped every command in a block. v0.4 is a classic terminal with your sessions and agents alongside it. Drag the divider — or focus it and use the arrow keys.</p>
-      </div>
-    </div>
-
-    <div class="compare-wrap reveal" style="--d:160ms">
-      <div class="compare-legend" aria-hidden="true">
-        <span>v0.3</span>
-        <span class="compare-hint"><svg viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>Drag to compare</span>
-        <span class="is-new">v0.4</span>
-      </div>
-      <div class="compare" data-compare>
-        <img class="compare-img compare-after" src="assets/screens/v04-hero.png" width="2400" height="1568" loading="lazy" decoding="async" draggable="false"
-             alt="Tethera v0.4: a sessions sidebar, split terminal panes and the agent inspector.">
-        <img class="compare-img compare-before" src="assets/screens/v03.png" width="2384" height="1664" loading="lazy" decoding="async" draggable="false"
-             alt="Tethera v0.3: every command shown as a block, with an input bar at the bottom.">
-        <div class="compare-handle" role="slider" tabindex="0"
-             aria-label="Comparison divider. v0.3 is shown left of the divider, v0.4 to the right."
-             aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50 percent, v0.3 on the left, v0.4 on the right">
-          <span class="compare-knob" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 7-5 5 5 5M15 7l5 5-5 5"/></svg></span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= Shortcuts ================= -->
-<section class="section" id="shortcuts" aria-labelledby="shortcuts-title">
-  <div class="container">
-    <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">05</span>Keyboard</p>
-      <div>
-        <h2 id="shortcuts-title" class="reveal" style="--d:60ms">Fast from the keyboard.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">The shortcuts you’ll use every day.</p>
-      </div>
-    </div>
-
-    <div class="kb-grid">
-      <table class="kb reveal">
-        <caption>Sessions</caption>
-        <tbody>
-          <tr><th scope="row">New shell</th><td><kbd><span aria-hidden="true">⌘T</span><span class="sr-only">Command T</span></kbd></td></tr>
-          <tr><th scope="row">Next / previous session</th><td><kbd><span aria-hidden="true">⌘]</span><span class="sr-only">Command right bracket</span></kbd><span class="kb-or" aria-hidden="true">/</span><kbd><span aria-hidden="true">⌘[</span><span class="sr-only">Command left bracket</span></kbd></td></tr>
-          <tr><th scope="row">Go to the session that needs you</th><td><kbd><span aria-hidden="true">⇧⌘U</span><span class="sr-only">Shift Command U</span></kbd></td></tr>
-          <tr><th scope="row">Rename session</th><td><kbd><span aria-hidden="true">⇧⌘R</span><span class="sr-only">Shift Command R</span></kbd></td></tr>
-          <tr><th scope="row">End session</th><td><kbd><span aria-hidden="true">⌥⌘W</span><span class="sr-only">Option Command W</span></kbd></td></tr>
-          <tr><th scope="row">Quit <small>Sessions keep running</small></th><td><kbd><span aria-hidden="true">⌘Q</span><span class="sr-only">Command Q</span></kbd></td></tr>
-          <tr><th scope="row">Quit and end all sessions</th><td><kbd><span aria-hidden="true">⌥⌘Q</span><span class="sr-only">Option Command Q</span></kbd></td></tr>
-        </tbody>
-      </table>
-
-      <table class="kb reveal" style="--d:80ms">
-        <caption>Panes &amp; views</caption>
-        <tbody>
-          <tr><th scope="row">Command palette</th><td><kbd><span aria-hidden="true">⌘K</span><span class="sr-only">Command K</span></kbd></td></tr>
-          <tr><th scope="row">Agents overview</th><td><kbd><span aria-hidden="true">⇧⌘A</span><span class="sr-only">Shift Command A</span></kbd></td></tr>
-          <tr><th scope="row">Inspector</th><td><kbd><span aria-hidden="true">⌥⌘I</span><span class="sr-only">Option Command I</span></kbd></td></tr>
-          <tr><th scope="row">Split right</th><td><kbd><span aria-hidden="true">⌘D</span><span class="sr-only">Command D</span></kbd></td></tr>
-          <tr><th scope="row">Split down</th><td><kbd><span aria-hidden="true">⇧⌘D</span><span class="sr-only">Shift Command D</span></kbd></td></tr>
-          <tr><th scope="row">Close pane</th><td><kbd><span aria-hidden="true">⌘W</span><span class="sr-only">Command W</span></kbd></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</section>
-
-<!-- ================= CLI ================= -->
-<section class="section" id="cli" aria-labelledby="cli-title">
-  <div class="container">
-    <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">06</span>Command line</p>
-      <div>
-        <h2 id="cli-title" class="reveal" style="--d:60ms">Your sessions, from any shell.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">The <code>tethera</code> command talks to the same daemon as the app — so a session you start in one place is there in the other.</p>
-      </div>
-    </div>
-
-    <div class="split">
-      <div class="code reveal">
-        <pre><code><span class="p">$ </span>tethera list
-<span class="p">$ </span>tethera new --attach
-<span class="p">$ </span>tethera attach &lt;name&gt;</code></pre>
-      </div>
-      <div class="reveal" style="--d:100ms">
-        <dl class="cli-cmds">
-          <div><dt>tethera list</dt><dd>List your sessions.</dd></div>
-          <div><dt>tethera new --attach</dt><dd>Start a new session and attach to it.</dd></div>
-          <div><dt>tethera attach &lt;name&gt;</dt><dd>Attach to a running session by name. Works over SSH.</dd></div>
-        </dl>
-        <p class="cli-note">SSH into your Mac and attach to a running session. Full remote control is the next step.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ================= What's next ================= -->
-<section class="section" id="next" aria-labelledby="next-title">
-  <div class="container">
-    <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">07</span>Roadmap</p>
-      <div>
-        <h2 id="next-title" class="reveal" style="--d:60ms">What’s next.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">None of this is in v0.4 yet. It’s where Tethera is headed.</p>
-      </div>
-    </div>
-
-    <ul class="next-list reveal">
-      <li><span class="next-tag">Next</span><div><h3>Built-in editor and viewers</h3><p>An editor, plus viewers for files, images, PDFs and video.</p></div></li>
-      <li><span class="next-tag">Next</span><div><h3>A browser your agents can drive</h3><p>Built in, and driven by agents over MCP.</p></div></li>
-      <li><span class="next-tag">Next</span><div><h3>Agent workflows across git worktrees</h3><p>Agent workflows that span several git worktrees.</p></div></li>
-      <li><span class="next-tag">Next</span><div><h3>Remote control</h3><p>Building on <code>tethera attach</code>, which already works over SSH.</p></div></li>
-      <li><span class="next-tag">Next</span><div><h3>Music controls</h3><p>Control what’s playing without leaving Tethera.</p></div></li>
+    <ul class="rows">
+      <li><span class="k">Quit</span><p><kbd>⌘Q</kbd> closes the window. Open Tethera again and every session is exactly where you left it. <kbd>⌥⌘Q</kbd> ends them all.</p></li>
+      <li><span class="k">Restart</span><p>After a reboot, sessions come back with their history and folder.</p></li>
+      <li><span class="k">SSH</span><p><code>tethera attach</code> picks up a running session from any terminal — over SSH too.</p></li>
     </ul>
   </div>
 </section>
 
-<!-- ================= Install ================= -->
-<section class="section" id="install" aria-labelledby="install-title">
-  <div class="container">
+<!-- ================= 02 Agent-aware ================= -->
+<section class="sec sec-flip" id="agents" aria-labelledby="agents-title">
+  <div class="wrap grid">
     <div class="sec-head">
-      <p class="eyebrow reveal"><span class="num">08</span>Install</p>
-      <div>
-        <h2 id="install-title" class="reveal" style="--d:60ms">Get Tethera.</h2>
-        <p class="lead-2 reveal" style="--d:120ms">Free and open source. No API keys and no account — your agents run with the logins you already have.</p>
-        <div class="install-cta reveal" style="--d:180ms">
-          <div class="cta-row">
-            <a class="btn btn-primary btn-lg" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>
-              Download for Mac
-            </a>
-            <a class="btn btn-ghost btn-lg" href="https://github.com/Tsogbat/tethera/releases">All releases</a>
-          </div>
-          <p class="meta-line"><span>v0.4.0</span><span class="dot" aria-hidden="true">·</span><span>macOS 14+</span><span class="dot" aria-hidden="true">·</span><span>Apple silicon &amp; Intel</span></p>
-        </div>
-      </div>
+      <p class="eyebrow"><span>02</span>Agent-aware</p>
+      <h2 id="agents-title">Know which agent needs you.</h2>
+      <p class="lede">The sidebar shows which agent runs where and what it’s doing right now. When one needs you, you hear about it — even with Tethera in the&nbsp;background.</p>
     </div>
+    <div class="prop">
+      <div class="prop-slot" data-prop="overview" aria-hidden="true"></div>
+      <p class="prop-cap"><kbd>⇧⌘A</kbd> Every agent in one table</p>
+    </div>
+    <div class="sec-body">
+      <ul class="states" aria-label="Agent states">
+        <li><span class="st st-working" aria-hidden="true"></span><b>working</b><span>running tools, writing code</span></li>
+        <li><span class="st st-waiting" aria-hidden="true"></span><b>waiting</b><span>idle at its prompt</span></li>
+        <li><span class="st st-needs" aria-hidden="true"></span><b>needs you</b><span>asking for permission or an answer</span></li>
+        <li><span class="st st-done" aria-hidden="true"></span><b>done</b><span>finished its turn</span></li>
+        <li><span class="st st-error" aria-hidden="true"></span><b>error</b><span>stopped with an error</span></li>
+      </ul>
+      <ul class="rows">
+        <li><span class="k">Notify</span><p>A notification and a Dock badge when an agent needs you. <kbd>⇧⌘U</kbd> jumps straight&nbsp;there.</p></li>
+      </ul>
+      <figure class="sec-shot" data-shot-figure="agents"><img data-shot="agents" loading="lazy" decoding="async" alt=""></figure>
+    </div>
+  </div>
+</section>
 
-    <div class="install-grid">
-      <div class="panel reveal">
-        <h3>Install the app</h3>
-        <p>Three steps, one of them only the first time.</p>
-        <ol class="steps">
-          <li>
-            <h4>Download the DMG</h4>
-            <p>Get <a href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">Tethera-macOS.dmg</a> — for Apple silicon and Intel.</p>
-          </li>
-          <li>
-            <h4>Drag to Applications</h4>
-            <p>Open the DMG and drag Tethera into your Applications folder.</p>
-          </li>
-          <li>
-            <h4>Open it the first time</h4>
-            <p class="note"><strong>Right-click Tethera.app → Open → Open.</strong> You only need to do this once.</p>
-            <p>Or clear the quarantine flag from a terminal:</p>
-            <div class="code">
-              <pre><code>xattr -dr com.apple.quarantine /Applications/Tethera.app</code></pre>
-              <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Tethera.app" aria-label="Copy command">
-                <svg class="i-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9"/></svg>
-                <svg class="i-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>
-                <span class="copy-label">Copy</span>
-              </button>
-            </div>
-          </li>
-        </ol>
-      </div>
+<!-- ================= 03 Every agent ================= -->
+<section class="sec" id="every-agent" aria-labelledby="every-title">
+  <div class="wrap grid">
+    <div class="sec-head sec-head-wide">
+      <p class="eyebrow"><span>03</span>Every agent you use</p>
+      <h2 id="every-title">Bring the agents you already&nbsp;use.</h2>
+    </div>
+    <ul class="marks" aria-label="Supported agents">
+      <li>Claude Code</li><li>Codex</li><li>OpenCode</li><li>Hermes</li><li>Gemini</li><li>Antigravity</li><li>Ollama</li>
+    </ul>
+    <ul class="rows rows-wide">
+      <li><span class="k">Start</span><p>Launch any of them from <b>+</b> or from Home. They run with your own logins — no API keys, no&nbsp;account.</p></li>
+      <li><span class="k">Connect</span><p>Settings → Agents adds hooks so Tethera sees tool calls, permission requests and finished turns. Every change is shown as a diff first, backed up, and&nbsp;reversible.</p></li>
+      <li><span class="k">Local</span><p>Ollama runs Claude Code, Codex or OpenCode on your local models with <code>ollama&nbsp;launch</code>.</p></li>
+    </ul>
+  </div>
+</section>
 
-      <div class="panel reveal" style="--d:100ms">
-        <h3>Build from source</h3>
-        <p>Clone the repository and run it.</p>
-        <div class="code" style="margin-top:18px">
-          <pre><code><span class="p">$ </span>git clone https://github.com/Tsogbat/tethera.git
-<span class="p">$ </span>cd tethera
-<span class="p">$ </span>make run</code></pre>
-          <button class="copy" type="button" data-copy="git clone https://github.com/Tsogbat/tethera.git &amp;&amp; cd tethera &amp;&amp; make run" aria-label="Copy build commands">
-            <svg class="i-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9"/></svg>
-            <svg class="i-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>
-            <span class="copy-label">Copy</span>
-          </button>
-        </div>
+<!-- ================= 04 Home ================= -->
+<section class="sec" id="home" aria-labelledby="home-title">
+  <div class="wrap grid">
+    <div class="sec-head">
+      <p class="eyebrow"><span>04</span>Home <em>New in 0.5</em></p>
+      <h2 id="home-title">Everything starts at&nbsp;Home.</h2>
+      <p class="lede">One quiet screen to start any agent, reopen a recent folder, see who’s running, and check which integrations are&nbsp;connected.</p>
+    </div>
+    <div class="prop">
+      <div class="prop-slot" data-prop="home" aria-hidden="true"></div>
+      <p class="prop-cap"><kbd>⇧⌘H</kbd> Back to Home</p>
+    </div>
+    <ul class="rows">
+      <li><span class="k">Start</span><p>A shell, or any agent, in one click.</p></li>
+      <li><span class="k">Recent</span><p>The folders you worked in last.</p></li>
+      <li><span class="k">Running</span><p>Who’s working, who’s waiting, who needs you.</p></li>
+      <li><span class="k">Connected</span><p>Which agent integrations are on.</p></li>
+    </ul>
+    <figure class="sec-shot sec-shot-wide" data-shot-figure="home"><img data-shot="home" loading="lazy" decoding="async" alt=""></figure>
+  </div>
+</section>
 
-        <div class="panel-sub">
-          <h4>Requirements</h4>
-          <ul class="req">
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>macOS 14 Sonoma or later</li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>Apple silicon or Intel</li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>To build: Xcode 26</li>
-            <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg>For agents: Claude Code, Codex, OpenCode, Hermes, Gemini, Antigravity or Ollama, signed in as you — no API keys</li>
-          </ul>
-        </div>
+<!-- ================= 05 A real terminal ================= -->
+<section class="sec sec-flip" id="terminal" aria-labelledby="terminal-title">
+  <div class="wrap grid">
+    <div class="sec-head">
+      <p class="eyebrow"><span>05</span>A real terminal</p>
+      <h2 id="terminal-title">Your shell, exactly as you left&nbsp;it.</h2>
+      <p class="lede">Your own zsh or bash, unchanged, in GPU-rendered panes. TUIs, <code>vim</code>, <code>ssh</code> and Nerd Font prompts just&nbsp;work.</p>
+    </div>
+    <div class="prop">
+      <div class="prop-slot" data-prop="split" aria-hidden="true"></div>
+      <p class="prop-cap"><kbd>⌘D</kbd> Split right</p>
+    </div>
+    <ul class="rows">
+      <li><span class="k">Splits</span><p><kbd>⌘D</kbd> splits right, <kbd>⇧⌘D</kbd> splits down.</p></li>
+      <li><span class="k">Icons</span><p>Nerd Font prompt icons work out of the box.</p></li>
+      <li><span class="k">Fonts</span><p>Geist Mono, IBM Plex Mono and JetBrains Mono, bundled.</p></li>
+    </ul>
+    <figure class="sec-shot sec-shot-wide" data-shot-figure="terminal"><img data-shot="terminal" loading="lazy" decoding="async" alt=""></figure>
+  </div>
+</section>
+
+<!-- ================= 06 CLI ================= -->
+<section class="sec" id="cli" aria-labelledby="cli-title">
+  <div class="wrap grid">
+    <div class="sec-head sec-head-wide">
+      <p class="eyebrow"><span>06</span>Command line</p>
+      <h2 id="cli-title">Your sessions, from any&nbsp;shell.</h2>
+      <p class="lede">The <code>tethera</code> command talks to the same daemon as the app, so a session you start in one place is there in the&nbsp;other.</p>
+    </div>
+    <div class="code-block">
+      <pre><code><span class="p">$</span> tethera list                      <span class="c"># sessions, their agents and state</span>
+<span class="p">$</span> tethera new --name api --attach   <span class="c"># a new session, attached here</span>
+<span class="p">$</span> tethera attach api                <span class="c"># from any terminal — over SSH too</span>
+<span class="p">$</span> tethera close api</code></pre>
+    </div>
+    <p class="note-line">Linked at <code>~/.local/bin/tethera</code> once you connect an agent. <kbd>⌃\</kbd> detaches.</p>
+  </div>
+</section>
+
+<!-- ================= 07 Next ================= -->
+<section class="sec" id="next" aria-labelledby="next-title">
+  <div class="wrap grid">
+    <div class="sec-head sec-head-wide">
+      <p class="eyebrow"><span>07</span>Next: Tools <em>Coming in 0.6</em></p>
+      <h2 id="next-title">The things you leave the terminal for, built&nbsp;in.</h2>
+    </div>
+    <ul class="rows rows-wide rows-next">
+      <li><span class="k">Editor</span><p>A built-in code editor.</p></li>
+      <li><span class="k">Viewers</span><p>Images, PDFs and video.</p></li>
+      <li><span class="k">Browser</span><p>A browser your agents can drive over MCP.</p></li>
+      <li><span class="k">Music</span><p>Playback controls, without leaving Tethera.</p></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= Download ================= -->
+<section class="finale" id="download" aria-labelledby="download-title">
+  <div class="finale-stage" data-prop="download" aria-hidden="true"></div>
+  <div class="wrap finale-copy">
+    <p class="finale-cap" aria-hidden="true">Press the key.</p>
+    <h2 id="download-title">Get Tethera.</h2>
+    <p class="lede">Free and open source. macOS 14+, Apple silicon &amp; Intel.</p>
+    <div class="cta">
+      <a class="btn btn-lg" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
+        Download for Mac
+      </a>
+      <a class="btn btn-lg btn-ghost" href="https://github.com/Tsogbat/tethera/releases">All releases</a>
+    </div>
+    <div class="quarantine">
+      <p>The build isn’t notarized yet. The first time, right-click Tethera.app → Open, or run:</p>
+      <div class="cmd">
+        <code>xattr -dr com.apple.quarantine /Applications/Tethera.app</code>
+        <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Tethera.app" aria-label="Copy command">Copy</button>
       </div>
     </div>
   </div>
@@ -1028,28 +302,18 @@ h2 {
 </main>
 
 <footer class="footer">
-  <div class="container">
-    <div class="footer-top">
-      <div class="footer-brand">
-        <a class="brand" href="#top" aria-label="Tethera, back to top">
-          <img src="assets/icon-64.png" width="28" height="28" alt="" loading="lazy">
-          <span>Tethera</span>
-        </a>
-        <p>A terminal for running and supervising AI coding agents.</p>
-      </div>
-      <nav aria-label="Footer">
-        <ul class="footer-links">
-          <li><a href="https://github.com/Tsogbat/tethera">GitHub</a></li>
-          <li><a href="https://github.com/Tsogbat/tethera/releases">Releases</a></li>
-          <li><a href="https://github.com/Tsogbat/tethera/issues">Issues</a></li>
-          <li><a href="https://github.com/Tsogbat/tethera/blob/main/LICENCE.TXT">License</a></li>
-        </ul>
-      </nav>
-    </div>
-    <div class="footer-bottom">
-      <p style="margin:0">Free and open source under the <a href="https://github.com/Tsogbat/tethera/blob/main/LICENCE.TXT">GNU Affero General Public License v3.0</a>.</p>
-      <p style="margin:0">Made for macOS</p>
-    </div>
+  <div class="wrap footer-inner">
+    <a class="brand" href="#top" aria-label="Tethera, back to top">
+      <img src="assets/icon-64.png" width="22" height="22" alt="" loading="lazy">
+      <span>Tethera</span>
+    </a>
+    <nav aria-label="Footer" class="footer-links">
+      <a href="https://github.com/Tsogbat/tethera">GitHub</a>
+      <a href="https://github.com/Tsogbat/tethera/releases">Releases</a>
+      <a href="https://github.com/Tsogbat/tethera/issues">Issues</a>
+      <a href="https://github.com/Tsogbat/tethera/blob/main/LICENCE.TXT">License</a>
+    </nav>
+    <p class="footer-note">Free and open source under the GNU AGPL v3. Made for macOS.</p>
   </div>
 </footer>
 
@@ -1057,149 +321,49 @@ h2 {
 
 <script>
 (() => {
-  const $ = (s, r = document) => r.querySelector(s);
-  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const root = document.documentElement;
 
-  /* Nav: hairline on scroll + mobile menu */
-  const nav = $('[data-nav]');
-  const toggle = $('.nav-toggle');
-  const menu = $('#nav-menu');
-  let ticking = false;
-  const onScroll = () => { nav.classList.toggle('is-scrolled', window.scrollY > 8); ticking = false; };
-  window.addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  /* Screenshots from the list in <head> */
+  const shots = window.TETHERA_SHOTS || {};
+  $$('img[data-shot]').forEach((img) => {
+    const s = shots[img.dataset.shot];
+    const fig = img.closest('[data-shot-figure]');
+    if (!s || !s.src) { if (fig) fig.hidden = true; return; }
+    if (s.w) { img.width = s.w; img.height = s.h; }
+    img.alt = s.alt || '';
+    img.src = s.src;
+  });
+
+  /* Nav hairline once scrolled */
+  const nav = document.querySelector('[data-nav]');
+  let tick = false;
+  const onScroll = () => { nav.classList.toggle('is-solid', scrollY > 8); tick = false; };
+  addEventListener('scroll', () => { if (!tick) { tick = true; requestAnimationFrame(onScroll); } }, { passive: true });
   onScroll();
 
-  const setOpen = (open) => {
-    nav.classList.toggle('is-open', open);
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
-  };
-  toggle.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
-  menu.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
-  document.addEventListener('click', (e) => { if (nav.classList.contains('is-open') && !nav.contains(e.target)) setOpen(false); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && nav.classList.contains('is-open')) { setOpen(false); toggle.focus(); }
-  });
-  const wide = window.matchMedia('(min-width: 861px)');
-  const onWide = () => { if (wide.matches) setOpen(false); };
-  wide.addEventListener ? wide.addEventListener('change', onWide) : wide.addListener(onWide);
-
-  /* Reveal on scroll */
-  const reveals = $$('.reveal');
-  if (!reduceMotion && 'IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) { entry.target.classList.add('is-in'); io.unobserve(entry.target); }
-      });
-    }, { rootMargin: '0px 0px -6% 0px', threshold: 0.06 });
-    reveals.forEach((el) => io.observe(el));
-  } else {
-    reveals.forEach((el) => el.classList.add('is-in'));
-  }
-
-  /* Placeholder if a screenshot is missing */
-  const watchImage = (img, frame) => {
-    img.addEventListener('error', () => frame.classList.add('is-missing'));
-    img.addEventListener('load', () => frame.classList.remove('is-missing'));
-    if (img.loading !== 'lazy' && img.complete && img.naturalWidth === 0) frame.classList.add('is-missing');
-  };
-  $$('img[data-shot]').forEach((img) => watchImage(img, img.closest('.shot')));
-
-  /* Copy to clipboard */
-  const live = $('#live');
-  const fallbackCopy = (text) => {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    let ok = false;
-    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
-    ta.remove();
-    return ok;
-  };
+  /* Copy buttons */
+  const live = document.getElementById('live');
   $$('[data-copy]').forEach((btn) => {
-    const label = $('.copy-label', btn);
-    let timer;
+    let t;
     btn.addEventListener('click', async () => {
-      const text = btn.getAttribute('data-copy');
       let ok = false;
-      try {
-        if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; }
-        else ok = fallbackCopy(text);
-      } catch (_) { ok = fallbackCopy(text); }
-      btn.classList.toggle('is-copied', ok);
-      if (label) label.textContent = ok ? 'Copied' : 'Press ⌘C';
+      try { await navigator.clipboard.writeText(btn.dataset.copy); ok = true; } catch (_) { ok = false; }
+      btn.textContent = ok ? 'Copied' : 'Press ⌘C';
       live.textContent = ok ? 'Copied to clipboard' : 'Copy failed. Select the text and press Command C.';
-      clearTimeout(timer);
-      timer = setTimeout(() => { btn.classList.remove('is-copied'); if (label) label.textContent = 'Copy'; live.textContent = ''; }, 1800);
+      clearTimeout(t); t = setTimeout(() => { btn.textContent = 'Copy'; live.textContent = ''; }, 1800);
     });
   });
 
-  /* Before / after comparison */
-  const cmp = $('[data-compare]');
-  if (cmp) {
-    const handle = $('.compare-handle', cmp);
-    const imgs = $$('.compare-img', cmp);
-    let pos = 50;
-    let drag = null;
-    const set = (v) => {
-      pos = Math.max(0, Math.min(100, v));
-      cmp.style.setProperty('--pos', pos + '%');
-      const n = Math.round(pos);
-      handle.setAttribute('aria-valuenow', String(n));
-      handle.setAttribute('aria-valuetext', n + ' percent, v0.3 on the left, v0.4 on the right');
-    };
-    const fromX = (x) => { const r = cmp.getBoundingClientRect(); if (r.width) set(((x - r.left) / r.width) * 100); };
-
-    cmp.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
-      drag = { id: e.pointerId, x: e.clientX, moved: false, touch: e.pointerType !== 'mouse' };
-      if (!drag.touch) {
-        e.preventDefault();
-        fromX(e.clientX);
-        cmp.setPointerCapture(e.pointerId);
-        handle.focus({ preventScroll: true });
-      }
-    });
-    cmp.addEventListener('pointermove', (e) => {
-      if (!drag || e.pointerId !== drag.id) return;
-      if (drag.touch && !drag.moved) {
-        if (Math.abs(e.clientX - drag.x) < 4) return;
-        drag.moved = true;
-        try { cmp.setPointerCapture(e.pointerId); } catch (_) {}
-      }
-      drag.moved = true;
-      fromX(e.clientX);
-    });
-    const end = (e) => {
-      if (!drag || (e.pointerId !== undefined && e.pointerId !== drag.id)) return;
-      if (e.type === 'pointerup' && drag.touch && !drag.moved) fromX(e.clientX);
-      drag = null;
-    };
-    cmp.addEventListener('pointerup', end);
-    cmp.addEventListener('pointercancel', end);
-    cmp.addEventListener('lostpointercapture', end);
-
-    handle.addEventListener('keydown', (e) => {
-      const step = e.shiftKey ? 10 : 2;
-      let v = pos;
-      switch (e.key) {
-        case 'ArrowLeft': case 'ArrowDown': v -= step; break;
-        case 'ArrowRight': case 'ArrowUp': v += step; break;
-        case 'PageDown': v -= 10; break;
-        case 'PageUp': v += 10; break;
-        case 'Home': v = 0; break;
-        case 'End': v = 100; break;
-        default: return;
-      }
-      e.preventDefault();
-      set(v);
-    });
-
-    imgs.forEach((img) => img.addEventListener('error', () => cmp.classList.add('is-missing')));
-    set(50);
-  }
+  /* If the 3D scene never arrives (CDN blocked, old browser), show the still */
+  setTimeout(() => {
+    if (!root.classList.contains('stage-on') && !root.classList.contains('no-webgl')) {
+      root.classList.remove('has-3d');
+      root.classList.add('no-webgl');
+      const s = document.querySelector('[data-still]');
+      if (s && !s.getAttribute('src')) s.src = 'assets/hero-still.png';
+    }
+  }, 9000);
 })();
 </script>
 </body>
