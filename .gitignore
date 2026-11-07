@@ -143,7 +143,6 @@ releases/
 release.sh
 build_app.sh
 test_terminal.sh
-.github/
 
 # Note: The following files SHOULD be committed:
 # - icon.png (source icon file)

@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Test
+        # The real-shell tests depend on the runner's login shell setup; they run locally.
+        run: swift test --skip ShellSessionTests
+
+      - name: Package
+        run: scripts/package.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Release notes
+        run: |
+          NOTES=".github/release-notes/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$NOTES" ]; then
+            NOTES="$RUNNER_TEMP/notes.md"
+            echo "Download **Tethera-macOS.dmg** below, open it and drag Tethera to Applications." > "$NOTES"
+          fi
+          echo "NOTES=$NOTES" >> "$GITHUB_ENV"
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Tethera ${{ github.ref_name }}
+          body_path: ${{ env.NOTES }}
+          files: dist/Tethera-macOS.dmg
