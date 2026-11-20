@@ -15,7 +15,7 @@ import TetheraKit
 ///     tethera changes                    show this session's live diff
 ///     tethera mcp                        the browser MCP server for agents (stdio)
 
-let version = "0.8.0"
+let version = "0.9.0"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 
@@ -171,9 +171,11 @@ case "new":
     var iterator = arguments.makeIterator()
     while let argument = iterator.next() {
         switch argument {
-        case "--name": spec.name = iterator.next()
-        case "--cwd": spec.cwd = iterator.next().map { ($0 as NSString).expandingTildeInPath }
-        case "--attach", "-a": attachAfter = true
+        case "--name" where rest.isEmpty: spec.name = iterator.next()
+        case "--cwd" where rest.isEmpty: spec.cwd = iterator.next().map { ($0 as NSString).expandingTildeInPath }
+        case "--attach" where rest.isEmpty, "-a" where rest.isEmpty: attachAfter = true
+        // `--` ends the options; everything after it is the command.
+        case "--" where rest.isEmpty: while let word = iterator.next() { rest.append(word) }
         default: rest.append(argument)
         }
     }
@@ -289,6 +291,28 @@ case "open", "changes":
 case "mcp":
     MCPServer.run(version: version)
 
+case "bridge":
+    // The daemon's protocol over stdin/stdout, for another Mac's Tethera:
+    // `ssh this-mac ~/.local/bin/tethera bridge`. Starts the daemon if needed.
+    let fd: Int32
+    do { fd = try DaemonLauncher.connect(executable: selfPath) } catch { fail("can't reach the session daemon") }
+    func pump(from source: Int32, to destination: Int32) {
+        var buffer = [UInt8](repeating: 0, count: 65_536)
+        while true {
+            let count = read(source, &buffer, buffer.count)
+            guard count > 0 else { break }
+            var offset = 0
+            while offset < count {
+                let written = buffer.withUnsafeBytes { write(destination, $0.baseAddress! + offset, count - offset) }
+                guard written > 0 else { exit(0) }
+                offset += written
+            }
+        }
+        exit(0)
+    }
+    Thread.detachNewThread { pump(from: STDIN_FILENO, to: fd) }
+    pump(from: fd, to: STDOUT_FILENO)
+
 case "version", "--version":
     print("tethera \(version)")
 
@@ -305,5 +329,6 @@ default:
       tethera open <file|folder|url>      open in Tethera beside this session
       tethera changes                     this session's live diff
       tethera mcp                         browser tools for agents (MCP over stdio)
+      tethera bridge                      this Mac's sessions over stdin/stdout (for ssh)
     """)
 }

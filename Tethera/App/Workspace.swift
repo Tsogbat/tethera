@@ -82,9 +82,15 @@ final class Workspace: ObservableObject {
         } else if let index = panes.firstIndex(where: { $0.id == focusedPane }) {
             panes[index].content = .session(id)
         }
-        if let cwd = client.session(id)?.cwd { RecentFolders.note(cwd) }
+        if let session = client.session(id), session.host == nil { RecentFolders.note(session.cwd) }
         save()
         focusTerminalSoon()
+    }
+
+    /// The focused session if it's on this Mac, else this Mac's first: tools that read files
+    /// (Changes, Git, transcripts) can't see another Mac's disk.
+    var focusedLocalSession: SessionInfo? {
+        focusedSession.flatMap { $0.host == nil ? $0 : nil } ?? client.sessions.first { $0.host == nil }
     }
 
     /// Opens a tool beside the session that asked for it (or the focused pane): a pane that
@@ -137,7 +143,7 @@ final class Workspace: ObservableObject {
 
     /// The Git panel for the focused session's repository.
     func showGit() {
-        guard let cwd = focusedSession?.cwd ?? client.sessions.first?.cwd else { return }
+        guard let cwd = focusedLocalSession?.cwd else { return }
         Task {
             guard let repo = await WorktreeService.repository(at: cwd) else { return }
             let top = await GitService.run(["rev-parse", "--show-toplevel"], in: cwd)
@@ -147,7 +153,8 @@ final class Workspace: ObservableObject {
 
     /// What the focused session's agent did, step by step (⌥⌘T).
     func showTranscript() {
-        guard let id = focusedSessionID ?? client.sessions.first(where: { $0.agent != nil })?.id else { return }
+        guard let id = focusedLocalSession.flatMap({ $0.agent != nil ? $0.id : nil })
+                ?? client.sessions.first(where: { $0.agent != nil && $0.host == nil })?.id else { return }
         open(.transcript(id), besideSession: id)
     }
 
@@ -162,7 +169,7 @@ final class Workspace: ObservableObject {
 
     /// The live diff for the focused session's repository.
     func showChanges() {
-        guard let id = focusedSessionID ?? client.sessions.first?.id else { return }
+        guard let id = focusedLocalSession?.id else { return }
         open(.changes(id), besideSession: id)
     }
 
@@ -172,7 +179,7 @@ final class Workspace: ObservableObject {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
-        if let cwd = focusedSession?.cwd { panel.directoryURL = URL(fileURLWithPath: cwd) }
+        if let cwd = focusedLocalSession?.cwd { panel.directoryURL = URL(fileURLWithPath: cwd) }
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { open(path: url.path, besideSession: focusedSessionID) }
     }
@@ -228,12 +235,16 @@ final class Workspace: ObservableObject {
 
     // MARK: Creating and closing
 
-    /// Starts a session in the focused session's folder. Agents are typed into the shell, so the
-    /// session (and its scrollback) outlives the agent.
-    func newSession(agent: AgentKind? = nil, command: String? = nil, cwd: String? = nil, inNewPane: Axis? = nil) {
+    /// Starts a session in the focused session's folder, on the same Mac. Agents are typed into
+    /// the shell, so the session (and its scrollback) outlives the agent.
+    func newSession(agent: AgentKind? = nil, command: String? = nil, cwd: String? = nil, inNewPane: Axis? = nil, on host: String? = nil) {
         let preferences = PreferencesStore.shared.value
-        let directory = cwd ?? focusedSession?.cwd ?? preferences.startDirectory ?? NSHomeDirectory()
-        var spec = SessionSpec(cwd: directory, shell: preferences.shell)
+        // Without a folder, a new session joins the focused one's Mac; a remote Mac picks its own
+        // shell and starts in the focused session's folder, or its home.
+        let host = host ?? (cwd == nil ? focusedSession?.host : nil)
+        let directory = host != nil ? (cwd ?? focusedSession.flatMap { $0.host == host ? $0.cwd : nil })
+            : cwd ?? focusedSession.flatMap { $0.host == nil ? $0.cwd : nil } ?? preferences.startDirectory ?? NSHomeDirectory()
+        var spec = SessionSpec(cwd: directory, shell: host == nil ? preferences.shell : nil)
         if let size = focusedSessionID.flatMap({ TerminalStore.shared.existing($0)?.gridSize }) {
             spec.cols = size.cols
             spec.rows = size.rows
@@ -241,8 +252,8 @@ final class Workspace: ObservableObject {
         if let command = command ?? agent?.command {
             spec.initialInput = command + "\r"
         }
-        RecentFolders.note(directory)
-        client.create(spec) { [weak self] info in
+        if host == nil, let directory { RecentFolders.note(directory) }
+        client.create(spec, on: host) { [weak self] info in
             guard let self else { return }
             if let axis = inNewPane {
                 self.axis = axis
@@ -322,7 +333,7 @@ final class Workspace: ObservableObject {
             focusedPane = panes[0].id
             changed = true
         }
-        if let cwd = focusedSession?.cwd { RecentFolders.note(cwd) }
+        if let session = focusedSession, session.host == nil { RecentFolders.note(session.cwd) }
         if changed { save() }
     }
 

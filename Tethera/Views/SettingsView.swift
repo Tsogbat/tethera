@@ -7,7 +7,9 @@ struct SettingsView: View {
             GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
             AppearanceSettings().tabItem { Label("Appearance", systemImage: "textformat") }
             AgentSettings().tabItem { Label("Agents", systemImage: "point.3.connected.trianglepath.dotted") }
+            RemoteSettings().tabItem { Label("Remote", systemImage: "desktopcomputer") }
             ShortcutSettings().tabItem { Label("Shortcuts", systemImage: "keyboard") }
+            PlanSettings().tabItem { Label("Plan", systemImage: "seal") }
         }
         .frame(width: 560, height: 460)
     }

@@ -172,7 +172,7 @@ struct ChangesPane: View {
     @StateObject private var model = ChangesModel()
 
     private var worktree: WorktreeService.Info? {
-        client.session(sessionID).flatMap { worktrees.info(for: $0.cwd) }
+        client.session(sessionID)?.localFolder.flatMap { worktrees.info(for: $0) }
     }
     @Environment(\.theme) private var theme
     @State private var confirmDiscard: ChangesModel.Entry?
@@ -208,11 +208,11 @@ struct ChangesPane: View {
         }
         .background(theme.bg.color)
         .onAppear {
-            if let cwd = client.session(sessionID)?.cwd { model.start(cwd: cwd) }
+            if let cwd = client.session(sessionID)?.localFolder { model.start(cwd: cwd) }
             // A worktree's review starts from everything since its base.
             if let worktree, model.base == nil { model.base = worktree.base }
         }
-        .onChange(of: client.session(sessionID)?.cwd) { _, cwd in if let cwd { model.start(cwd: cwd) } }
+        .onChange(of: client.session(sessionID)?.localFolder) { _, cwd in if let cwd { model.start(cwd: cwd) } }
         .onChange(of: model.selected) { _, _ in Task { await model.loadDiff() } }
         .onDisappear { model.stop() }
         .confirmationDialog("Discard changes to \(confirmDiscard?.file.path ?? "")?", isPresented: Binding(

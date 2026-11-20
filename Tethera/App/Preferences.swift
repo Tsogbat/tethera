@@ -59,6 +59,18 @@ struct Preferences: Codable, Equatable {
     var customPalettes: [CustomPalette] = []
     /// Shortcuts you changed, by command id (the rest keep their defaults).
     var keyBindings: [String: KeyBinding] = [:]
+    /// Other Macs whose sessions show here too, reached with `ssh <address> tethera bridge`.
+    var remoteHosts: [RemoteHost] = []
+    /// The phone dashboard (Settings → Remote); off until turned on.
+    var phoneEnabled = false
+    var phoneReach: PhoneReach = .tailscale
+    var phonePort = Int(PhoneServer.defaultPort)
+    /// The phone's pairing token; a new one unpairs every phone.
+    var phoneToken: String?
+    /// ntfy push while you're away; the topic is random and the server can be your own.
+    var pushEnabled = false
+    var pushTopic: String?
+    var pushServer: String?
 
     init() {}
 
@@ -87,6 +99,14 @@ struct Preferences: Codable, Equatable {
         contextAlertPercent = try? c.decodeIfPresent(Double.self, forKey: .contextAlertPercent)
         customPalettes = (try? c.decode([CustomPalette].self, forKey: .customPalettes)) ?? d.customPalettes
         keyBindings = (try? c.decode([String: KeyBinding].self, forKey: .keyBindings)) ?? d.keyBindings
+        remoteHosts = (try? c.decode([RemoteHost].self, forKey: .remoteHosts)) ?? d.remoteHosts
+        phoneEnabled = (try? c.decode(Bool.self, forKey: .phoneEnabled)) ?? d.phoneEnabled
+        phoneReach = (try? c.decode(PhoneReach.self, forKey: .phoneReach)) ?? d.phoneReach
+        phonePort = (try? c.decode(Int.self, forKey: .phonePort)) ?? d.phonePort
+        phoneToken = try? c.decodeIfPresent(String.self, forKey: .phoneToken)
+        pushEnabled = (try? c.decode(Bool.self, forKey: .pushEnabled)) ?? d.pushEnabled
+        pushTopic = try? c.decodeIfPresent(String.self, forKey: .pushTopic)
+        pushServer = try? c.decodeIfPresent(String.self, forKey: .pushServer)
     }
 }
 

@@ -55,6 +55,19 @@ All of this comes from a journal Tethera keeps on your Mac (`~/Library/Applicati
   <img src="docs/assets/screens/v08-away.png" width="49%" alt="While you were away, on Home">
 </p>
 
+## From anywhere
+
+- **Other Macs.** Settings → Remote → *Add Mac…*: give it an SSH address (a host from `~/.ssh/config`, `you@10.0.0.4`, or a Tailscale name). Its sessions show in the sidebar under its name, and you attach, type, rename and start new ones there as if they were local. Tethera runs `ssh <mac> tethera bridge` with your own ssh, so keys, config and Tailscale SSH just work.
+- **Your phone.** Turn on the phone dashboard in Settings → Remote and scan the QR code. It lists your agents with what they cost, and lets you **allow or deny** a permission request or **answer** an agent's question. It can't open a shell. It listens on your Tailscale address by default (or your local network), and only a phone with the pairing code gets in.
+- **Push.** Away from the Mac for two minutes and an agent needs you, finishes or fails: a push through [ntfy](https://ntfy.sh) (free, no account; or your own server), with Allow and Deny on permission requests.
+
+<p align="center">
+  <img src="docs/assets/screens/v09-remote.png" width="68%" alt="Sessions from this Mac and from a Mac called Studio in one sidebar">
+  <img src="docs/assets/screens/v09-phone.png" width="27%" alt="The phone dashboard: a permission request with Allow and Deny, a question with an answer field, and the agents list">
+</p>
+
+Remote Macs, the phone dashboard and push are part of **Pro**, and Settings → Plan shows what's in Free, Pro and Team. Every plan is free during the beta.
+
 ## Tools
 
 Tools open as panes beside the session that needs them.
@@ -147,6 +160,7 @@ tethera close api
 tethera open src/app.ts              # open a file (or folder, or URL) beside this session
 tethera changes                      # this session's live diff
 tethera mcp                          # the browser, as an MCP server for agents
+tethera bridge                       # this Mac's sessions over stdin/stdout (what another Mac runs over ssh)
 ```
 
 ## Install
@@ -183,8 +197,9 @@ Needs Xcode 26 (Swift 6.2). The icon is rendered from the same SceneKit model as
 
 ## What's next
 
-- Remote control of your sessions, from other Macs and your phone
+- Updates that never restart your sessions
 - Teams: a shared agent board, approval policies, a cost dashboard and an audit log
+- Autocompletion at your shell prompt
 
 ## Architecture
 

@@ -66,6 +66,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSLocalNetworkUsageDescription</key><string>Tethera reaches your other Macs over SSH and, when you turn it on, answers your phone's dashboard on your network.</string>
     <key>NSAppleEventsUsageDescription</key><string>Tethera controls Music and Spotify from its status bar (play, pause, next) and shows the artwork.</string>
     <key>NSHumanReadableCopyright</key><string>Copyright © $(date +%Y) Tethera contributors.</string>
 </dict>

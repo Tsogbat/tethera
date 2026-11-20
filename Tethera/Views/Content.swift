@@ -13,7 +13,7 @@ struct TitleBar: View {
     var body: some View {
         HStack(spacing: 10) {
             if let session = workspace.focusedSession {
-                Breadcrumb(session: session, git: git.status(for: session.cwd))
+                Breadcrumb(session: session, git: session.localFolder.flatMap { git.status(for: $0) })
                 Spacer(minLength: 12)
                 AgentStateLabel(session: session)
             } else {
@@ -47,7 +47,7 @@ struct SessionToolButtons: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if let url = previews.urls[session.id] {
+            if session.host == nil, let url = previews.urls[session.id] {
                 Button {
                     PreviewDetector.shared.open(for: session.id)
                 } label: {
@@ -63,7 +63,7 @@ struct SessionToolButtons: View {
                 .buttonStyle(.plain)
                 .help("Open \(url.absoluteString) beside this session")
             }
-            if git.status(for: session.cwd)?.info.isDirty == true {
+            if let folder = session.localFolder, git.status(for: folder)?.info.isDirty == true {
                 IconButton(systemName: "plusminus", help: "Changes (⇧⌘E)") {
                     Workspace.shared.open(.changes(session.id), besideSession: session.id)
                 }
@@ -84,6 +84,14 @@ struct Breadcrumb: View {
                 .font(TypeScale.ui(compact ? 11.5 : 12.5, .semibold))
                 .foregroundStyle(theme.text.color)
                 .lineLimit(1)
+            if let host = DaemonClient.shared.host(session.host) {
+                HStack(spacing: 3) {
+                    Image(systemName: "desktopcomputer").font(.system(size: compact ? 9 : 10))
+                    Text(host.name).lineLimit(1)
+                }
+                .font(TypeScale.ui(compact ? 11 : 12, .medium))
+                .foregroundStyle(theme.text2.color)
+            }
             Text(session.displayPath)
                 .font(TypeScale.ui(compact ? 11 : 12))
                 .foregroundStyle(theme.text3.color)
@@ -178,7 +186,7 @@ struct PaneView: View {
         VStack(spacing: 0) {
             if showsHeader, let session = client.session(pane.session) {
                 HStack(spacing: 8) {
-                    Breadcrumb(session: session, git: git.status(for: session.cwd), compact: true)
+                    Breadcrumb(session: session, git: session.localFolder.flatMap { git.status(for: $0) }, compact: true)
                     Spacer(minLength: 8)
                     if session.agent != nil {
                         Text(session.subtitle.text)

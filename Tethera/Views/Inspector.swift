@@ -38,7 +38,16 @@ struct InspectorView: View {
                 if let session = workspace.focusedSession {
                     switch tab {
                     case .agent: AgentInspector(session: session)
-                    case .git: GitInspector(cwd: session.cwd)
+                    case .git:
+                        if let folder = session.localFolder {
+                            GitInspector(cwd: folder)
+                        } else {
+                            Text("Git shows for sessions on this Mac.")
+                                .font(TypeScale.ui(12))
+                                .foregroundStyle(theme.text3.color)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
+                        }
                     }
                 }
             }

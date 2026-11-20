@@ -41,14 +41,11 @@ struct SidebarView: View {
             .padding(.bottom, 6)
 
             List {
-                let groups = SessionGroups.make(client.sessions, repoRoot: { worktrees.repoRoot(for: $0) })
+                let groups = SessionGroups.make(client.sessions, repoRoot: { worktrees.repoRoot(for: $0) },
+                                                hostName: { client.host($0)?.name ?? "Another Mac" })
                 ForEach(groups, id: \.key) { group in
                     if groups.count > 1 {
-                        Text(group.title)
-                            .font(TypeScale.ui(11, .semibold))
-                            .foregroundStyle(theme.text3.color)
-                            .padding(.leading, 8)
-                            .padding(.top, 6)
+                        GroupHeader(group: group)
                             .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -77,25 +74,34 @@ struct SidebarView: View {
     }
 }
 
-/// Sessions grouped by the repository they're in (worktrees with their main checkout), in
-/// sidebar order. Folders outside any repository form one group.
+/// This Mac's sessions grouped by the repository they're in (worktrees with their main
+/// checkout), in sidebar order, with folders outside any repository in one group; then one
+/// group per other Mac.
 enum SessionGroups {
     struct Group {
         let key: String
         let title: String
         let sessions: [SessionInfo]
+        /// The other Mac this group is, if it is one.
+        var host: String?
     }
 
-    static func make(_ sessions: [SessionInfo], repoRoot: (String) -> String?) -> [Group] {
+    static func make(_ sessions: [SessionInfo], repoRoot: (String) -> String?, hostName: (String) -> String = { $0 }) -> [Group] {
         var order: [String] = []
         var members: [String: [SessionInfo]] = [:]
         for session in sessions {
-            let key = repoRoot(session.cwd) ?? ""
+            let key = session.host.map { "host:" + $0 } ?? repoRoot(session.cwd) ?? ""
             if members[key] == nil { order.append(key) }
             members[key, default: []].append(session)
         }
+        let hasRemote = order.contains { $0.hasPrefix("host:") }
         return order.map { key in
-            Group(key: key, title: key.isEmpty ? "Other" : (key as NSString).lastPathComponent, sessions: members[key] ?? [])
+            if key.hasPrefix("host:") {
+                let host = String(key.dropFirst(5))
+                return Group(key: key, title: hostName(host), sessions: members[key] ?? [], host: host)
+            }
+            let other = hasRemote ? "This Mac" : "Other"
+            return Group(key: key, title: key.isEmpty ? other : (key as NSString).lastPathComponent, sessions: members[key] ?? [])
         }
     }
 
@@ -106,6 +112,33 @@ enum SessionGroups {
         var iterator = moved.makeIterator()
         let members = Set(group)
         return all.map { members.contains($0) ? (iterator.next() ?? $0) : $0 }
+    }
+}
+
+/// A repository's name over its sessions, or another Mac's with how its connection is doing.
+private struct GroupHeader: View {
+    let group: SessionGroups.Group
+    @ObservedObject private var client = DaemonClient.shared
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if group.host != nil {
+                Image(systemName: "desktopcomputer").font(.system(size: 9.5, weight: .semibold))
+            }
+            Text(group.title)
+            if let host = group.host {
+                switch client.remoteStatus[host] ?? .connecting {
+                case .connected: EmptyView()
+                case .connecting: Text("reconnecting").font(TypeScale.ui(10.5)).foregroundStyle(theme.text3.color.opacity(0.8))
+                case .failed: Text("offline").font(TypeScale.ui(10.5)).foregroundStyle(theme.text3.color.opacity(0.8))
+                }
+            }
+        }
+        .font(TypeScale.ui(11, .semibold))
+        .foregroundStyle(theme.text3.color)
+        .padding(.leading, 8)
+        .padding(.top, 6)
     }
 }
 
@@ -191,7 +224,7 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 nameView
                 HStack(spacing: 4) {
-                    if let worktree = worktrees.info(for: session.cwd) {
+                    if let worktree = session.localFolder.flatMap({ worktrees.info(for: $0) }) {
                         // A worktree session gets a branch mark; the branch name too, unless the
                         // session is already named after it.
                         Image(systemName: "arrow.triangle.branch").font(.system(size: 8.5, weight: .semibold))
@@ -200,7 +233,7 @@ struct SessionRow: View {
                             Text(branch + (session.agent == nil ? "" : " ·")).font(TypeScale.ui(11, .medium))
                         }
                     }
-                    if session.agent != nil || worktrees.info(for: session.cwd) == nil {
+                    if session.agent != nil || session.localFolder.flatMap({ worktrees.info(for: $0) }) == nil {
                         Text(session.stateLine.text)
                             .font(TypeScale.ui(11, session.stateLine.tone.weight))
                             .foregroundStyle(session.stateLine.tone.color(theme))
@@ -287,7 +320,7 @@ struct SessionRow: View {
 
     @ViewBuilder
     private var menu: some View {
-        if let worktree = WorktreeMonitor.shared.info(for: session.cwd) {
+        if let worktree = session.localFolder.flatMap({ WorktreeMonitor.shared.info(for: $0) }) {
             Button("Merge \(worktree.branch) into \(worktree.base)…") { WorktreeActions.merge(worktree) }
             Button("Open Pull Request") { WorktreeService.openPullRequest(worktree) }
             Button("Remove Worktree…") { WorktreeActions.remove(worktree) }
@@ -301,15 +334,19 @@ struct SessionRow: View {
                 workspace.focus(pane: workspace.panes.last!.id)
             }
         }
-        Button("New Session Here") { workspace.newSession(cwd: session.cwd) }
+        Button("New Session Here") { workspace.newSession(cwd: session.cwd, on: session.host) }
         Divider()
-        Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.cwd)]) }
+        if session.host == nil {
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.cwd)]) }
+        }
         Button("Copy Path") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(session.cwd, forType: .string)
         }
         if session.agent != nil {
-            Button("Show Transcript") { workspace.open(.transcript(session.id), besideSession: session.id) }
+            if session.host == nil {
+                Button("Show Transcript") { workspace.open(.transcript(session.id), besideSession: session.id) }
+            }
             Button("Interrupt (⌃C)") { DaemonClient.shared.interrupt(session.id) }
         }
         Divider()
@@ -330,12 +367,23 @@ struct SessionRow: View {
 /// "+" menu: a shell, or any installed agent, in the focused session's folder.
 struct NewSessionMenu: View {
     @ObservedObject private var detector = AgentDetector.shared
+    @ObservedObject private var client = DaemonClient.shared
+    @ObservedObject private var store = PreferencesStore.shared
     @Environment(\.theme) private var theme
 
     var body: some View {
         Menu {
             Button("Shell") { Workspace.shared.newSession() }
                 .keyboardShortcut("t", modifiers: .command)
+            let hosts = store.value.remoteHosts.filter { client.remoteStatus[$0.id] == .connected }
+            if !hosts.isEmpty {
+                Menu("Shell On") {
+                    Button("This Mac") { Workspace.shared.newSession(cwd: NSHomeDirectory()) }
+                    ForEach(hosts) { host in
+                        Button(host.name) { Workspace.shared.newSession(on: host.id) }
+                    }
+                }
+            }
             let agents = detector.installed.filter { $0 != .ollama }
             if !agents.isEmpty {
                 Section("Agents") {

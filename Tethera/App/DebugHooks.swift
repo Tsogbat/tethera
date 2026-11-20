@@ -9,7 +9,8 @@ import TetheraKit
 /// Steps: a shell line (typed into the focused session with ↩), `@type:<text>`, `@keys:<text>`
 /// (`\e`, `\r`, `\x03` escapes), `@new`, `@agent:<kind>`, `@split`, `@select:<n>`, `@palette`,
 /// `@overview`, `@inspector`, `@close`, `@home`, `@about` (captures about.png), `@open:<path>`, `@preview`,
-/// `@changes`, `@closepane`, `@appearance:<dark|light>`, `@wait:<sec>`, `@shot:<name>`, `@quit`.
+/// `@changes`, `@closepane`, `@appearance:<dark|light>`, `@remote:<name>=<address>`, `@newon:<n>`, `@phone:<token>`,
+/// `@wait:<sec>`, `@shot:<name>`, `@quit`.
 @MainActor
 enum DebugHooks {
     static func runIfRequested() {
@@ -19,7 +20,10 @@ enum DebugHooks {
         let steps = (env["TETHERA_SCRIPT"] ?? "@wait:3;;@shot:window").components(separatedBy: ";;")
         Task {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            for step in steps { await run(step.trimmingCharacters(in: .whitespaces), directory: directory) }
+            for step in steps {
+                if env["TETHERA_SCRIPT_TRACE"] != nil { print("[DebugHooks] \(step.prefix(60))") }
+                await run(step.trimmingCharacters(in: .whitespaces), directory: directory)
+            }
         }
     }
 
@@ -142,6 +146,25 @@ enum DebugHooks {
         } else if step.hasPrefix("@shotkey:") {
             try? await Task.sleep(nanoseconds: 500_000_000)
             if let window = NSApp.keyWindow { capture(window, name: String(step.dropFirst(9)), directory: directory) }
+        } else if step.hasPrefix("@remote:") {
+            // `@remote:Studio=exec:TETHERA_HOME=… tethera bridge` stands in another Mac.
+            let parts = step.dropFirst(8).split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2, !PreferencesStore.shared.value.remoteHosts.contains(where: { $0.address == parts[1] }) else { return }
+            PreferencesStore.shared.value.remoteHosts.append(RemoteHost(name: parts[0], address: parts[1]))
+            client.syncRemoteHosts(PreferencesStore.shared.value.remoteHosts)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+        } else if step.hasPrefix("@newon:") {
+            let hosts = PreferencesStore.shared.value.remoteHosts
+            if let index = Int(step.dropFirst(7)), hosts.indices.contains(index) { workspace.newSession(on: hosts[index].id) }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+        } else if step.hasPrefix("@phone") {
+            // `@phone:<token>` turns the dashboard on (bind it with TETHERA_PHONE_HOST=127.0.0.1).
+            let token = step.split(separator: ":").dropFirst().first.map(String.init) ?? PhoneServer.randomToken()
+            PreferencesStore.shared.value.phoneToken = token
+            PreferencesStore.shared.value.phoneEnabled = true
+            PhoneServer.shared.apply(PreferencesStore.shared.value)
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            print("[DebugHooks] phone \(PhoneServer.shared.pairingURL?.absoluteString ?? PhoneServer.shared.problem ?? "off")")
         } else if step == "@quit" {
             NSApp.terminate(nil)
         } else if !step.isEmpty {

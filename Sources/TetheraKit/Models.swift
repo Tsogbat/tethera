@@ -98,6 +98,9 @@ public struct SessionInfo: Codable, Equatable, Identifiable, Sendable {
     /// Bumped on every bell or desktop notification (OSC 9/99/777) so clients can alert once.
     public var attention: Int
     public var lastNotification: String?
+    /// The other Mac this session runs on (its id in the app's settings); nil for this Mac.
+    /// Set by the app as sessions arrive, never by a daemon.
+    public var host: String?
 
     public init(id: UUID = UUID(), name: String, cwd: String, shell: String, cols: Int, rows: Int, order: Int) {
         self.id = id

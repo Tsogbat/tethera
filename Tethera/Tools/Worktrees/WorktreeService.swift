@@ -185,7 +185,7 @@ final class WorktreeMonitor: ObservableObject {
 @MainActor
 enum WorktreeActions {
     static func newAgent(_ agent: AgentKind?, from folder: String? = nil) {
-        guard let folder = folder ?? Workspace.shared.focusedSession?.cwd ?? RecentFolders.all.first else {
+        guard let folder = folder ?? Workspace.shared.focusedSession?.localFolder ?? RecentFolders.all.first else {
             alert("Open a session in a git repository first.")
             return
         }
@@ -227,7 +227,7 @@ enum WorktreeActions {
         let choice = confirm.runModal()
         guard choice != .alertThirdButtonReturn else { return }
         let force = choice == .alertSecondButtonReturn
-        for session in DaemonClient.shared.sessions where session.cwd.hasPrefix(info.root) {
+        for session in DaemonClient.shared.sessions where session.host == nil && session.cwd.hasPrefix(info.root) {
             DaemonClient.shared.close(session.id)
         }
         Task {

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import TetheraKit
 import UserNotifications
@@ -137,6 +138,7 @@ struct TetheraCommands: Commands {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var observers: [NSObjectProtocol] = []
+    private var preferencesWatch: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
@@ -154,12 +156,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             client.onUpdate = { [weak self] session, previous in
                 if !client.deliveringInitialList { Journal.shared.record(session, previous: previous) }
                 self?.notifyIfNeeded(session, previous: previous)
+                PushNotifier.shared.sessionChanged(session, previous: previous)
                 BudgetWatcher.shared.check(session)
             }
             client.onRemove = { session in Journal.shared.recordEnded(session) }
             AwayTracker.shared.start()
             client.connect()
             Self.startAppServer()
+            PhoneServer.shared.apply(PreferencesStore.shared.value)
+            preferencesWatch = PreferencesStore.shared.$value
+                .map { [String($0.phoneEnabled), $0.phoneReach.rawValue, String($0.phonePort), $0.phoneToken ?? ""] }
+                .removeDuplicates()
+                .dropFirst()
+                .sink { _ in DispatchQueue.main.async { PhoneServer.shared.apply(PreferencesStore.shared.value) } }
             _ = NowPlaying.shared
             Updater.shared.start()
             if Self.canNotify {

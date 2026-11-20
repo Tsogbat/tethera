@@ -287,6 +287,8 @@ h2 {
 
 .sec-shot { margin: 40px 0 0; }
 .sec-shot-wide { grid-column: 1 / -1; }
+.sec-phone { grid-column: 9 / span 4; grid-row: 1 / span 2; align-self: center; margin: 0; }
+.sec-phone img { display: block; width: 100%; height: auto; border-radius: 28px; border: 1px solid var(--line); }
 
 /* Code */
 .code-block {
@@ -339,6 +341,7 @@ h2 {
   .sec-head, .sec-head-wide, .rows, .sec-body, .prop, .code-block,
   .sec-flip .sec-head, .sec-flip .rows, .sec-flip .sec-body, .sec-flip .prop { grid-column: 1; grid-row: auto; }
   .prop { min-height: 0; margin-top: 20px; }
+  .sec-phone { grid-column: 1; grid-row: auto; max-width: 320px; margin-top: 36px; }
   .prop-slot { height: 190px; }
   .rows { margin-top: 28px; }
   .rows-wide, .rows-next { grid-template-columns: minmax(0, 1fr); }

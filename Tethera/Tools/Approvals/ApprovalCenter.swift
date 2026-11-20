@@ -64,6 +64,7 @@ final class ApprovalCenter: ObservableObject {
             connection: connection)
         pending.append(approval)
         notify(approval)
+        PushNotifier.shared.approval(approval)
         let answer = await withCheckedContinuation { continuation in waiting[approval.id] = continuation }
         return AppChannel.Response(id: request.id, text: answer.rawValue)
     }

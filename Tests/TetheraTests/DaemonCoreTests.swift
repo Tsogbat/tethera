@@ -196,6 +196,48 @@ final class DaemonIntegrationTests: XCTestCase {
         var text: String { String(decoding: output, as: UTF8.self) }
     }
 
+    /// `tethera bridge` carries the protocol over stdin/stdout, as it does over ssh.
+    func testBridgeRelaysTheProtocol() throws {
+        var fds: [Int32] = [0, 0]
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
+        let bridge = Process()
+        bridge.executableURL = Bundle(for: Self.self).bundleURL.deletingLastPathComponent().appendingPathComponent("tethera-cli")
+        bridge.arguments = ["bridge"]
+        let child = FileHandle(fileDescriptor: fds[1], closeOnDealloc: true)
+        bridge.standardInput = child
+        bridge.standardOutput = child
+        try bridge.run()
+        try child.close()
+        defer { bridge.terminate() }
+
+        let lock = NSLock()
+        var messages: [ControlMessage] = []
+        let socket = FramedSocket(fd: fds[0], queue: DispatchQueue(label: "bridge-probe"))
+        socket.onFrame = { frame in
+            if let message = frame.controlMessage { lock.lock(); messages.append(message); lock.unlock() }
+        }
+        socket.start()
+        var hello = ControlMessage(.hello)
+        hello.protocolVersion = tetheraProtocolVersion
+        socket.send(hello)
+        socket.send(ControlMessage(.subscribe))
+        var create = ControlMessage(.create)
+        create.spec = SessionSpec(name: "over-the-bridge", cwd: NSTemporaryDirectory(), shell: "/bin/zsh", cols: 80, rows: 24)
+        socket.send(create)
+
+        let deadline = Date().addingTimeInterval(10)
+        var created: SessionInfo?
+        while Date() < deadline, created == nil {
+            lock.lock(); created = messages.first { $0.type == .created }?.info; lock.unlock()
+            usleep(20_000)
+        }
+        lock.lock(); let types = messages.map(\.type); lock.unlock()
+        XCTAssertTrue(types.contains(.welcome), "got \(types)")
+        XCTAssertEqual(created?.name, "over-the-bridge")
+        XCTAssertNil(created?.host, "daemons never tag a host")
+        socket.close()
+    }
+
     func testCreateAttachTypeDetachReattach() throws {
         let probe = try Probe()
         var hello = ControlMessage(.hello)
@@ -227,7 +269,10 @@ final class DaemonIntegrationTests: XCTestCase {
         // Foreground detection sees the running program.
         probe.socket.send(.input(session: id, bytes: Data("sleep 3\r".utf8)))
         XCTAssertTrue(probe.wait { $0.messages.contains { $0.type == .updated && $0.info?.foreground == "sleep" } })
+        probe.lock.lock(); let interrupted = probe.messages.count; probe.lock.unlock()
         probe.socket.send(.input(session: id, bytes: Data([0x03])))
+        // Typing before the prompt is back can be lost with the interrupt.
+        XCTAssertTrue(probe.wait { $0.messages.dropFirst(interrupted).contains { $0.type == .updated && $0.info?.foreground == "zsh" } })
 
         // A second client attaching gets the history in its snapshot.
         let second = try Probe()

@@ -22,8 +22,13 @@ enum Tone {
 }
 
 extension SessionInfo {
+    /// The folder, when it's on this Mac's disk. Git status, worktrees, Changes and transcripts
+    /// read files, so a session on another Mac has none of them.
+    var localFolder: String? { host == nil ? cwd : nil }
+
     /// The folder, with the home directory shortened to ~.
     var displayPath: String {
+        guard host == nil else { return cwd.replacingOccurrences(of: #"^/Users/[^/]+"#, with: "~", options: .regularExpression) }
         let home = NSHomeDirectory()
         if cwd == home { return "~" }
         if cwd.hasPrefix(home + "/") { return "~" + cwd.dropFirst(home.count) }
@@ -125,7 +130,7 @@ final class GitMonitor: ObservableObject {
 
     private func refreshVisible() {
         let workspace = Workspace.shared
-        let visible = Set(workspace.panes.compactMap { DaemonClient.shared.session($0.session)?.cwd })
+        let visible = Set(workspace.panes.compactMap { DaemonClient.shared.session($0.session)?.localFolder })
         visible.forEach(refresh)
     }
 }
