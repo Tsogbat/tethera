@@ -73,11 +73,53 @@ struct DiffSheet: View {
     }
 }
 
+/// Read-only, non-wrapping, selectable text in a native text view: diffs, git history. Fast
+/// for long content, and it never fights SwiftUI's layout.
+struct MonoText: NSViewRepresentable {
+    let text: NSAttributedString
+    let key: String
+    @Environment(\.theme) private var theme
+
+    func makeNSView(context: Context) -> NSScrollView {
+        DiffText.makeScroll()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+        proposal.replacingUnspecifiedDimensions(by: CGSize(width: 400, height: 300))
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let textView = scroll.documentView as? NSTextView else { return }
+        textView.backgroundColor = theme.bg.nsColor
+        scroll.backgroundColor = theme.bg.nsColor
+        let identity = "\(key)|\(theme.isDark)"
+        guard textView.identifier?.rawValue != identity else { return }
+        textView.identifier = NSUserInterfaceItemIdentifier(identity)
+        textView.textStorage?.setAttributedString(text)
+    }
+}
+
 /// A diff in a plain, non-wrapping text view: fast for big diffs, selectable, and lines
 /// marked by weight and a faint band rather than color.
 struct DiffText: NSViewRepresentable {
     let diff: String
     @Environment(\.theme) private var theme
+
+    static func makeScroll() -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.hasHorizontalScroller = true
+        scroll.autohidesScrollers = true
+        if let textView = scroll.documentView as? NSTextView {
+            textView.isEditable = false
+            textView.isSelectable = true
+            textView.textContainerInset = NSSize(width: 8, height: 10)
+            textView.isHorizontallyResizable = true
+            textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+            textView.textContainer?.widthTracksTextView = false
+            textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        }
+        return scroll
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSTextView.scrollableTextView()

@@ -15,7 +15,7 @@ import TetheraKit
 ///     tethera changes                    show this session's live diff
 ///     tethera mcp                        the browser MCP server for agents (stdio)
 
-let version = "0.6.1"
+let version = "0.7.0"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 
@@ -224,6 +224,11 @@ case "hook":
     var payload = source == "codex-notify" ? (event ?? "{}") : HookRelay.readStdin()
     if let event, source != "codex-notify" { payload = HookRelay.injecting(event: event, into: payload) }
     HookRelay.forward(source: source, payload: payload)
+    // Claude Code asking for permission: let Tethera answer it (inbox, notification, phone).
+    if source == "claude", let decision = HookRelay.askForApproval(payload: payload) {
+        print(decision)
+        exit(0)
+    }
     // Antigravity requires a decision from PreToolUse and Stop; allow and stop change nothing.
     if source == "agy" {
         print(event == "PreToolUse" ? #"{"decision":"allow"}"# : (event == "Stop" ? #"{"decision":"stop"}"# : "{}"))

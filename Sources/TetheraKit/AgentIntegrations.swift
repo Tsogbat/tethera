@@ -387,10 +387,24 @@ public enum AgentIntegrations {
 
     // MARK: JSON helpers
 
+    /// How long a permission hook may wait for an answer from Tethera (Claude's own maximum
+    /// default); the CLI gives up a little earlier and lets Claude ask instead.
+    static let permissionTimeout = 600
+
+    /// Connected before approvals existed: the permission hook times out after 5 s.
+    public static func needsUpdate(_ target: Target) -> Bool {
+        guard target == .claude, isConnected(target),
+              let groups = (readJSON(target.configFile)?["hooks"] as? [String: Any])?["PermissionRequest"] as? [[String: Any]] else { return false }
+        let ours = groups.flatMap { $0["hooks"] as? [[String: Any]] ?? [] }.filter { isOurs($0["command"] as? String ?? "") }
+        return ours.contains { ($0["timeout"] as? Int ?? 0) < permissionTimeout }
+    }
+
     private static func addingHooks(to hooks: [String: Any]?, events: [(name: String, toolMatcher: Bool, async: Bool)], command: String) -> [String: Any] {
         var hooks = hooks ?? [:]
         for event in events {
-            var handler: [String: Any] = ["type": "command", "command": command, "timeout": 5]
+            // A permission request waits for your answer in Tethera; everything else is instant.
+            let timeout = event.name == "PermissionRequest" ? permissionTimeout : 5
+            var handler: [String: Any] = ["type": "command", "command": command, "timeout": timeout]
             if event.async { handler["async"] = true }
             var group: [String: Any] = ["hooks": [handler]]
             if event.toolMatcher { group["matcher"] = "*" }

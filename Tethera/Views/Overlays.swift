@@ -122,7 +122,13 @@ struct CommandPalette: View {
             items.append(Item(id: "agent-\(kind)", title: "New \(kind.displayName) Session", detail: kind.command, agent: kind) {
                 workspace.newSession(agent: kind)
             })
+            items.append(Item(id: "worktree-\(kind)", title: "New \(kind.displayName) in a Worktree", detail: "own branch and folder", agent: kind) {
+                WorktreeActions.newAgent(kind)
+            })
         }
+        items.append(Item(id: "approvals", title: "Approvals", shortcut: "⌥⌘A") { workspace.showApprovals() })
+        items.append(Item(id: "git", title: "Git", shortcut: "⌥⌘G") { workspace.showGit() })
+        items.append(Item(id: "brew", title: "Homebrew", shortcut: "⌥⌘B") { workspace.showBrew() })
         items += [
             Item(id: "split-r", title: "Split Right", shortcut: "⌘D") { workspace.split(.horizontal) },
             Item(id: "split-d", title: "Split Down", shortcut: "⇧⌘D") { workspace.split(.vertical) },

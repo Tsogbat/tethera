@@ -46,6 +46,10 @@ struct TetheraCommands: Commands {
                 .keyboardShortcut("l", modifiers: .command)
             Button("Show Changes") { Workspace.shared.showChanges() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
+            Button("Git") { Workspace.shared.showGit() }
+                .keyboardShortcut("g", modifiers: [.command, .option])
+            Button("Homebrew") { Workspace.shared.showBrew() }
+                .keyboardShortcut("b", modifiers: [.command, .option])
             Divider()
             Button("Split Right") { Workspace.shared.split(.horizontal) }
                 .keyboardShortcut("d", modifiers: .command)
@@ -82,6 +86,8 @@ struct TetheraCommands: Commands {
                 .keyboardShortcut("p", modifiers: .command)
             Button("Agents Overview") { Workspace.shared.showOverview.toggle() }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
+            Button("Approvals") { Workspace.shared.showApprovals() }
+                .keyboardShortcut("a", modifiers: [.command, .option])
             Button("Go to Session That Needs You") { Workspace.shared.jumpToNeedsYou() }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
             Divider()
@@ -147,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             Updater.shared.start()
             if Self.canNotify {
                 UNUserNotificationCenter.current().delegate = self
+                ApprovalCenter.registerCategory()
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
             }
             #if DEBUG
@@ -164,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @MainActor
     private static func startAppServer() {
         let server = AppServer.shared
-        server.register("open") { request in
+        server.register("open") { request, _ in
             let params = (try? JSONSerialization.jsonObject(with: Data(request.params.utf8))) as? [String: Any] ?? [:]
             let session = request.session.flatMap(UUID.init(uuidString:))
             let workspace = Workspace.shared
@@ -186,11 +193,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return AppChannel.Response(id: request.id, text: "ok")
         }
         BrowserTools.register(on: server)
+        ApprovalCenter.shared.register(on: server)
         server.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        MainActor.assumeIsolated { AppServer.shared.stop() }
+        MainActor.assumeIsolated {
+            ApprovalCenter.shared.releaseAll()
+            AppServer.shared.stop()
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -249,6 +260,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             body = text
         }
         guard let body else { return }
+        if new == .needsInput {
+            // A Claude permission request gets its own notification with Allow / Deny; wait a
+            // moment for it so the same request doesn't notify twice.
+            let id = session.id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard !ApprovalCenter.shared.hasPending(for: id) else { return }
+                    self?.post(session, body: body)
+                }
+            }
+            return
+        }
+        post(session, body: body)
+    }
+
+    private func post(_ session: SessionInfo, body: String) {
         if Self.canNotify {
             let content = UNMutableNotificationContent()
             content.title = session.name
@@ -267,6 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        if await MainActor.run(body: { ApprovalCenter.shared.handleNotificationResponse(response) }) { return }
         guard let raw = response.notification.request.content.userInfo["session"] as? String, let id = UUID(uuidString: raw) else { return }
         await MainActor.run {
             NSApp.activate(ignoringOtherApps: true)

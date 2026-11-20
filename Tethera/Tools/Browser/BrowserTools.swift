@@ -7,7 +7,7 @@ import WebKit
 @MainActor
 enum BrowserTools {
     static func register(on server: AppServer) {
-        server.register(prefix: "browser_") { request in await handle(request) }
+        server.register(prefix: "browser_") { request, _ in await handle(request) }
     }
 
     static func handle(_ request: AppChannel.Request) async -> AppChannel.Response {

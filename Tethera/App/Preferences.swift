@@ -47,6 +47,8 @@ struct Preferences: Codable, Equatable {
     var showNowPlaying = true
     /// Look for a new release once a day.
     var checkForUpdates = true
+    /// The first-run "Get started" strip on Home was dismissed.
+    var dismissedGetStarted = false
 
     init() {}
 
@@ -69,6 +71,7 @@ struct Preferences: Codable, Equatable {
         openHomeOnLaunch = (try? c.decode(Bool.self, forKey: .openHomeOnLaunch)) ?? d.openHomeOnLaunch
         showNowPlaying = (try? c.decode(Bool.self, forKey: .showNowPlaying)) ?? d.showNowPlaying
         checkForUpdates = (try? c.decode(Bool.self, forKey: .checkForUpdates)) ?? d.checkForUpdates
+        dismissedGetStarted = (try? c.decode(Bool.self, forKey: .dismissedGetStarted)) ?? d.dismissedGetStarted
     }
 }
 

@@ -135,6 +135,25 @@ final class Workspace: ObservableObject {
         open(.browser(tab.id), besideSession: focusedSessionID)
     }
 
+    /// The Git panel for the focused session's repository.
+    func showGit() {
+        guard let cwd = focusedSession?.cwd ?? client.sessions.first?.cwd else { return }
+        Task {
+            guard let repo = await WorktreeService.repository(at: cwd) else { return }
+            let top = await GitService.run(["rev-parse", "--show-toplevel"], in: cwd)
+            open(.git(top.ok ? top.output.trimmingCharacters(in: .whitespacesAndNewlines) : repo.root), besideSession: focusedSessionID)
+        }
+    }
+
+    func showBrew() {
+        open(.brew, besideSession: focusedSessionID)
+    }
+
+    /// The approval inbox (⌥⌘A).
+    func showApprovals() {
+        open(.approvals, besideSession: focusedSessionID)
+    }
+
     /// The live diff for the focused session's repository.
     func showChanges() {
         guard let id = focusedSessionID ?? client.sessions.first?.id else { return }
@@ -332,7 +351,8 @@ final class Workspace: ObservableObject {
                            fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) -> [Pane] {
         panes.filter { pane in
             switch pane.content {
-            case .home: return true
+            case .home, .approvals, .brew: return true
+            case .git(let root): return fileExists(root)
             case .session(let id), .changes(let id): return ids.contains(id)
             case .file(let path): return fileExists(path)
             case .browser(let id): return tabs.contains(id)
@@ -351,6 +371,12 @@ enum PaneContent: Codable, Equatable, Hashable {
     case browser(UUID)
     /// The live diff of a session's repository.
     case changes(UUID)
+    /// Permission requests waiting on you.
+    case approvals
+    /// Branches, commit, sync, stashes and history for a repository.
+    case git(String)
+    /// Homebrew: outdated, installed, search, services.
+    case brew
 
     var sessionID: UUID? {
         if case .session(let id) = self { return id }
@@ -361,7 +387,7 @@ enum PaneContent: Codable, Equatable, Hashable {
     var isTool: Bool {
         switch self {
         case .home, .session: return false
-        case .file, .browser, .changes: return true
+        case .file, .browser, .changes, .approvals, .git, .brew: return true
         }
     }
 }

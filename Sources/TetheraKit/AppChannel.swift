@@ -44,11 +44,13 @@ public enum AppChannel {
     public enum Failure: Error, LocalizedError {
         case notRunning
         case closed
+        case timedOut
 
         public var errorDescription: String? {
             switch self {
             case .notRunning: return "Tethera isn't running. Open it and try again."
             case .closed: return "Tethera closed the connection."
+            case .timedOut: return "Tethera didn't answer in time."
             }
         }
     }
@@ -69,7 +71,9 @@ public enum AppChannel {
 
         deinit { close(fd) }
 
-        public func call(_ method: String, params: [String: Any] = [:], session: String? = nil) throws -> Response {
+        /// Sends a request and waits for its answer, up to `timeout` seconds (forever when nil).
+        public func call(_ method: String, params: [String: Any] = [:], session: String? = nil, timeout: TimeInterval? = nil) throws -> Response {
+            let deadline = timeout.map { Date().addingTimeInterval($0) }
             let id = nextID
             nextID += 1
             let json = (try? JSONSerialization.data(withJSONObject: params)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
@@ -83,6 +87,11 @@ public enum AppChannel {
                     buffer.removeSubrange(buffer.startIndex...newline)
                     if let response = try? JSONDecoder().decode(Response.self, from: body), response.id == id { return response }
                     continue
+                }
+                if let deadline {
+                    let remaining = Int32(max(0, deadline.timeIntervalSinceNow) * 1000)
+                    var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+                    guard remaining > 0, poll(&pfd, 1, remaining) > 0 else { throw Failure.timedOut }
                 }
                 var chunk = [UInt8](repeating: 0, count: 65_536)
                 let count = read(fd, &chunk, chunk.count)

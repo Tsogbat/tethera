@@ -29,6 +29,17 @@ Coding agents run in terminals, and you end up with five of them in five tabs, c
 - **Home.** Where Tethera opens: start any agent, pick up a recent folder, see which integrations are connected and who's running — with a little 3D computer whose keys you can press.
 - **Your tools, beside the agent.** The repo's changes as they happen, a preview of the app it's building, a browser it can drive, an editor and viewers for the files it makes, and your music.
 
+## Run agents in parallel
+
+- **An agent in its own worktree.** + → *Agent in a New Worktree* (or the palette) gives the agent its own branch and folder next to your repo (`api.worktrees/claude-1`), so five agents can work on one repository without colliding. The sidebar groups sessions by repository.
+- **Review and merge.** Changes for a worktree shows everything since its base branch, commits included. Then **Merge** (a merge commit in your checkout, nothing pushed), **Open Pull Request** (`git push` + `gh pr create`, in a session), or **Remove Worktree**.
+- **Approval inbox** (⌥⌘A). When Claude Code asks to run something, it lands in the inbox and in a notification with **Allow** and **Deny**, so you answer without switching sessions. **Answer in terminal** hands it back to Claude's own dialog. Other agents' requests are listed with a jump to their session.
+
+<p align="center">
+  <img src="docs/assets/screens/v07-changes.png" width="49%" alt="An OpenCode agent in its own worktree, with its changes since main">
+  <img src="docs/assets/screens/v07-inbox.png" width="49%" alt="The approval inbox with Allow and Deny">
+</p>
+
 ## Tools
 
 Tools open as panes beside the session that needs them.
@@ -41,6 +52,8 @@ Tools open as panes beside the session that needs them.
 | **Editor** | Your terminal font, line numbers, highlighting, find, ⌃G go to line, ⌘S. When an agent changes a file you have open, it reloads — or asks, if you've edited it too. |
 | **Viewers** | Images, PDFs, video and audio, rendered Markdown, and Quick Look for everything else. |
 | **Music** | What's playing in Music or Spotify, in the status bar, with play/pause and skip. |
+| **Git** (⌥⌘G) | Branches, commit, fetch/pull/push, stashes, and the history graph. |
+| **Homebrew** (⌥⌘B) | Outdated, installed, search, services. Upgrades and installs run in a session so you see them. |
 
 Open anything with ⌘O, the palette, or `tethera open <file|folder|url>` from a session.
 
@@ -90,6 +103,8 @@ Agents start inside a shell, so when one exits, the session (and its scrollback)
 | ⌘O | Open a file |
 | ⌘L | New browser tab |
 | ⇧⌘E | Changes |
+| ⌥⌘A | Approvals |
+| ⌥⌘G · ⌥⌘B | Git · Homebrew |
 | ⌘S · ⌃G | Save · go to line (editor) |
 | ⌘K / ⌘P | Command palette |
 | ⇧⌘A | Agents overview |
@@ -152,9 +167,9 @@ Needs Xcode 26 (Swift 6.2). The icon is rendered from the same SceneKit model as
 
 ## What's next
 
-- Agent workflows: run, monitor and debug agents across git worktrees
-- Git and Homebrew panels
-- Remote control of your sessions
+- Insight: a transcript debugger, "while you were away", budgets, a status line editor
+- Remote control of your sessions, from other Macs and your phone
+- Teams: a shared agent board, approval policies, a cost dashboard and an audit log
 
 ## Architecture
 

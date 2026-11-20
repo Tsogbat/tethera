@@ -17,6 +17,11 @@ final class ChangesModel: ObservableObject {
     @Published private(set) var branch = ""
     @Published private(set) var entries: [Entry] = []
     @Published var selected: String?
+    /// Compare against this branch's merge base (everything a worktree's agent did, commits
+    /// included) instead of HEAD (only what isn't committed).
+    @Published var base: String? {
+        didSet { if base != oldValue { Task { await refresh() } } }
+    }
     @Published private(set) var diff = ""
     @Published private(set) var stats: (added: Int, removed: Int) = (0, 0)
 
@@ -52,18 +57,37 @@ final class ChangesModel: ObservableObject {
         stream = nil
     }
 
+    /// What the diff is taken against: HEAD, or the merge base with `base`.
+    private func reference(_ root: String) async -> String {
+        guard let base else { return "HEAD" }
+        let mergeBase = await GitService.run(["merge-base", base, "HEAD"], in: root)
+        return mergeBase.ok ? mergeBase.output.trimmingCharacters(in: .whitespacesAndNewlines) : "HEAD"
+    }
+
     func refresh() async {
         guard let root else { return }
+        let reference = await reference(root)
         if let status = await GitService.status(for: root) {
             branch = status.info.branch
+            var files = status.files
+            if reference != "HEAD" {
+                // Committed changes since the base aren't in `git status`; add them.
+                let committed = await GitService.run(["diff", "--name-status", "--no-renames", reference], in: root)
+                for line in committed.output.split(separator: "\n") {
+                    let parts = line.split(separator: "\t", maxSplits: 1)
+                    guard parts.count == 2, let letter = parts[0].first else { continue }
+                    let path = String(parts[1])
+                    if !files.contains(where: { $0.path == path }) { files.append(GitFile(path: path, staged: ".", unstaged: letter)) }
+                }
+            }
             let fm = FileManager.default
-            entries = status.files.map { file in
+            entries = files.map { file in
                 let modified = (try? fm.attributesOfItem(atPath: (root as NSString).appendingPathComponent(file.path)))?[.modificationDate] as? Date
                 return Entry(file: file, modified: modified ?? .distantPast)
             }
             .sorted { $0.modified > $1.modified }
         }
-        let numstat = await GitService.run(["diff", "HEAD", "--numstat"], in: root)
+        let numstat = await GitService.run(["diff", reference, "--numstat"], in: root)
         var added = 0, removed = 0
         for line in numstat.output.split(separator: "\n") {
             let parts = line.split(separator: "\t")
@@ -86,9 +110,10 @@ final class ChangesModel: ObservableObject {
             diff = ""
             return
         }
+        let reference = await reference(root)
         let result = entry.file.isUntracked
             ? await GitService.run(["diff", "--no-color", "--no-index", "--", "/dev/null", path], in: root)
-            : await GitService.run(["diff", "--no-color", "HEAD", "--", path], in: root)
+            : await GitService.run(["diff", "--no-color", reference, "--", path], in: root)
         // `--no-index` exits 1 when files differ; the output is still the diff.
         diff = result.output.isEmpty ? "No changes." : result.output
     }
@@ -143,7 +168,12 @@ struct ChangesPane: View {
     let sessionID: UUID
     let paneID: UUID
     @ObservedObject private var client = DaemonClient.shared
+    @ObservedObject private var worktrees = WorktreeMonitor.shared
     @StateObject private var model = ChangesModel()
+
+    private var worktree: WorktreeService.Info? {
+        client.session(sessionID).flatMap { worktrees.info(for: $0.cwd) }
+    }
     @Environment(\.theme) private var theme
     @State private var confirmDiscard: ChangesModel.Entry?
 
@@ -151,6 +181,12 @@ struct ChangesPane: View {
         VStack(spacing: 0) {
             ToolHeader(paneID: paneID, icon: "plusminus", title: "Changes",
                        detail: header) {
+                if let worktree = worktree {
+                    Segments(options: [(String?.none, "Uncommitted"), (Optional(worktree.base), "Since \(worktree.base)")],
+                             selection: $model.base)
+                    Button("Merge…") { WorktreeActions.merge(worktree) }
+                        .buttonStyle(.plain).font(TypeScale.ui(11.5, .medium)).foregroundStyle(theme.text.color)
+                }
                 IconButton(systemName: "arrow.clockwise", help: "Refresh") { Task { await model.refresh() } }
             }
             if model.root == nil {
@@ -171,7 +207,11 @@ struct ChangesPane: View {
             }
         }
         .background(theme.bg.color)
-        .onAppear { if let cwd = client.session(sessionID)?.cwd { model.start(cwd: cwd) } }
+        .onAppear {
+            if let cwd = client.session(sessionID)?.cwd { model.start(cwd: cwd) }
+            // A worktree's review starts from everything since its base.
+            if let worktree, model.base == nil { model.base = worktree.base }
+        }
         .onChange(of: client.session(sessionID)?.cwd) { _, cwd in if let cwd { model.start(cwd: cwd) } }
         .onChange(of: model.selected) { _, _ in Task { await model.loadDiff() } }
         .onDisappear { model.stop() }
@@ -187,7 +227,10 @@ struct ChangesPane: View {
 
     private var header: String {
         var parts = [model.branch]
-        if !model.entries.isEmpty { parts.append("\(model.entries.count) files  +\(model.stats.added) −\(model.stats.removed)") }
+        if !model.entries.isEmpty {
+            let files = model.entries.count == 1 ? "1 file" : "\(model.entries.count) files"
+            parts.append("\(files)  +\(model.stats.added) −\(model.stats.removed)")
+        }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 

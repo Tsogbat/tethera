@@ -3,6 +3,8 @@ import TetheraKit
 
 struct SidebarView: View {
     @ObservedObject private var client = DaemonClient.shared
+    @ObservedObject private var worktrees = WorktreeMonitor.shared
+    @ObservedObject private var approvals = ApprovalCenter.shared
     @ObservedObject private var workspace = Workspace.shared
     @Environment(\.theme) private var theme
 
@@ -18,7 +20,12 @@ struct SidebarView: View {
 
             HomeSidebarRow(isSelected: workspace.isShowingHome)
                 .padding(.horizontal, 6)
-                .padding(.bottom, 10)
+                .padding(.bottom, approvals.pending.isEmpty ? 10 : 2)
+            if !approvals.pending.isEmpty {
+                ApprovalsSidebarRow(count: approvals.pending.count)
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 10)
+            }
 
             HStack {
                 SectionLabel(text: "Sessions")
@@ -34,18 +41,30 @@ struct SidebarView: View {
             .padding(.bottom, 6)
 
             List {
-                ForEach(client.sessions) { session in
-                    SessionRow(session: session,
-                               isSelected: session.id == workspace.focusedSessionID,
-                               isOnScreen: workspace.panes.contains { $0.session == session.id })
-                        .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                }
-                .onMove { source, destination in
-                    var ids = client.sessions.map(\.id)
-                    ids.move(fromOffsets: source, toOffset: destination)
-                    client.reorder(ids)
+                let groups = SessionGroups.make(client.sessions, repoRoot: { worktrees.repoRoot(for: $0) })
+                ForEach(groups, id: \.key) { group in
+                    if groups.count > 1 {
+                        Text(group.title)
+                            .font(TypeScale.ui(11, .semibold))
+                            .foregroundStyle(theme.text3.color)
+                            .padding(.leading, 8)
+                            .padding(.top, 6)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    ForEach(group.sessions) { session in
+                        SessionRow(session: session,
+                                   isSelected: session.id == workspace.focusedSessionID,
+                                   isOnScreen: workspace.panes.contains { $0.session == session.id })
+                            .listRowInsets(EdgeInsets(top: 1, leading: 6, bottom: 1, trailing: 6))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    .onMove { source, destination in
+                        client.reorder(SessionGroups.reordered(client.sessions.map(\.id), group: group.sessions.map(\.id),
+                                                               from: source, to: destination))
+                    }
                 }
             }
             .listStyle(.plain)
@@ -55,6 +74,68 @@ struct SidebarView: View {
             SidebarFooter()
         }
         .background(theme.surface.color)
+    }
+}
+
+/// Sessions grouped by the repository they're in (worktrees with their main checkout), in
+/// sidebar order. Folders outside any repository form one group.
+enum SessionGroups {
+    struct Group {
+        let key: String
+        let title: String
+        let sessions: [SessionInfo]
+    }
+
+    static func make(_ sessions: [SessionInfo], repoRoot: (String) -> String?) -> [Group] {
+        var order: [String] = []
+        var members: [String: [SessionInfo]] = [:]
+        for session in sessions {
+            let key = repoRoot(session.cwd) ?? ""
+            if members[key] == nil { order.append(key) }
+            members[key, default: []].append(session)
+        }
+        return order.map { key in
+            Group(key: key, title: key.isEmpty ? "Other" : (key as NSString).lastPathComponent, sessions: members[key] ?? [])
+        }
+    }
+
+    /// The full order after moving rows inside one group.
+    static func reordered(_ all: [UUID], group: [UUID], from source: IndexSet, to destination: Int) -> [UUID] {
+        var moved = group
+        moved.move(fromOffsets: source, toOffset: destination)
+        var iterator = moved.makeIterator()
+        let members = Set(group)
+        return all.map { members.contains($0) ? (iterator.next() ?? $0) : $0 }
+    }
+}
+
+/// Pending permission requests (⌥⌘A); only there while something waits.
+private struct ApprovalsSidebarRow: View {
+    let count: Int
+    @Environment(\.theme) private var theme
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "checkmark.shield")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(theme.accent.color)
+                .frame(width: 16)
+            Text("Approvals")
+                .font(TypeScale.ui(13, .semibold))
+                .foregroundStyle(theme.text.color)
+            Spacer()
+            Text("\(count)")
+                .font(TypeScale.mono(10.5, .semibold))
+                .foregroundStyle(theme.accent.color)
+            Circle().fill(theme.accent.color).frame(width: 6, height: 6)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 30)
+        .background(RoundedRectangle(cornerRadius: Metrics.panelRadius).fill(hovering ? theme.raised.color.opacity(0.5) : .clear))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { Workspace.shared.showApprovals() }
     }
 }
 
@@ -97,6 +178,7 @@ struct SessionRow: View {
     let isSelected: Bool
     let isOnScreen: Bool
     @ObservedObject private var workspace = Workspace.shared
+    @ObservedObject private var worktrees = WorktreeMonitor.shared
     @Environment(\.theme) private var theme
     @State private var hovering = false
     @State private var draftName = ""
@@ -108,11 +190,25 @@ struct SessionRow: View {
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
                 nameView
-                Text(session.subtitle.text)
-                    .font(TypeScale.ui(11, session.subtitle.tone.weight))
-                    .foregroundStyle(session.subtitle.tone.color(theme))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                HStack(spacing: 4) {
+                    if let worktree = worktrees.info(for: session.cwd) {
+                        // A worktree session gets a branch mark; the branch name too, unless the
+                        // session is already named after it.
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 8.5, weight: .semibold))
+                        let branch = worktree.branch.replacingOccurrences(of: "tethera/", with: "")
+                        if branch != session.name {
+                            Text(branch + (session.agent == nil ? "" : " ·")).font(TypeScale.ui(11, .medium))
+                        }
+                    }
+                    if session.agent != nil || worktrees.info(for: session.cwd) == nil {
+                        Text(session.subtitle.text)
+                            .font(TypeScale.ui(11, session.subtitle.tone.weight))
+                            .foregroundStyle(session.subtitle.tone.color(theme))
+                            .truncationMode(.middle)
+                    }
+                }
+                .foregroundStyle(theme.text2.color)
+                .lineLimit(1)
             }
             Spacer(minLength: 4)
             trailing
@@ -197,6 +293,12 @@ struct SessionRow: View {
 
     @ViewBuilder
     private var menu: some View {
+        if let worktree = WorktreeMonitor.shared.info(for: session.cwd) {
+            Button("Merge \(worktree.branch) into \(worktree.base)…") { WorktreeActions.merge(worktree) }
+            Button("Open Pull Request") { WorktreeService.openPullRequest(worktree) }
+            Button("Remove Worktree…") { WorktreeActions.remove(worktree) }
+            Divider()
+        }
         Button("Rename…") { startRename() }
         Button("Open in Split Right") {
             workspace.axis = .horizontal
@@ -244,6 +346,11 @@ struct NewSessionMenu: View {
                 Section("Agents") {
                     ForEach(agents, id: \.self) { kind in
                         Button(kind.displayName) { Workspace.shared.newSession(agent: kind) }
+                    }
+                }
+                Menu("Agent in a New Worktree") {
+                    ForEach(agents, id: \.self) { kind in
+                        Button(kind.displayName) { WorktreeActions.newAgent(kind) }
                     }
                 }
             }

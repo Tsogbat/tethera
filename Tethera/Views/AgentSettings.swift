@@ -85,7 +85,13 @@ struct AgentSettings: View {
                 Spacer()
                 if let target, status?.isInstalled == true {
                     if connected[target] == true {
-                        Label("Connected", systemImage: "checkmark").labelStyle(.titleAndIcon).font(.caption).foregroundStyle(.secondary)
+                        if AgentIntegrations.needsUpdate(target) {
+                            // Older hooks can't wait for an answer from the approval inbox.
+                            Button("Update…") { prepare(target, connecting: true) }.controlSize(.small)
+                                .help("Lets you allow or deny Claude's permission requests from Tethera")
+                        } else {
+                            Label("Connected", systemImage: "checkmark").labelStyle(.titleAndIcon).font(.caption).foregroundStyle(.secondary)
+                        }
                         Button("Disconnect") { prepare(target, connecting: false) }.controlSize(.small)
                     } else {
                         Button("Connect…") { prepare(target, connecting: true) }.controlSize(.small)

@@ -29,6 +29,11 @@ struct HomeView: View {
                     UpdateRow(release: release, state: updater.state)
                         .padding(.bottom, 24)
                 }
+                if showGetStarted {
+                    GetStarted(connected: connected.values.contains(true), firstAgent: detector.installed.first { $0 != .ollama })
+                        .frame(maxWidth: 1000)
+                        .padding(.bottom, 26)
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 320), spacing: 36, alignment: .top)],
                           alignment: .leading, spacing: 28) {
                     start
@@ -52,6 +57,11 @@ struct HomeView: View {
         .background(theme.bg.color)
         .onAppear(perform: refresh)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in refresh() }
+    }
+
+    /// Until it's dismissed, or you've connected an agent and run something.
+    private var showGetStarted: Bool {
+        !PreferencesStore.shared.value.dismissedGetStarted && !(connected.values.contains(true) && !client.sessions.isEmpty)
     }
 
     private var screen: RetroScreenState {
@@ -392,5 +402,55 @@ private struct UpdateRow: View {
         case .installing: return "Installing…"
         default: return "Update and restart"
         }
+    }
+}
+
+/// First run: three steps, in a line, until you've done them or close it.
+private struct GetStarted: View {
+    let connected: Bool
+    let firstAgent: AgentKind?
+    @ObservedObject private var client = DaemonClient.shared
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            step(1, "Connect your agents", connected ? "Done" : "Tethera sees what they do and asks you before risky commands.",
+                 done: connected, action: connected ? nil : ("Connect…", { SettingsOpener.open() }))
+            divider
+            step(2, "Start an agent", firstAgent.map { "\($0.displayName) runs in a session that survives quitting." } ?? "Install Claude Code, Codex or OpenCode first.",
+                 done: !client.sessions.isEmpty, action: firstAgent.map { kind in ("Start \(kind.displayName)", { Workspace.shared.newSession(agent: kind) }) })
+            divider
+            step(3, "Run several at once", "Each agent can get its own worktree and branch; review and merge from Changes.",
+                 done: false, action: firstAgent.map { kind in ("In a worktree", { WorktreeActions.newAgent(kind) }) })
+            Button {
+                PreferencesStore.shared.value.dismissedGetStarted = true
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(theme.text3.color)
+            }
+            .buttonStyle(.plain)
+            .padding(10)
+            .help("Hide")
+        }
+        .overlay(RoundedRectangle(cornerRadius: Metrics.panelRadius).strokeBorder(theme.hairline.color))
+    }
+
+    private var divider: some View {
+        Rectangle().fill(theme.hairline.color).frame(width: 1).padding(.vertical, 12)
+    }
+
+    private func step(_ number: Int, _ title: String, _ detail: String, done: Bool, action: (String, () -> Void)?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(done ? "✓" : "\(number)").font(TypeScale.mono(11, .semibold)).foregroundStyle(done ? theme.text2.color : theme.text.color)
+                Text(title).font(TypeScale.ui(12.5, .semibold)).foregroundStyle(done ? theme.text2.color : theme.text.color)
+            }
+            Text(detail).font(TypeScale.ui(11.5)).foregroundStyle(theme.text3.color).fixedSize(horizontal: false, vertical: true)
+            if let action, !done {
+                Button(action.0, action: action.1).buttonStyle(.plain).font(TypeScale.ui(11.5, .semibold)).foregroundStyle(theme.text.color)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

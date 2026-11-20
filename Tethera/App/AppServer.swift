@@ -8,7 +8,9 @@ import TetheraKit
 final class AppServer {
     static let shared = AppServer()
 
-    typealias Handler = @MainActor (AppChannel.Request) async -> AppChannel.Response
+    /// A handler gets the request and the id of the connection it came on, so long-lived
+    /// requests (approvals) can be dropped when their caller goes away.
+    typealias Handler = @MainActor (AppChannel.Request, Int32) async -> AppChannel.Response
 
     private var listenFD: Int32 = -1
     private var listenSource: DispatchSourceRead?
@@ -18,6 +20,9 @@ final class AppServer {
 
     func register(_ method: String, _ handler: @escaping Handler) { handlers[method] = handler }
     func register(prefix: String, _ handler: @escaping Handler) { prefixHandlers.append((prefix, handler)) }
+
+    /// Called with a connection id when that client disconnects.
+    var onDisconnect: [(Int32) -> Void] = []
 
     func start() {
         guard listenFD < 0 else { return }
@@ -55,17 +60,18 @@ final class AppServer {
             var on: Int32 = 1
             setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
             let connection = Connection(fd: fd) { [weak self] request in
-                await self?.handle(request) ?? AppChannel.Response(id: request.id, error: "closing")
+                await self?.handle(request, from: fd) ?? AppChannel.Response(id: request.id, error: "closing")
             } onClose: { [weak self] fd in
                 self?.connections.removeValue(forKey: fd)
+                self?.onDisconnect.forEach { $0(fd) }
             }
             connections[fd] = connection
         }
     }
 
-    private func handle(_ request: AppChannel.Request) async -> AppChannel.Response {
+    private func handle(_ request: AppChannel.Request, from connection: Int32) async -> AppChannel.Response {
         if let handler = handlers[request.method] ?? prefixHandlers.first(where: { request.method.hasPrefix($0.0) })?.1 {
-            return await handler(request)
+            return await handler(request, connection)
         }
         return AppChannel.Response(id: request.id, error: "unknown method \(request.method)")
     }

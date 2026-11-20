@@ -173,3 +173,30 @@ struct SectionLabel: View {
             .foregroundStyle(theme.text3.color)
     }
 }
+
+/// A segmented choice in the app's monochrome: the selected segment is filled with the text
+/// color, the rest are quiet. (The system control uses the blue accent.)
+struct Segments<Value: Hashable>: View {
+    let options: [(Value, String)]
+    @Binding var selection: Value
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                let selected = option.0 == selection
+                Button { selection = option.0 } label: {
+                    Text(option.1)
+                        .font(TypeScale.ui(11.5, selected ? .semibold : .medium))
+                        .foregroundStyle(selected ? theme.bg.color : theme.text2.color)
+                        .padding(.horizontal, 9)
+                        .frame(height: 20)
+                        .background(RoundedRectangle(cornerRadius: Metrics.controlRadius - 1).fill(selected ? theme.text.color : .clear))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(theme.raised.color))
+    }
+}

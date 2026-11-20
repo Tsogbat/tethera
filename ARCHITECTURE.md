@@ -112,6 +112,10 @@ Home is SwiftUI lists, plus `RetroComputerView`: an `SCNView` of the model in `V
 
 **The app channel.** Things only the app can do (open a pane, drive a browser tab) go over a second socket, `app.sock` (0600, `getpeereid`), with one JSON object per line: `AppChannel` in TetheraKit, `AppServer` in the app. `tethera open` and `tethera mcp` use it. The daemon isn't involved, so it works whatever version of the daemon is running.
 
+**Approvals.** Claude Code's `PermissionRequest` hook (`tethera hook claude`, timeout 600 s) asks the app over `app.sock` (`approval.request`) and blocks. `ApprovalCenter` holds the request until it gets an answer from the inbox, a notification action (category `tethera.approval`) or, later, the phone. The CLI then prints Claude's decision (`ApprovalDecision.claude`). "Answer in terminal", no app, or a timeout at 590 s prints nothing, and Claude shows its own dialog. If the hook process goes away first (Claude answered in its own dialog), the connection closes and the request leaves the inbox.
+
+**Worktrees.** `WorktreeService` runs `git worktree add -b tethera/<agent>-N <repo>.worktrees/<agent>-N <base>` and remembers the base in `branch.<name>.tetheraBase`. Merge is `--no-ff` in the main checkout, refused if either side has uncommitted work, and aborted on conflicts. `WorktreeMonitor` caches each folder's repository and worktree, for grouping and labels.
+
 **`tethera mcp`** is a stdio MCP server (JSON-RPC, protocol `2025-06-18`) exposing Playwright MCP's browser tools. Each call goes to the app, which acts in the tab beside the calling session (`TETHERA_SESSION_ID`). Snapshots are an accessibility-style outline with `ref`s, built by a script injected into the page. Settings → Agents adds it to each agent's config with the same preview/backup/undo as hooks (Claude Code through its own `claude mcp add`).
 
 A custom `TETHERA_HOME` also gets its own defaults suite (`AppDefaults`), so test runs never touch the layout or preferences of the Tethera you use.

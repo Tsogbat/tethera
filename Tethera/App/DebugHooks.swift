@@ -76,6 +76,24 @@ enum DebugHooks {
                 view.subviews.forEach { walk($0, depth + 1) }
             }
             if let content = NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) })?.contentView { walk(content, 0) }
+        } else if step == "@git" {
+            workspace.showGit()
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        } else if step == "@brew" {
+            workspace.showBrew()
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+        } else if step.hasPrefix("@worktree:") {
+            WorktreeActions.newAgent(AgentKind(rawValue: String(step.dropFirst(10))))
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+        } else if step == "@approvals" {
+            workspace.showApprovals()
+            try? await Task.sleep(nanoseconds: 800_000_000)
+        } else if step.hasPrefix("@answer:") {
+            if let first = ApprovalCenter.shared.pending.first,
+               let answer = ApprovalCenter.Answer(rawValue: String(step.dropFirst(8))) {
+                ApprovalCenter.shared.answer(first.id, answer)
+            }
+            try? await Task.sleep(nanoseconds: 800_000_000)
         } else if step == "@closepane" {
             workspace.closeFocusedPane()
         } else if step == "@home" {

@@ -214,6 +214,15 @@ struct PaneView: View {
             case .browser(let id):
                 BrowserPane(tabID: id, paneID: pane.id)
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .git(let root):
+                GitPane(root: root, paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .brew:
+                BrewPane(paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .approvals:
+                ApprovalsPane(paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
             case .changes(let id):
                 ChangesPane(sessionID: id, paneID: pane.id)
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
@@ -273,6 +282,7 @@ final class TerminalSlot: NSView {
 /// The bottom strip: what needs you across every session, and the focused agent's numbers.
 struct StatusBar: View {
     @ObservedObject private var client = DaemonClient.shared
+    @ObservedObject private var approvals = ApprovalCenter.shared
     @ObservedObject private var workspace = Workspace.shared
     @Environment(\.theme) private var theme
 
@@ -288,6 +298,18 @@ struct StatusBar: View {
                         Circle().fill(theme.accent.color).frame(width: 6, height: 6)
                         Text(needsYou.count == 1 ? "\(needsYou[0].name) needs you" : "\(needsYou.count) sessions need you")
                         Text("⇧⌘U").foregroundStyle(theme.text3.color)
+                    }
+                    .font(TypeScale.ui(11, .semibold))
+                    .foregroundStyle(theme.accent.color)
+                }
+                .buttonStyle(.plain)
+            }
+            if !approvals.pending.isEmpty {
+                Button { workspace.showApprovals() } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark.shield").font(.system(size: 9.5, weight: .semibold))
+                        Text(approvals.pending.count == 1 ? "1 approval" : "\(approvals.pending.count) approvals")
+                        Text("⌥⌘A").foregroundStyle(theme.text3.color)
                     }
                     .font(TypeScale.ui(11, .semibold))
                     .foregroundStyle(theme.accent.color)

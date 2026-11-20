@@ -32,6 +32,23 @@ enum HookRelay {
         _ = frame.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
     }
 
+    /// For a Claude Code `PermissionRequest`: asks the Tethera app and waits for Allow or Deny.
+    /// Returns the decision JSON to print, or nil to leave the question to Claude's own dialog
+    /// (Tethera isn't running, "Answer in terminal", or no answer before the hook's time runs out).
+    static func askForApproval(payload: String, timeout: TimeInterval = 590) -> String? {
+        let env = ProcessInfo.processInfo.environment
+        guard let json = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any],
+              json["hook_event_name"] as? String == "PermissionRequest",
+              let connection = try? AppChannel.Connection() else { return nil }
+        var params: [String: Any] = ["agent": "claude"]
+        for key in ["tool_name", "tool_input", "cwd", "session_id", "transcript_path", "permission_mode"] {
+            if let value = json[key] { params[key] = value }
+        }
+        guard let response = try? connection.call("approval.request", params: params, session: env["TETHERA_SESSION_ID"], timeout: timeout),
+              let answer = response.text else { return nil }
+        return ApprovalDecision.claude(answer)
+    }
+
     /// Adds the event name (passed as an argument) to a payload that doesn't carry one.
     static func injecting(event: String, into payload: String) -> String {
         guard var json = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any] else {
