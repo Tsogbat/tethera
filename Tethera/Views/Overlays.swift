@@ -130,6 +130,9 @@ struct CommandPalette: View {
         items.append(Item(id: "git", title: "Git", shortcut: "⌥⌘G") { workspace.showGit() })
         items.append(Item(id: "transcript", title: "Transcript", shortcut: "⌥⌘T") { workspace.showTranscript() })
         items.append(Item(id: "brew", title: "Homebrew", shortcut: "⌥⌘B") { workspace.showBrew() })
+        items.append(Item(id: "board", title: "Team Board", shortcut: "⌥⌘M") { workspace.showBoard() })
+        items.append(Item(id: "costs", title: "Costs", shortcut: "⌥⌘C") { workspace.showCosts() })
+        items.append(Item(id: "audit", title: "Audit Log", shortcut: "⌥⌘L") { workspace.showAudit() })
         items += [
             Item(id: "split-r", title: "Split Right", shortcut: "⌘D") { workspace.split(.horizontal) },
             Item(id: "split-d", title: "Split Down", shortcut: "⇧⌘D") { workspace.split(.vertical) },

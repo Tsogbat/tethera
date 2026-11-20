@@ -162,6 +162,18 @@ final class Workspace: ObservableObject {
         open(.brew, besideSession: focusedSessionID)
     }
 
+    func showBoard() {
+        open(.board, besideSession: focusedSessionID)
+    }
+
+    func showCosts() {
+        open(.costs, besideSession: focusedSessionID)
+    }
+
+    func showAudit() {
+        open(.audit, besideSession: focusedSessionID)
+    }
+
     /// The approval inbox (⌥⌘A).
     func showApprovals() {
         open(.approvals, besideSession: focusedSessionID)
@@ -368,7 +380,7 @@ final class Workspace: ObservableObject {
                            fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }) -> [Pane] {
         panes.filter { pane in
             switch pane.content {
-            case .home, .approvals, .brew: return true
+            case .home, .approvals, .brew, .board, .costs, .audit: return true
             case .git(let root): return fileExists(root)
             case .session(let id), .changes(let id), .transcript(let id): return ids.contains(id)
             case .file(let path): return fileExists(path)
@@ -396,6 +408,12 @@ enum PaneContent: Codable, Equatable, Hashable {
     case brew
     /// What a session's agent did, step by step.
     case transcript(UUID)
+    /// Every team member's agents.
+    case board
+    /// Spend by day, agent, repository and member.
+    case costs
+    /// Approvals, budget stops and sessions, searchable and exportable.
+    case audit
 
     var sessionID: UUID? {
         if case .session(let id) = self { return id }
@@ -414,7 +432,7 @@ enum PaneContent: Codable, Equatable, Hashable {
     var isTool: Bool {
         switch self {
         case .home, .session: return false
-        case .file, .browser, .changes, .approvals, .git, .brew, .transcript: return true
+        case .file, .browser, .changes, .approvals, .git, .brew, .transcript, .board, .costs, .audit: return true
         }
     }
 }

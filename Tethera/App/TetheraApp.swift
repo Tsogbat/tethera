@@ -56,6 +56,12 @@ struct TetheraCommands: Commands {
                 .keyboardShortcut(KeyBindings.shortcut("git"))
             Button("Homebrew") { Workspace.shared.showBrew() }
                 .keyboardShortcut(KeyBindings.shortcut("brew"))
+            Button("Team Board") { Workspace.shared.showBoard() }
+                .keyboardShortcut(KeyBindings.shortcut("board"))
+            Button("Costs") { Workspace.shared.showCosts() }
+                .keyboardShortcut(KeyBindings.shortcut("costs"))
+            Button("Audit Log") { Workspace.shared.showAudit() }
+                .keyboardShortcut(KeyBindings.shortcut("audit"))
             Divider()
             Button("Split Right") { Workspace.shared.split(.horizontal) }
                 .keyboardShortcut(KeyBindings.shortcut("splitRight"))
@@ -164,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             client.connect()
             Self.startAppServer()
             PhoneServer.shared.apply(PreferencesStore.shared.value)
+            TeamSync.shared.start()
             preferencesWatch = PreferencesStore.shared.$value
                 .map { [String($0.phoneEnabled), $0.phoneReach.rawValue, String($0.phonePort), $0.phoneToken ?? ""] }
                 .removeDuplicates()

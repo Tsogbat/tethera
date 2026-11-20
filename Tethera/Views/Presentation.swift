@@ -172,6 +172,8 @@ struct IconButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(help)
+        // "Close (⌘W)" reads as "Close".
+        .accessibilityLabel(help.components(separatedBy: " (").first ?? help)
     }
 }
 

@@ -17,6 +17,8 @@ public enum TetheraPaths {
     public static var lock: URL { home.appendingPathComponent("d.lock") }
     public static var log: URL { home.appendingPathComponent("daemon.log") }
     public static var state: URL { home.appendingPathComponent("sessions.json") }
+    /// What a daemon passes to its next version across `exec`: open descriptors and screens.
+    public static var handover: URL { home.appendingPathComponent("handover.json") }
     public static var snapshots: URL { home.appendingPathComponent("snapshots", isDirectory: true) }
     public static var shellIntegration: URL { home.appendingPathComponent("shell", isDirectory: true) }
 

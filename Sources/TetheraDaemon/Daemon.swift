@@ -13,6 +13,8 @@ public final class Daemon {
     private var timers: [DispatchSourceTimer] = []
     private var idleSince: Date?
     private var onStop: (() -> Void)?
+    /// The single-daemon lock, kept across a handover; -1 when run in-process (tests).
+    private var lockFD: Int32 = -1
 
     private final class Client {
         let socket: FramedSocket
@@ -28,18 +30,27 @@ public final class Daemon {
     // MARK: - Process entry
 
     /// Runs the daemon as this process and never returns. Exits quietly if one is already running.
-    public static func runForever(version: String) -> Never {
+    /// With `resume`, this process was a daemon a moment ago and carries on from its handover.
+    public static func runForever(version: String, resume: String? = nil) -> Never {
         do {
             try TetheraPaths.prepare()
         } catch {
             log("cannot create \(TetheraPaths.home.path): \(error)")
             exit(1)
         }
-        let lock = open(TetheraPaths.lock.path, O_CREAT | O_RDWR, 0o600)
+        var handover: Handover?
+        if let resume {
+            handover = (try? Data(contentsOf: URL(fileURLWithPath: resume))).flatMap { try? JSONDecoder().decode(Handover.self, from: $0) }
+            unlink(resume)
+            if handover == nil { log("couldn't read the handover at \(resume); starting fresh") }
+        }
+        // A handover brings the lock with it (still held: same process, same open file).
+        let lock = handover?.lockFD ?? open(TetheraPaths.lock.path, O_CREAT | O_RDWR, 0o600)
         guard lock >= 0, flock(lock, LOCK_EX | LOCK_NB) == 0 else {
             log("another daemon holds the lock; exiting")
             exit(0)
         }
+        Handover.setCloseOnExec(lock, true)
         _ = setsid()
         signal(SIGHUP, SIG_IGN)
         signal(SIGPIPE, SIG_IGN)
@@ -57,32 +68,53 @@ public final class Daemon {
             daemon.signalSources.append(source)
         }
         daemon.onStop = { exit(0) }
+        daemon.lockFD = lock
         do {
-            try daemon.start()
+            try daemon.start(resuming: handover)
         } catch {
             log("failed to start: \(error)")
             exit(1)
         }
-        log("daemon \(version) listening on \(TetheraPaths.socket.path) (pid \(getpid()))")
+        if let handover {
+            log("daemon \(version) took over from \(handover.from) with \(handover.sessions.count) live session(s) (pid \(getpid()))")
+        } else {
+            log("daemon \(version) listening on \(TetheraPaths.socket.path) (pid \(getpid()))")
+        }
         dispatchMain()
     }
 
     private var signalSources: [DispatchSourceSignal] = []
 
-    /// Binds the socket, restores saved sessions and starts the timers.
-    public func start() throws {
+    /// Binds the socket (or keeps the one handed over), restores sessions and starts the timers.
+    func start(resuming handover: Handover?) throws {
         try TetheraPaths.prepare()
-        listenFD = try UnixSocket.listen(path: TetheraPaths.socket.path)
+        if let handover {
+            listenFD = handover.listenFD
+            Handover.setCloseOnExec(listenFD, true)
+        } else {
+            listenFD = try UnixSocket.listen(path: TetheraPaths.socket.path)
+        }
         let source = DispatchSource.makeReadSource(fileDescriptor: listenFD, queue: queue)
         source.setEventHandler { [weak self] in self?.acceptClients() }
         let fd = listenFD
         source.setCancelHandler { Darwin.close(fd) }
         listenSource = source
-        queue.sync { restoreSaved() }
+        queue.sync {
+            for live in handover?.sessions ?? [] {
+                let host = SessionHost(adopting: live, queue: queue, version: version)
+                wire(host)
+                sessions[host.id] = host
+            }
+            restoreSaved()
+        }
         source.resume()
 
         addTimer(every: 1) { [weak self] in self?.tick() }
         addTimer(every: 5) { [weak self] in self?.saveAll(force: false) }
+    }
+
+    public func start() throws {
+        try start(resuming: nil)
     }
 
     /// Stops listening and ends every session (used by tests and `shutdown`).
@@ -236,6 +268,12 @@ public final class Daemon {
             client.socket.sendNow(.control(ControlMessage(.removed)))
             queue.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.onStop?() }
 
+        case .handover:
+            let target = message.message ?? selfExecutable
+            guard lockFD >= 0 else { return reply(client, error: "this daemon can't hand over (it isn't running as `tethera daemon`)") }
+            guard Handover.isAcceptable(executable: target) else { return reply(client, error: "won't hand over to \(target)") }
+            handOver(to: target)
+
         case .welcome, .sessions, .created, .attached, .updated, .removed, .exited, .error:
             break
         }
@@ -324,6 +362,43 @@ public final class Daemon {
         } else {
             idleSince = nil
         }
+    }
+
+    // MARK: - Handover
+
+    private var selfExecutable: String {
+        Bundle.main.executablePath ?? CommandLine.arguments[0]
+    }
+
+    /// Becomes `executable` (a newer `tethera`) in this same process: the listening socket, the
+    /// lock and every PTY stay open across `exec`, and the new image picks them up from the
+    /// handover file. Clients see their connection drop and reconnect to the new image. If
+    /// `exec` fails, this daemon carries on.
+    private func handOver(to executable: String) {
+        let live = sessions.values.compactMap { $0.handoverState() }
+        saveAll(force: true)
+        let state = Handover(from: version, listenFD: listenFD, lockFD: lockFD, sessions: live)
+        let path = TetheraPaths.handover.path
+        guard let data = try? JSONEncoder().encode(state),
+              FileManager.default.createFile(atPath: path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            log("handover: couldn't write \(path)")
+            return
+        }
+        for client in clients.values {
+            Handover.setCloseOnExec(client.socket.fd, true)
+            Darwin.shutdown(client.socket.fd, SHUT_RDWR)
+        }
+        let kept = [listenFD, lockFD] + live.map(\.fd)
+        kept.forEach { Handover.setCloseOnExec($0, false) }
+        log("handing over to \(executable) with \(live.count) live session(s)")
+        let words: [String] = [executable, "daemon", "--resume", path]
+        var argv: [UnsafeMutablePointer<CChar>?] = words.map { strdup($0) } + [nil]
+        execv(executable, &argv)
+        let error = String(cString: strerror(errno))
+        argv.forEach { free($0) }
+        kept.forEach { Handover.setCloseOnExec($0, true) }
+        unlink(path)
+        log("handover to \(executable) failed (\(error)); carrying on")
     }
 
     // MARK: - Persistence

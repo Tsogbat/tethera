@@ -26,6 +26,8 @@ final class Journal {
         var decision: String?
         var costUSD: Double?
         var repo: String?
+        /// Who answered an approval: "you", "phone", "policy" or "team policy".
+        var by: String?
     }
 
     private let encoder: JSONEncoder = {
@@ -41,28 +43,15 @@ final class Journal {
         return decoder
     }()
 
-    private var directory: URL { TetheraPaths.home.appendingPathComponent("journal", isDirectory: true) }
+    private var directory: URL { JournalFile.directory }
 
     static func dayName(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        JournalFile.dayName(date)
     }
 
     func append(_ event: Event) {
-        guard var line = try? encoder.encode(event) else { return }
-        line.append(0x0A)
-        let url = directory.appendingPathComponent(Self.dayName(event.at) + ".jsonl")
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        if let handle = try? FileHandle(forWritingTo: url) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: line)
-        } else {
-            try? line.write(to: url, options: .atomic)
-        }
+        guard let line = try? encoder.encode(event) else { return }
+        JournalFile.append(line, at: event.at)
     }
 
     /// Events from `start` until now (or `end`), oldest first.
@@ -105,10 +94,9 @@ final class Journal {
                      repo: session.cwd))
     }
 
-    func recordApproval(_ approval: ApprovalCenter.Approval, decision: String, sessionName: String?, automatic: Bool = false) {
+    func recordApproval(_ approval: ApprovalCenter.Approval, decision: String, sessionName: String?, by: String = "you") {
         append(Event(at: Date(), kind: .approval, session: approval.session, sessionName: sessionName, agent: approval.agent.rawValue,
-                     tool: approval.tool, detail: approval.summary, decision: automatic ? "\(decision) (policy)" : decision,
-                     repo: approval.cwd))
+                     tool: approval.tool, detail: approval.summary, decision: decision, repo: approval.cwd, by: by))
     }
 
     // MARK: Reading costs

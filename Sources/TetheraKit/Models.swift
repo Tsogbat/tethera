@@ -8,6 +8,8 @@ public struct ControlMessage: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
         // client → daemon
         case hello, list, create, attach, detach, resize, signal, rename, close, subscribe, hook, shutdown, reorder
+        /// Become the `tethera` at `message` (a newer version) without ending any session.
+        case handover
         // daemon → client
         case welcome, sessions, created, attached, updated, removed, exited, error
     }

@@ -15,7 +15,7 @@ import TetheraKit
 ///     tethera changes                    show this session's live diff
 ///     tethera mcp                        the browser MCP server for agents (stdio)
 
-let version = "0.9.0"
+let version = "1.0.0"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 
@@ -151,7 +151,35 @@ func attach(to session: UUID) -> Never {
 
 switch command {
 case "daemon":
-    Daemon.runForever(version: version)
+    let resume = arguments.firstIndex(of: "--resume").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+    Daemon.runForever(version: version, resume: resume)
+
+case "handover":
+    // The running daemon becomes this version of tethera; every session keeps running.
+    var client = BlockingClient()
+    var hello = ControlMessage(.hello)
+    hello.protocolVersion = tetheraProtocolVersion
+    client.send(hello)
+    let before = client.receive { $0.type == .welcome }
+    let from = before.message ?? "?"
+    var handover = ControlMessage(.handover)
+    handover.message = (selfPath as NSString).resolvingSymlinksInPath
+    client.send(handover)
+    // The connection drops when the daemon execs; a refusal comes back as an error instead.
+    var buffer = [UInt8](repeating: 0, count: 4096)
+    var decoder = FrameDecoder()
+    while true {
+        let count = read(client.fd, &buffer, buffer.count)
+        guard count > 0 else { break }
+        for frame in (try? decoder.append(Data(buffer[0..<count]))) ?? [] where frame.controlMessage?.type == .error {
+            fail(frame.controlMessage?.message ?? "the daemon refused the handover")
+        }
+    }
+    var after = BlockingClient()
+    after.send(hello)
+    let welcome = after.receive { $0.type == .welcome }
+    guard welcome.pid == before.pid else { fail("the daemon restarted instead (pid \(before.pid ?? 0) → \(welcome.pid ?? 0))") }
+    print("daemon \(from) → \(welcome.message ?? "?") (pid \(welcome.pid ?? 0)); \(after.sessions().count) session(s) kept")
 
 case "list", "ls":
     var client = BlockingClient()
@@ -330,5 +358,6 @@ default:
       tethera changes                     this session's live diff
       tethera mcp                         browser tools for agents (MCP over stdio)
       tethera bridge                      this Mac's sessions over stdin/stdout (for ssh)
+      tethera handover                    move the running daemon to this version; sessions keep running
     """)
 }

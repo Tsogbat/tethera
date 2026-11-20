@@ -32,7 +32,7 @@ enum DebugHooks {
         let client = DaemonClient.shared
         func type(_ text: String) {
             guard let id = workspace.focusedSessionID else { return }
-            client.send(id, Data(text.utf8))
+            if let terminal = TerminalStore.shared.existing(id) { terminal.input(text) } else { client.send(id, Data(text.utf8)) }
         }
         if step.hasPrefix("@wait:") {
             try? await Task.sleep(nanoseconds: UInt64((Double(step.dropFirst(6)) ?? 1) * 1e9))
@@ -83,6 +83,13 @@ enum DebugHooks {
         } else if step == "@git" {
             workspace.showGit()
             try? await Task.sleep(nanoseconds: 2_000_000_000)
+        } else if step == "@costs" || step == "@audit" || step == "@board" {
+            switch step {
+            case "@costs": workspace.showCosts()
+            case "@audit": workspace.showAudit()
+            default: workspace.showBoard()
+            }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
         } else if step == "@brew" {
             workspace.showBrew()
             try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -128,7 +135,8 @@ enum DebugHooks {
         } else if step.hasPrefix("@appearance:") {
             PreferencesStore.shared.value.appearance = step.hasSuffix("light") ? .light : .dark
         } else if step.hasPrefix("@type:") {
-            type(String(step.dropFirst(6)))
+            // `_` stands for a space, which the step list would trim.
+            type(String(step.dropFirst(6)).replacingOccurrences(of: "_", with: " "))
         } else if step.hasPrefix("@keys:") {
             type(String(step.dropFirst(6))
                 .replacingOccurrences(of: "\\e", with: "\u{1b}")
@@ -165,6 +173,20 @@ enum DebugHooks {
             PhoneServer.shared.apply(PreferencesStore.shared.value)
             try? await Task.sleep(nanoseconds: 500_000_000)
             print("[DebugHooks] phone \(PhoneServer.shared.pairingURL?.absoluteString ?? PhoneServer.shared.problem ?? "off")")
+        } else if step == "@accept" || step == "@complete" || step == "@down" || step == "@insert" {
+            // Keys for suggestions: → takes the ghost text, ⌃Space lists, ↓ moves, Return inserts.
+            guard let id = workspace.focusedSessionID, let terminal = TerminalStore.shared.existing(id) else { return }
+            let (code, characters, flags): (UInt16, String, NSEvent.ModifierFlags) = switch step {
+            case "@accept": (124, "\u{F703}", [.function, .numericPad])
+            case "@complete": (49, " ", [.control])
+            case "@down": (125, "\u{F701}", [.function, .numericPad])
+            default: (36, "\r", [])
+            }
+            if let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                                            characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) {
+                _ = terminal.handleKey(event)
+            }
+            try? await Task.sleep(nanoseconds: 600_000_000)
         } else if step == "@quit" {
             NSApp.terminate(nil)
         } else if !step.isEmpty {

@@ -62,6 +62,7 @@ final class DaemonClient: ObservableObject {
     private var links: [String: Link] = ["": Link(key: "", host: nil)]
     private var sinks: [UUID: (Frame) -> Void] = [:]
     private var sinkSizes: [UUID: (Int, Int)] = [:]
+    private var handoverAttempted = false
 
     private init() {}
 
@@ -224,6 +225,16 @@ final class DaemonClient: ObservableObject {
         connected(link, fd: fds[0])
     }
 
+    /// The `tethera` to hand the daemon over to, when the daemon is older than this app and
+    /// new enough to know how (1.0 or later). Only packaged apps: dev builds have no version.
+    static func handoverTarget(daemon: String, app: String? = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+                               cli: String? = nil) -> String? {
+        let cli = cli ?? cliPath
+        guard let app, Updater.isNewer(app, than: daemon), !Updater.isNewer("1.0.0", than: daemon),
+              FileManager.default.isExecutableFile(atPath: cli) else { return nil }
+        return cli
+    }
+
     private nonisolated static func describe(sshExit code: Int32, stderr: String?) -> String {
         if let stderr, !stderr.isEmpty { return stderr }
         switch code {
@@ -311,6 +322,17 @@ final class DaemonClient: ObservableObject {
     private func handle(_ message: ControlMessage, from link: Link) {
         switch message.type {
         case .welcome:
+            if link.host == nil, !handoverAttempted, let daemon = message.message, let target = Self.handoverTarget(daemon: daemon) {
+                // Once per launch: if the exec fails, the old daemon carries on and that's fine.
+                handoverAttempted = true
+                // An update replaced the app; move the running daemon to the new version. It
+                // keeps every session, drops this connection, and answers again in a moment.
+                var handover = ControlMessage(.handover)
+                handover.message = target
+                link.socket?.send(handover)
+                NSLog("tethera: handing the \(daemon) daemon over to \(target)")
+                return
+            }
             if message.protocolVersion != tetheraProtocolVersion {
                 setStatus(.failed(link.host == nil
                     ? "The running session daemon is a different version. Quit and End All Sessions (⌥⌘Q) to restart it."

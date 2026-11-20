@@ -262,7 +262,7 @@ final class PhoneServer: ObservableObject {
         case ("POST", "a") where parts.count == 2:
             guard let action = actionLinks.removeValue(forKey: parts[1]) else { return .text("That link was already used or has expired.", status: 404) }
             guard ApprovalCenter.shared.pending.contains(where: { $0.id == action.approval }) else { return .text("Already answered.", status: 409) }
-            ApprovalCenter.shared.answer(action.approval, action.answer)
+            ApprovalCenter.shared.answer(action.approval, action.answer, from: "phone")
             return .text(action.answer == .allow ? "Allowed." : "Denied.", status: 200)
         default:
             break
@@ -275,7 +275,7 @@ final class PhoneServer: ObservableObject {
         case ("POST", let rest) where rest.count == 3 && rest[0] == "approvals":
             guard let id = UUID(uuidString: rest[1]), let answer = ApprovalCenter.Answer(rawValue: rest[2]), answer != .terminal,
                   ApprovalCenter.shared.pending.contains(where: { $0.id == id }) else { return .text("Already answered.", status: 409) }
-            ApprovalCenter.shared.answer(id, answer)
+            ApprovalCenter.shared.answer(id, answer, from: "phone")
             return .json(["ok": true])
         case ("POST", let rest) where rest.count == 3 && rest[0] == "sessions" && rest[2] == "reply":
             // Only an agent asking a question takes an answer: not a shell, and not a permission

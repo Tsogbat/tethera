@@ -38,13 +38,23 @@ enum HookRelay {
     static func askForApproval(payload: String, timeout: TimeInterval = 590) -> String? {
         let env = ProcessInfo.processInfo.environment
         guard let json = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any],
-              json["hook_event_name"] as? String == "PermissionRequest",
-              let connection = try? AppChannel.Connection() else { return nil }
+              json["hook_event_name"] as? String == "PermissionRequest" else { return nil }
+        // Your rules and your team's answer first; only what they leave open reaches you.
+        let tool = json["tool_name"] as? String ?? ""
+        let input = json["tool_input"] as? [String: Any] ?? [:]
+        if let decision = ApprovalPolicies.decide(agent: "claude", tool: tool, input: input), decision.rule.action != .ask {
+            JournalFile.appendPolicyDecision(decision, agent: "claude", tool: tool, subject: ApprovalPolicies.subject(tool: tool, input: input),
+                                             session: env["TETHERA_SESSION_ID"], cwd: json["cwd"] as? String)
+            let why = decision.rule.note.map { " (\($0))" } ?? ""
+            return ApprovalDecision.claude(decision.rule.action.rawValue,
+                                           message: "Denied by \(decision.fromTeam ? "your team's" : "your") Tethera policy: \(decision.rule.summary)\(why)")
+        }
         var params: [String: Any] = ["agent": "claude"]
         for key in ["tool_name", "tool_input", "cwd", "session_id", "transcript_path", "permission_mode"] {
             if let value = json[key] { params[key] = value }
         }
-        guard let response = try? connection.call("approval.request", params: params, session: env["TETHERA_SESSION_ID"], timeout: timeout),
+        guard let connection = try? AppChannel.Connection(),
+              let response = try? connection.call("approval.request", params: params, session: env["TETHERA_SESSION_ID"], timeout: timeout),
               let answer = response.text else { return nil }
         return ApprovalDecision.claude(answer)
     }

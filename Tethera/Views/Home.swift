@@ -244,6 +244,8 @@ private struct HomeRow: View {
         Button(action: action) {
             HomeRowLabel(glyph: glyph, title: title, detail: detail, trailing: shortcut, mark: mark, dimmed: dimmed)
         }
+        .accessibilityLabel([title, detail].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityValue(mark == .filled ? "connected" : mark == .open ? "not connected" : "")
         .buttonStyle(HomeRowStyle())
     }
 }

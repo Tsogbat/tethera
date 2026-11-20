@@ -234,6 +234,15 @@ struct PaneView: View {
             case .approvals:
                 ApprovalsPane(paneID: pane.id)
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .board:
+                BoardPane(paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .costs:
+                CostsPane(paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .audit:
+                AuditPane(paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
             case .changes(let id):
                 ChangesPane(sessionID: id, paneID: pane.id)
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })

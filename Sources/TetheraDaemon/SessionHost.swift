@@ -112,6 +112,11 @@ final class SessionHost: TerminalDelegate {
         let child = tethera_spawn_pty(launch.executable, &argv, &envp, cwd,
                                       UInt16(clamping: info.cols), UInt16(clamping: info.rows), &fd)
         guard child > 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        watch(fd: fd, pid: child)
+    }
+
+    /// Reads the PTY and waits for the shell to exit.
+    private func watch(fd: Int32, pid child: pid_t) {
         pid = child
         masterFD = fd
 
@@ -127,6 +132,31 @@ final class SessionHost: TerminalDelegate {
         processSource = exit
         read.resume()
         exit.resume()
+    }
+
+    // MARK: - Handover
+
+    /// What the next daemon needs to carry on with this session: its PTY, its shell, and the
+    /// screen as it is now. Nil for a session without a live shell.
+    func handoverState() -> Handover.Live? {
+        guard info.isAlive, masterFD >= 0, pid > 0 else { return nil }
+        return Handover.Live(info: info, fd: masterFD, pid: pid, screen: snapshot(), seq: seq)
+    }
+
+    /// A live session handed over by the previous daemon: the shell keeps running on the same
+    /// PTY, and the screen is rebuilt from what it saw.
+    convenience init(adopting live: Handover.Live, queue: DispatchQueue, version: String) {
+        self.init(info: live.info, queue: queue, version: version)
+        seq = live.seq
+        // Replay before the PTY is attached, so the emulator's replies go nowhere.
+        makeTerminal().feed(byteArray: Array(live.screen))
+        _ = fcntl(live.fd, F_SETFD, FD_CLOEXEC)
+        watch(fd: live.fd, pid: live.pid)
+        // The shell may have exited while the daemon was between images; reap it if so.
+        var status: Int32 = 0
+        if waitpid(live.pid, &status, WNOHANG) == live.pid || kill(live.pid, 0) != 0 {
+            queue.async { [weak self] in self?.processExited() }
+        }
     }
 
     /// Hangs up the shell's process group, like closing a terminal window.

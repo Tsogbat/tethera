@@ -39,6 +39,8 @@ Each session feeds its output into a headless SwiftTerm `Terminal`. That emulato
 - **Serves snapshots.** On attach, `VTSnapshot` serializes the scrollback, screen, SGR attributes, cursor, scroll region and input modes (alt screen, bracketed paste, mouse, application cursor, kitty flags; cursor visibility via DECRQM) as VT sequences. A fresh client replays them and shows the same screen. Then a brief size nudge makes full-screen agents redraw.
 - **Keeps PTYs drained.** PTYs are drained even with no client attached, so a slow client never blocks a shell. A client that falls 32 MB behind is dropped and reattaches with a snapshot.
 
+**Handover.** A `handover` control message (the app sends it when it finds a daemon older than itself, 1.0 or later; `tethera handover` sends it by hand) makes the daemon become a new `tethera` binary without ending anything. It writes `TETHERA_HOME/handover.json` (0600): the listening socket's fd, the lock's fd, and for each live session its PTY master fd, shell pid, `SessionInfo` and a `VTSnapshot` of its screen. It shuts down client sockets so they reconnect, clears `FD_CLOEXEC` on the kept fds and calls `execv(<new tethera>, ["daemon", "--resume", <file>])`. Same process, so the shells stay its children; the new image re-arms the lock, adopts the listening socket, and rebuilds each `SessionHost` around its fd by replaying the snapshot into a fresh emulator (before the PTY is attached, so its replies go nowhere). A shell that exited in between is reaped on adoption. If `exec` fails the old image restores the flags and carries on. Only a `tethera` owned by you or root is accepted.
+
 ## Protocol
 
 Each frame is `[u32 length][u8 kind][payload]`. The kinds are:
@@ -128,6 +130,14 @@ Home is SwiftUI lists, plus `RetroComputerView`: an `SCNView` of the model in `V
 
 **Phone.** `PhoneServer` is a small HTTP/1.1 server on Network.framework, off until it's turned on. It binds the Tailscale address (100.64.0.0/10, found with `getifaddrs`), or every interface for "Local network". The page (`PhoneDashboard`, plain HTML and JS) is public; everything under `/api` needs `Authorization: Bearer <pairing token>`. The token reaches the phone in the URL's fragment (the QR code), which browsers never send to a server, and the page keeps it in `localStorage`. `GET /api/state` lists agents and pending approvals; `POST /api/approvals/<id>/<allow|deny>` answers through `ApprovalCenter`; `POST /api/sessions/<id>/reply` types one line into a session only when its agent is asking a question (not a permission prompt, not a shell). **Push** (`PushNotifier`) posts ntfy's JSON format to `ntfy.sh` or your own server on a random topic, only after two minutes without keyboard or mouse input. Its Allow and Deny buttons are one-time links (`/a/<nonce>`) for that approval, so the pairing token never passes through ntfy.
 
+**Policies.** `ApprovalPolicies` (TetheraKit) reads `TETHERA_HOME/policies.json` and the team's copy, and `tethera hook claude` applies them to a `PermissionRequest` before asking the app, so a rule works with the app closed. Team rules come first; the first match decides; `ask` or no match asks you. Globs use `fnmatch`, `/…/` a regex. An allow rule is skipped for a shell command containing `;` `&` `|` `` ` `` `$(` `>` `<` or a newline. Decisions made by a rule are journaled by the CLI itself; `JournalFile` appends each line in one `O_APPEND` write, so the CLI and the app never interleave.
+
+**Teams.** `TeamSync` drives `gh api` (your login, no token in Tethera). Each member publishes one orphan commit to `refs/heads/tethera/members/<login>`, force-updated (tree → commit → ref): `status.json` (agent sessions, states, costs for 30 days) and `audit/YYYY-MM.jsonl` (this month's approvals and budget events). It publishes when its status changes, at most every 30 s, and every 10 minutes regardless. It reads members' branches (every 30 s while the board is open, otherwise every 2 minutes) and `policies.json` from the default branch into `TETHERA_HOME/team/`. `TeamBackend` is the seam tests replace with an in-memory GitHub.
+
+**Costs and audit.** `CostReport` turns the journal's cost events into spend per day, agent and repository (growth of each conversation's running total, as `Journal.spend` does). The Costs pane is Swift Charts, one series in ink. The Audit pane reads the journal (or members' audit files) and exports CSV or JSON.
+
+**Suggestions.** `PromptLine` follows what's typed at the prompt from OSC 133 marks (`A` starts a fresh line, `C` means a command runs) and the keys sent; anything it can't follow (arrows, Tab, pastes) makes the line unknown until the next prompt, and nothing is suggested. `CompletionEngine` offers the newest history entry with that prefix (`~/.zsh_history`, `~/.bash_history`, and what you run in Tethera) as ghost text, and for ⌃Space: history's commands, built-in specs (`CompletionSpecs`), PATH, files, git branches read from `.git`, npm scripts and make targets. Because SwiftTerm's Metal renderer draws its own cursor and doesn't report it, each terminal feeds a small headless `Terminal` the same bytes to know where the cursor is; ghost text only shows when nothing follows the cursor. Off in agent sessions, remote sessions and while scrolled back.
+
 A custom `TETHERA_HOME` also gets its own defaults suite (`AppDefaults`), so test runs never touch the layout or preferences of the Tethera you use.
 
 ## Building and releasing
@@ -141,6 +151,8 @@ make app      # dist/Tethera.app + dist/Tethera-macOS.dmg
 `scripts/render_icon.sh icon` regenerates the app icon set, the bundled brand icon and the website icons from the 3D model; `preview <png>` renders a contact sheet at every size.
 
 `scripts/package.sh` builds arm64 and x86_64 separately with SwiftPM's native build system and merges them with `lipo`. It copies `tethera-cli` to `Contents/Helpers/tethera`, signs the helper and then the app, and creates the DMG.
+
+`scripts/bench.sh` measures a release build (daemon start, round trip, throughput, handover, launch) against a throwaway `TETHERA_HOME`. `scripts/demo_video.swift` makes the tour video from screenshots with AVFoundation.
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, packages and publishes to the GitHub Release. It publishes `Tethera-macOS.dmg` and its `.sha256`. The website is `docs/` on GitHub Pages, including `install.sh` (the one-line installer). A Homebrew cask lives in `Tsogbat/homebrew-tap`.
 

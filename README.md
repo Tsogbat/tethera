@@ -55,6 +55,20 @@ All of this comes from a journal Tethera keeps on your Mac (`~/Library/Applicati
   <img src="docs/assets/screens/v08-away.png" width="49%" alt="While you were away, on Home">
 </p>
 
+## Trust
+
+- **Updates that never restart your sessions.** After an update the daemon hands itself over to the new version in the same process: every shell, agent and screen carries on, and the app reconnects in a moment. (From 1.0 on; `tethera handover` does it by hand.)
+- **Approval policies.** Settings → Policies: rules that answer an agent's permission requests for you, like *allow* `npm test*`, *ask* before `git push --force`, *deny* anything with `deploy`. The first rule that matches decides, even with Tethera closed. An allow rule never covers a command that chains or pipes, so `npm test*` can't let `npm test && rm -rf ~` through. Presets get you started, and a "Try it" box shows which rule would answer.
+- **Costs** (⌥⌘C). What your agents spent each day, by agent and by repository, from their own cost reports.
+- **Audit log** (⌥⌘L). Every approval, who answered it (you, your phone, or a rule) and when, plus budget stops and sessions. Search it; export CSV or JSON.
+- **Teams.** A team is a private GitHub repository. Join it in Settings → Team, and the **Team board** (⌥⌘M) shows every member's agents live, the team's `policies.json` applies to everyone, and costs and the audit log have a Team view. Tethera talks to GitHub with your own `gh` login; each member shares agent states, costs and approvals on their own branch, never terminal output.
+- **Suggestions as you type.** Gray text from your shell history; → or End takes it. ⌃Space lists commands, subcommands and flags (git, npm, docker, gh, cargo, claude, codex and more), files, git branches, and npm and make scripts.
+
+<p align="center">
+  <img src="docs/assets/screens/v10-complete.png" width="49%" alt="Typing npm run, with a list of the project's scripts under the cursor">
+  <img src="docs/assets/screens/v10-costs.png" width="49%" alt="The Costs pane: spend per day as bars, and totals by agent and repository">
+</p>
+
 ## From anywhere
 
 - **Other Macs.** Settings → Remote → *Add Mac…*: give it an SSH address (a host from `~/.ssh/config`, `you@10.0.0.4`, or a Tailscale name). Its sessions show in the sidebar under its name, and you attach, type, rename and start new ones there as if they were local. Tethera runs `ssh <mac> tethera bridge` with your own ssh, so keys, config and Tailscale SSH just work.
@@ -66,7 +80,7 @@ All of this comes from a journal Tethera keeps on your Mac (`~/Library/Applicati
   <img src="docs/assets/screens/v09-phone.png" width="27%" alt="The phone dashboard: a permission request with Allow and Deny, a question with an answer field, and the agents list">
 </p>
 
-Remote Macs, the phone dashboard and push are part of **Pro**, and Settings → Plan shows what's in Free, Pro and Team. Every plan is free during the beta.
+Remote Macs, the phone dashboard and push are part of **Pro**, and Teams is **Team**; Settings → Plan shows what's in each. Every plan is free during the beta.
 
 ## Tools
 
@@ -161,7 +175,22 @@ tethera open src/app.ts              # open a file (or folder, or URL) beside th
 tethera changes                      # this session's live diff
 tethera mcp                          # the browser, as an MCP server for agents
 tethera bridge                       # this Mac's sessions over stdin/stdout (what another Mac runs over ssh)
+tethera handover                     # move the running daemon to this version; sessions keep running
 ```
+
+Reference: [the CLI](docs/cli.md), [hooks, approvals, policies and the journal](docs/hooks.md), [browser tools over MCP](docs/mcp.md).
+
+## Performance
+
+`scripts/bench.sh` measures a release build against a throwaway session store. On an M3 Pro:
+
+| What | Time |
+| --- | --- |
+| Daemon start (first command) | 41 ms |
+| Command round trip (median) | 13 ms |
+| `seq 1 2000000` through a session | 1.4 s |
+| Handover to a new daemon, 10 live sessions | 46 ms |
+| App launch to ready | 0.46 s |
 
 ## Install
 
@@ -197,9 +226,7 @@ Needs Xcode 26 (Swift 6.2). The icon is rendered from the same SceneKit model as
 
 ## What's next
 
-- Updates that never restart your sessions
-- Teams: a shared agent board, approval policies, a cost dashboard and an audit log
-- Autocompletion at your shell prompt
+Tell us in [issues](https://github.com/Tsogbat/tethera/issues) what you'd like Tethera to do next.
 
 ## Architecture
 

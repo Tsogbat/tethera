@@ -70,10 +70,11 @@ final class ApprovalCenter: ObservableObject {
     }
 
     /// Answers a request: from the inbox, a notification, or the phone.
-    func answer(_ id: UUID, _ answer: Answer) {
+    func answer(_ id: UUID, _ answer: Answer, from source: String = "you") {
         guard let continuation = waiting.removeValue(forKey: id) else { return }
         if let approval = pending.first(where: { $0.id == id }) {
-            Journal.shared.recordApproval(approval, decision: answer.rawValue, sessionName: DaemonClient.shared.session(approval.session)?.name)
+            Journal.shared.recordApproval(approval, decision: answer.rawValue, sessionName: DaemonClient.shared.session(approval.session)?.name,
+                                          by: source)
         }
         let session = pending.first { $0.id == id }?.session
         pending.removeAll { $0.id == id }
@@ -99,13 +100,8 @@ final class ApprovalCenter: ObservableObject {
     }
 
     static func summary(tool: String, input: [String: Any]) -> String {
-        for key in ["command", "file_path", "path", "url", "pattern", "notebook_path", "description"] {
-            if let value = input[key] as? String, !value.isEmpty {
-                return value.replacingOccurrences(of: "\n", with: " ⏎ ")
-            }
-        }
-        guard !input.isEmpty, let data = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys]) else { return tool }
-        return String(decoding: data, as: UTF8.self)
+        let subject = ApprovalPolicies.subject(tool: tool, input: input)
+        return subject.isEmpty ? tool : subject.replacingOccurrences(of: "\n", with: " ⏎ ")
     }
 
     // MARK: Notifications

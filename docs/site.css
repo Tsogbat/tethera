@@ -287,6 +287,8 @@ h2 {
 
 .sec-shot { margin: 40px 0 0; }
 .sec-shot-wide { grid-column: 1 / -1; }
+.sec-video video { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #111; }
+.sec-video figcaption { margin-top: 10px; font-size: 14px; color: var(--ink-3); }
 .sec-phone { grid-column: 9 / span 4; grid-row: 1 / span 2; align-self: center; margin: 0; }
 .sec-phone img { display: block; width: 100%; height: auto; border-radius: 28px; border: 1px solid var(--line); }
 

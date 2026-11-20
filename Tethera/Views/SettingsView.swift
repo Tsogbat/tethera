@@ -8,10 +8,12 @@ struct SettingsView: View {
             AppearanceSettings().tabItem { Label("Appearance", systemImage: "textformat") }
             AgentSettings().tabItem { Label("Agents", systemImage: "point.3.connected.trianglepath.dotted") }
             RemoteSettings().tabItem { Label("Remote", systemImage: "desktopcomputer") }
+            PolicySettings().tabItem { Label("Policies", systemImage: "checkmark.shield") }
+            TeamSettings().tabItem { Label("Team", systemImage: "person.3") }
             ShortcutSettings().tabItem { Label("Shortcuts", systemImage: "keyboard") }
             PlanSettings().tabItem { Label("Plan", systemImage: "seal") }
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 640, height: 480)
     }
 }
 
@@ -52,6 +54,8 @@ private struct GeneralSettings: View {
                 Toggle("Open to Home", isOn: $store.value.openHomeOnLaunch)
                 Toggle("Show what's playing in Music or Spotify", isOn: $store.value.showNowPlaying)
                 Toggle("Check for updates automatically", isOn: $store.value.checkForUpdates)
+                Toggle("Suggest commands as I type", isOn: $store.value.suggestCommands)
+                    .help("Gray text from your shell history; → or End takes it. ⌃Space lists commands, flags, files, branches and scripts.")
             } footer: {
                 Text("Sessions keep running when you quit Tethera (⌘Q). To stop them all, use Quit and End All Sessions (⌥⌘Q).")
                     .foregroundStyle(.secondary)

@@ -71,6 +71,10 @@ struct Preferences: Codable, Equatable {
     var pushEnabled = false
     var pushTopic: String?
     var pushServer: String?
+    /// The team's GitHub repository (owner/name), when you've joined one.
+    var teamRepository: String?
+    /// Ghost text from your history at the prompt, and the ⌃Space list.
+    var suggestCommands = true
 
     init() {}
 
@@ -107,6 +111,8 @@ struct Preferences: Codable, Equatable {
         pushEnabled = (try? c.decode(Bool.self, forKey: .pushEnabled)) ?? d.pushEnabled
         pushTopic = try? c.decodeIfPresent(String.self, forKey: .pushTopic)
         pushServer = try? c.decodeIfPresent(String.self, forKey: .pushServer)
+        teamRepository = try? c.decodeIfPresent(String.self, forKey: .teamRepository)
+        suggestCommands = (try? c.decode(Bool.self, forKey: .suggestCommands)) ?? d.suggestCommands
     }
 }
 

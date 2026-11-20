@@ -74,6 +74,9 @@ enum KeyBindings {
         Command(id: "transcript", title: "Transcript", binding: KeyBinding("t", option: true)),
         Command(id: "git", title: "Git", binding: KeyBinding("g", option: true)),
         Command(id: "brew", title: "Homebrew", binding: KeyBinding("b", option: true)),
+        Command(id: "board", title: "Team board", binding: KeyBinding("m", option: true)),
+        Command(id: "costs", title: "Costs", binding: KeyBinding("c", option: true)),
+        Command(id: "audit", title: "Audit log", binding: KeyBinding("l", option: true)),
         Command(id: "inspector", title: "Inspector", binding: KeyBinding("i", option: true)),
         Command(id: "rename", title: "Rename session", binding: KeyBinding("r", shift: true)),
     ]

@@ -169,6 +169,10 @@ private struct ApprovalsSidebarRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { Workspace.shared.showApprovals() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Approvals, \(count) waiting")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { Workspace.shared.showApprovals() }
     }
 }
 
@@ -203,6 +207,10 @@ private struct HomeSidebarRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { Workspace.shared.showHome() }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Home")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { Workspace.shared.showHome() }
     }
 }
 
@@ -257,6 +265,19 @@ struct SessionRow: View {
         .onTapGesture(count: 2) { startRename() }
         .onTapGesture { workspace.show(session.id) }
         .contextMenu { menu }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction { workspace.show(session.id) }
+        .accessibilityAction(named: "Rename") { startRename() }
+        .accessibilityAction(named: "End Session") { SessionActions.confirmEnd(session) }
+    }
+
+    /// "api, Claude Code · needs permission, on Studio".
+    private var accessibilityText: String {
+        var parts = [session.name, session.subtitle.text]
+        if let host = DaemonClient.shared.host(session.host) { parts.append("on \(host.name)") }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
