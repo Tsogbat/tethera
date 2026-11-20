@@ -37,7 +37,16 @@ extension SessionInfo {
     var needsYou: Bool { agent?.state == .needsInput }
     var isWorking: Bool { agent?.state == .working }
 
-    /// The second line in the sidebar.
+    /// The second line in the sidebar, where the glyph already shows which agent it is: just
+    /// what it's doing.
+    var stateLine: (text: String, tone: Tone) {
+        let full = subtitle
+        guard let agent else { return full }
+        let prefix = agent.kind.displayName + " · "
+        return full.text.hasPrefix(prefix) ? (String(full.text.dropFirst(prefix.count)), full.tone) : full
+    }
+
+    /// What the session is doing, agent included, for places with room for both.
     var subtitle: (text: String, tone: Tone) {
         if !isAlive { return ("restored · \(displayPath)", .dim) }
         if let agent {

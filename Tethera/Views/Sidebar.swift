@@ -201,10 +201,10 @@ struct SessionRow: View {
                         }
                     }
                     if session.agent != nil || worktrees.info(for: session.cwd) == nil {
-                        Text(session.subtitle.text)
-                            .font(TypeScale.ui(11, session.subtitle.tone.weight))
-                            .foregroundStyle(session.subtitle.tone.color(theme))
-                            .truncationMode(.middle)
+                        Text(session.stateLine.text)
+                            .font(TypeScale.ui(11, session.stateLine.tone.weight))
+                            .foregroundStyle(session.stateLine.tone.color(theme))
+                            .truncationMode(session.agent == nil ? .middle : .tail)
                     }
                 }
                 .foregroundStyle(theme.text2.color)
@@ -219,12 +219,6 @@ struct SessionRow: View {
             RoundedRectangle(cornerRadius: Metrics.panelRadius)
                 .fill(isSelected ? theme.raised.color : (hovering ? theme.raised.color.opacity(0.5) : .clear))
         )
-        .overlay(alignment: .leading) {
-            // A 2pt bone edge marks a session waiting on you, even when it's selected.
-            if session.needsYou {
-                Capsule().fill(theme.accent.color).frame(width: 2, height: 18).offset(x: -1)
-            }
-        }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(count: 2) { startRename() }

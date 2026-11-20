@@ -103,7 +103,7 @@ window.TETHERA_SHOTS = {
   <div class="hero-pin">
     <div class="wrap hero-copy" data-hero-copy>
       <h1 id="hero-title">The terminal for your AI&nbsp;agents.</h1>
-      <p class="hero-sub">Run Claude Code, Codex and the rest in sessions that keep going when you quit — and see at a glance which one needs&nbsp;you.</p>
+      <p class="hero-sub">Run Claude Code, Codex and the rest in sessions that keep going when you quit, and see at a glance which one needs&nbsp;you.</p>
       <div class="cta">
         <a class="btn btn-lg" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
@@ -125,24 +125,23 @@ window.TETHERA_SHOTS = {
       </div>
     </div>
 
-    <img class="hero-still" data-still alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard." width="2400" height="1499">
+    <img class="hero-still" data-still src="assets/hero-still.png" loading="lazy" decoding="async" alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard." width="2400" height="1499">
     <noscript><img class="hero-still is-on" src="assets/hero-still.png" alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard."></noscript>
 
-    <div class="hero-shot" data-hero-shot><img data-shot="hero" decoding="async" alt=""></div>
+    <div class="hero-shot" data-hero-shot><img data-shot="hero" src="assets/screens/v05-hero.png" width="2400" height="1568" decoding="async" alt="Tethera’s Home: a small 3D computer showing one agent needs you, above lists to start an agent, recent folders, connected agents and running sessions."></div>
     <p class="cue" data-cue aria-hidden="true"><span>Scroll</span></p>
   </div>
 </section>
 
 <!-- Shown instead of the zoom when motion is reduced or 3D isn't available -->
-<figure class="hero-figure wrap"><img data-shot="hero" loading="lazy" decoding="async" alt=""></figure>
+<figure class="hero-figure wrap"><img data-shot="hero" src="assets/screens/v05-hero.png" width="2400" height="1568" loading="lazy" decoding="async" alt="Tethera’s Home: a small 3D computer showing one agent needs you, above lists to start an agent, recent folders, connected agents and running sessions."></figure>
 
 <!-- ================= 01 Sessions ================= -->
 <section class="sec" id="sessions" aria-labelledby="sessions-title">
   <div class="wrap grid">
     <div class="sec-head">
-      <p class="eyebrow"><span>01</span>Sessions that persist</p>
       <h2 id="sessions-title">Quit the app. Your agents keep working.</h2>
-      <p class="lede">Every session lives in a small background daemon, not in the window. Quit Tethera and your shells — and the agents running in them — carry&nbsp;on.</p>
+      <p class="lede">Every session lives in a small background daemon, not in the window. Quit Tethera, and your shells and the agents running in them carry&nbsp;on.</p>
     </div>
     <div class="prop">
       <div class="prop-slot" data-prop="palette" aria-hidden="true"></div>
@@ -151,7 +150,7 @@ window.TETHERA_SHOTS = {
     <ul class="rows">
       <li><span class="k">Quit</span><p><kbd>⌘Q</kbd> closes the window. Open Tethera again and every session is exactly where you left it. <kbd>⌥⌘Q</kbd> ends them all.</p></li>
       <li><span class="k">Restart</span><p>After a reboot, sessions come back with their history and folder.</p></li>
-      <li><span class="k">SSH</span><p><code>tethera attach</code> picks up a running session from any terminal — over SSH too.</p></li>
+      <li><span class="k">SSH</span><p><code>tethera attach</code> picks up a running session from any terminal, over SSH too.</p></li>
     </ul>
   </div>
 </section>
@@ -160,9 +159,8 @@ window.TETHERA_SHOTS = {
 <section class="sec sec-flip" id="agents" aria-labelledby="agents-title">
   <div class="wrap grid">
     <div class="sec-head">
-      <p class="eyebrow"><span>02</span>Agent-aware</p>
       <h2 id="agents-title">Know which agent needs you.</h2>
-      <p class="lede">The sidebar shows which agent runs where and what it’s doing right now. When one needs you, you hear about it — even with Tethera in the&nbsp;background.</p>
+      <p class="lede">The sidebar shows which agent runs where and what it’s doing right now. When one needs you, you hear about it, even with Tethera in the&nbsp;background.</p>
     </div>
     <div class="prop">
       <div class="prop-slot" data-prop="overview" aria-hidden="true"></div>
@@ -179,7 +177,7 @@ window.TETHERA_SHOTS = {
       <ul class="rows">
         <li><span class="k">Notify</span><p>A notification and a Dock badge when an agent needs you. <kbd>⇧⌘U</kbd> jumps straight&nbsp;there.</p></li>
       </ul>
-      <figure class="sec-shot" data-shot-figure="agents"><img data-shot="agents" loading="lazy" decoding="async" alt=""></figure>
+      <figure class="sec-shot" data-shot-figure="agents"><img data-shot="agents" src="assets/screens/v05-overview.png" width="2400" height="1568" loading="lazy" decoding="async" alt="The Agents overview: every session in one table, sorted by what needs you."></figure>
     </div>
   </div>
 </section>
@@ -188,14 +186,13 @@ window.TETHERA_SHOTS = {
 <section class="sec" id="every-agent" aria-labelledby="every-title">
   <div class="wrap grid">
     <div class="sec-head sec-head-wide">
-      <p class="eyebrow"><span>03</span>Every agent you use</p>
       <h2 id="every-title">Bring the agents you already&nbsp;use.</h2>
     </div>
     <ul class="marks" aria-label="Supported agents">
       <li>Claude Code</li><li>Codex</li><li>OpenCode</li><li>Hermes</li><li>Gemini</li><li>Antigravity</li><li>Ollama</li>
     </ul>
     <ul class="rows rows-wide">
-      <li><span class="k">Start</span><p>Launch any of them from <b>+</b> or from Home. They run with your own logins — no API keys, no&nbsp;account.</p></li>
+      <li><span class="k">Start</span><p>Launch any of them from <b>+</b> or from Home. They run with your own logins: no API keys, no&nbsp;account.</p></li>
       <li><span class="k">Connect</span><p>Settings → Agents adds hooks so Tethera sees tool calls, permission requests and finished turns. Every change is shown as a diff first, backed up, and&nbsp;reversible.</p></li>
       <li><span class="k">Local</span><p>Ollama runs Claude Code, Codex or OpenCode on your local models with <code>ollama&nbsp;launch</code>.</p></li>
     </ul>
@@ -206,7 +203,6 @@ window.TETHERA_SHOTS = {
 <section class="sec" id="home" aria-labelledby="home-title">
   <div class="wrap grid">
     <div class="sec-head">
-      <p class="eyebrow"><span>04</span>Home <em>New in 0.5</em></p>
       <h2 id="home-title">Everything starts at&nbsp;Home.</h2>
       <p class="lede">One quiet screen to start any agent, reopen a recent folder, see who’s running, and check which integrations are&nbsp;connected.</p>
     </div>
@@ -220,7 +216,7 @@ window.TETHERA_SHOTS = {
       <li><span class="k">Running</span><p>Who’s working, who’s waiting, who needs you.</p></li>
       <li><span class="k">Connected</span><p>Which agent integrations are on.</p></li>
     </ul>
-    <figure class="sec-shot sec-shot-wide" data-shot-figure="home"><img data-shot="home" loading="lazy" decoding="async" alt=""></figure>
+    <figure class="sec-shot sec-shot-wide" data-shot-figure="home"><img data-shot="home" src="assets/screens/v05-light.png" width="2400" height="1568" loading="lazy" decoding="async" alt="Home: start an agent, recent folders, running sessions and connected integrations."></figure>
   </div>
 </section>
 
@@ -228,7 +224,6 @@ window.TETHERA_SHOTS = {
 <section class="sec sec-flip" id="terminal" aria-labelledby="terminal-title">
   <div class="wrap grid">
     <div class="sec-head">
-      <p class="eyebrow"><span>05</span>A real terminal</p>
       <h2 id="terminal-title">Your shell, exactly as you left&nbsp;it.</h2>
       <p class="lede">Your own zsh or bash, unchanged, in GPU-rendered panes. TUIs, <code>vim</code>, <code>ssh</code> and Nerd Font prompts just&nbsp;work.</p>
     </div>
@@ -241,7 +236,6 @@ window.TETHERA_SHOTS = {
       <li><span class="k">Icons</span><p>Nerd Font prompt icons work out of the box.</p></li>
       <li><span class="k">Fonts</span><p>Geist Mono, IBM Plex Mono and JetBrains Mono, bundled.</p></li>
     </ul>
-    <figure class="sec-shot sec-shot-wide" data-shot-figure="terminal"><img data-shot="terminal" loading="lazy" decoding="async" alt=""></figure>
   </div>
 </section>
 
@@ -249,15 +243,11 @@ window.TETHERA_SHOTS = {
 <section class="sec" id="cli" aria-labelledby="cli-title">
   <div class="wrap grid">
     <div class="sec-head sec-head-wide">
-      <p class="eyebrow"><span>06</span>Command line</p>
       <h2 id="cli-title">Your sessions, from any&nbsp;shell.</h2>
       <p class="lede">The <code>tethera</code> command talks to the same daemon as the app, so a session you start in one place is there in the&nbsp;other.</p>
     </div>
     <div class="code-block">
-      <pre><code><span class="p">$</span> tethera list                      <span class="c"># sessions, their agents and state</span>
-<span class="p">$</span> tethera new --name api --attach   <span class="c"># a new session, attached here</span>
-<span class="p">$</span> tethera attach api                <span class="c"># from any terminal — over SSH too</span>
-<span class="p">$</span> tethera close api</code></pre>
+      <pre><code><span class="ln"><span class="p">$</span> tethera list                      <span class="c"># sessions, their agents and state</span></span><span class="ln"><span class="p">$</span> tethera new --name api --attach   <span class="c"># a new session, attached here</span></span><span class="ln"><span class="p">$</span> tethera attach api                <span class="c"># from any terminal, over SSH too</span></span><span class="ln"><span class="p">$</span> tethera close api</span></code></pre>
     </div>
     <p class="note-line">Linked at <code>~/.local/bin/tethera</code> once you connect an agent. <kbd>⌃\</kbd> detaches.</p>
   </div>
@@ -267,13 +257,12 @@ window.TETHERA_SHOTS = {
 <section class="sec" id="tools" aria-labelledby="tools-title">
   <div class="wrap grid">
     <div class="sec-head sec-head-wide">
-      <p class="eyebrow"><span>07</span>Tools <em>New in 0.6 and 0.7</em></p>
       <h2 id="tools-title">See the code, the app, and the files, right next to the&nbsp;agent.</h2>
       <p class="lede">The things you used to leave the terminal for open as panes beside the session that needs them.</p>
     </div>
     <ul class="rows rows-wide rows-next">
       <li><span class="k">Changes</span><p>The repo, live. What the agent just touched comes first; select a file for its diff. <kbd>⇧⌘E</kbd></p></li>
-      <li><span class="k">Preview</span><p>A dev server starts and a <b>Preview :5173</b> button appears. One click opens the app beside the session.</p></li>
+      <li><span class="k">Preview</span><p>A dev server starts and a <b class="nowrap">Preview :5173</b> button appears. One click opens the app beside the session.</p></li>
       <li><span class="k">Browser</span><p>Agents drive it over MCP (<code>tethera mcp</code>) to open, read, click and take screenshots while you watch.</p></li>
       <li><span class="k">Editor</span><p>Your terminal font, line numbers, highlighting. Reloads when an agent edits the file you have open.</p></li>
       <li><span class="k">Viewers</span><p>Images, PDFs, video and Markdown. Open anything with <kbd>⌘O</kbd> or <code>tethera open</code>.</p></li>
@@ -282,9 +271,9 @@ window.TETHERA_SHOTS = {
       <li><span class="k">Approvals</span><p>Claude asks to run something; you get Allow and Deny in a notification and the inbox. <kbd>⌥⌘A</kbd></p></li>
       <li><span class="k">Git &amp; Brew</span><p>Branches, commits, stashes and history; outdated, installs and services, without remembering commands.</p></li>
     </ul>
-    <figure class="sec-shot sec-shot-wide" data-shot-figure="preview"><img data-shot="preview" loading="lazy" decoding="async" alt=""></figure>
-    <figure class="sec-shot sec-shot-wide" data-shot-figure="changes"><img data-shot="changes" loading="lazy" decoding="async" alt=""></figure>
-    <figure class="sec-shot sec-shot-wide" data-shot-figure="editor"><img data-shot="editor" loading="lazy" decoding="async" alt=""></figure>
+    <figure class="sec-shot sec-shot-wide" data-shot-figure="preview"><img data-shot="preview" src="assets/screens/v06-preview.png" width="2400" height="1568" loading="lazy" decoding="async" alt="A dev server running in a session, with its page open in a preview pane beside it."></figure>
+    <figure class="sec-shot sec-shot-wide" data-shot-figure="changes"><img data-shot="changes" src="assets/screens/v06-changes.png" width="2400" height="1568" loading="lazy" decoding="async" alt="The Changes pane: the files an agent created, newest first, and the selected file’s diff."></figure>
+    <figure class="sec-shot sec-shot-wide" data-shot-figure="editor"><img data-shot="editor" src="assets/screens/v06-editor.png" width="2400" height="1568" loading="lazy" decoding="async" alt="The editor beside a terminal: app.js with line numbers and syntax highlighting."></figure>
   </div>
 </section>
 

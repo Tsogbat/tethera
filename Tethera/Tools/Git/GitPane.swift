@@ -207,7 +207,8 @@ struct GitPane: View {
                 Button("Commit Staged") { Task { await model.commit(all: false) } }
                     .buttonStyle(.plain).font(TypeScale.ui(12, .medium)).foregroundStyle(theme.text.color)
             }
-            .disabled(model.busy != nil)
+            .disabled(model.busy != nil || (model.status?.files.isEmpty ?? true))
+            .opacity((model.status?.files.isEmpty ?? true) ? 0.45 : 1)
         }
     }
 

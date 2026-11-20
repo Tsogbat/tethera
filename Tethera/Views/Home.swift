@@ -134,7 +134,7 @@ struct HomeView: View {
                 }
             }
             if detector.status(for: .ollama)?.isInstalled == true {
-                HomeRow(glyph: .ollama, title: "Ollama", detail: "local models", shortcut: "▸") {
+                HomeRow(glyph: .ollama, title: "Ollama", detail: "local models", mark: .more) {
                     var items = [AgentKind.claude, .codex, .opencode].map { kind in
                         ("\(kind.displayName) on a local model", { workspace.newSession(command: "ollama launch \(kind.rawValue)") })
                     }
@@ -176,7 +176,7 @@ struct HomeView: View {
                 let isConnected = connected[target] ?? false
                 HomeRowLabel(glyph: target.kind, title: target.kind.displayName,
                              detail: isConnected ? "connected" : nil,
-                             trailing: isConnected ? "●" : "○", dimmed: !isConnected)
+                             mark: isConnected ? .filled : .open, dimmed: !isConnected)
             }
             HomeRow(title: "Connect agents…", detail: "Settings → Agents", dimmed: true) { SettingsOpener.open() }
         }
@@ -230,22 +230,27 @@ private struct HomeRow: View {
     let title: String
     var detail: String?
     var shortcut: String?
+    var mark: HomeRowLabel.Mark?
     var dimmed = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HomeRowLabel(glyph: glyph, title: title, detail: detail, trailing: shortcut, dimmed: dimmed)
+            HomeRowLabel(glyph: glyph, title: title, detail: detail, trailing: shortcut, mark: mark, dimmed: dimmed)
         }
         .buttonStyle(HomeRowStyle())
     }
 }
 
 private struct HomeRowLabel: View {
+    /// A drawn marker at the end of a row: connected, not connected, or "opens a menu".
+    enum Mark { case filled, open, more }
+
     var glyph: AgentKind?
     let title: String
     var detail: String?
     var trailing: String?
+    var mark: Mark?
     var dimmed = false
     @Environment(\.theme) private var theme
 
@@ -271,6 +276,12 @@ private struct HomeRowLabel: View {
                 Text(trailing)
                     .font(TypeScale.mono(10.5))
                     .foregroundStyle(theme.text3.color)
+            }
+            switch mark {
+            case .filled: Circle().fill(theme.text2.color).frame(width: 6, height: 6)
+            case .open: Circle().strokeBorder(theme.text3.color, lineWidth: 1).frame(width: 6, height: 6)
+            case .more: Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(theme.text3.color)
+            case nil: EmptyView()
             }
         }
         .frame(height: 30)
@@ -441,7 +452,11 @@ private struct GetStarted: View {
     private func step(_ number: Int, _ title: String, _ detail: String, done: Bool, action: (String, () -> Void)?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Text(done ? "✓" : "\(number)").font(TypeScale.mono(11, .semibold)).foregroundStyle(done ? theme.text2.color : theme.text.color)
+                if done {
+                    Image(systemName: "checkmark").font(.system(size: 9.5, weight: .bold)).foregroundStyle(theme.text2.color)
+                } else {
+                    Text("\(number)").font(TypeScale.ui(11.5, .semibold)).foregroundStyle(theme.text.color).monospacedDigit()
+                }
                 Text(title).font(TypeScale.ui(12.5, .semibold)).foregroundStyle(done ? theme.text2.color : theme.text.color)
             }
             Text(detail).font(TypeScale.ui(11.5)).foregroundStyle(theme.text3.color).fixedSize(horizontal: false, vertical: true)

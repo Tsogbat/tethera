@@ -31,7 +31,7 @@ struct ApprovalsPane: View {
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             VStack(spacing: 0) {
                                 ForEach(center.pending) { approval in
-                                    ApprovalRow(approval: approval, now: context.date)
+                                    ApprovalRow(approval: approval, now: context.date, isFirst: approval.id == center.pending.first?.id)
                                 }
                             }
                         }
@@ -66,6 +66,8 @@ struct ApprovalsPane: View {
 private struct ApprovalRow: View {
     let approval: ApprovalCenter.Approval
     let now: Date
+    /// Only the oldest request answers to ⌘↩.
+    let isFirst: Bool
     @ObservedObject private var client = DaemonClient.shared
     @Environment(\.theme) private var theme
 
@@ -94,7 +96,7 @@ private struct ApprovalRow: View {
                         .background(RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(theme.text.color))
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(.return, modifiers: .command)
+                .keyboardShortcut(isFirst ? KeyboardShortcut(.return, modifiers: .command) : nil)
                 Button { ApprovalCenter.shared.answer(approval.id, .deny) } label: {
                     Text("Deny").font(TypeScale.ui(12, .semibold)).foregroundStyle(theme.text.color)
                         .padding(.horizontal, 14).frame(height: 26)

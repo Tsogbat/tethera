@@ -138,7 +138,10 @@ struct BrewPane: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ToolHeader(paneID: paneID, icon: "mug", title: "Homebrew", detail: model.loading ? "loading…" : nil) {
+            ToolHeader(paneID: paneID, icon: "mug", title: "Homebrew", detail: nil) {
+                if model.tab == .outdated && !model.outdated.isEmpty {
+                    action("Upgrade All") { model.runInSession("upgrade") }
+                }
                 Segments(options: BrewModel.Tab.allCases.map { ($0, $0.rawValue) }, selection: $model.tab)
                 IconButton(systemName: "arrow.clockwise", help: "Refresh") { Task { await model.load() } }
             }
@@ -151,6 +154,13 @@ struct BrewPane: View {
                     .buttonStyle(.plain).font(TypeScale.ui(12, .semibold)).foregroundStyle(theme.text.color)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if model.loading && isEmpty {
+                // Homebrew can take a few seconds; say what's happening instead of an empty list.
+                VStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text(model.tab == .search ? "Searching…" : "Asking Homebrew…").font(TypeScale.ui(12)).foregroundStyle(theme.text3.color)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 content
             }
@@ -161,6 +171,15 @@ struct BrewPane: View {
         .onChange(of: client.sessions) { _, sessions in model.sessionsChanged(sessions) }
     }
 
+    private var isEmpty: Bool {
+        switch model.tab {
+        case .outdated: return model.outdated.isEmpty
+        case .installed: return model.installed.isEmpty
+        case .search: return model.results.isEmpty
+        case .services: return model.services.isEmpty
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
         switch model.tab {
@@ -168,9 +187,7 @@ struct BrewPane: View {
             list(model.outdated, empty: model.loading ? "" : "Everything is up to date.") { package in
                 Text("\(package.installed) → \(package.latest ?? "?")").font(TypeScale.mono(11)).foregroundStyle(theme.text2.color)
                 action("Upgrade") { model.runInSession("upgrade \(package.isCask ? "--cask " : "")\(package.name)") }
-            } footer: {
-                if !model.outdated.isEmpty { action("Upgrade All") { model.runInSession("upgrade") } }
-            }
+            } footer: { EmptyView() }
         case .installed:
             list(model.installed, empty: "") { package in
                 Text(package.installed).font(TypeScale.mono(11)).foregroundStyle(theme.text3.color)

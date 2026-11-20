@@ -192,7 +192,7 @@ struct PaneView: View {
                     }
                 }
                 .padding(.horizontal, 10)
-                .frame(height: 26)
+                .frame(height: Metrics.paneHeaderHeight)
                 .background(theme.surface.color)
                 .overlay(alignment: .top) {
                     Rectangle().fill(isFocused ? theme.accent.color.opacity(0.6) : .clear).frame(height: 1)
@@ -241,7 +241,7 @@ struct PaneView: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 26)
+        .frame(height: Metrics.paneHeaderHeight)
         .background(theme.surface.color)
         .overlay(alignment: .top) {
             Rectangle().fill(isFocused ? theme.accent.color.opacity(0.6) : .clear).frame(height: 1)
@@ -287,7 +287,8 @@ struct StatusBar: View {
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let needsYou = client.sessions.filter(\.needsYou)
+        // Sessions with a pending approval are counted once, under approvals.
+        let needsYou = client.sessions.filter { $0.needsYou && !approvals.hasPending(for: $0.id) }
         let working = client.sessions.filter(\.isWorking)
         HStack(spacing: 16) {
             if !needsYou.isEmpty {

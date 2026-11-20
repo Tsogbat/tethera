@@ -148,7 +148,7 @@ struct ToolHeader<Actions: View>: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 30)
+        .frame(height: Metrics.paneHeaderHeight)
         .background(theme.surface.color)
         .overlay(alignment: .top) {
             Rectangle().fill(isFocused && workspace.panes.count > 1 ? theme.accent.color.opacity(0.6) : .clear).frame(height: 1)
