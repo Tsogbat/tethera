@@ -71,6 +71,9 @@ final class ApprovalCenter: ObservableObject {
     /// Answers a request: from the inbox, a notification, or the phone.
     func answer(_ id: UUID, _ answer: Answer) {
         guard let continuation = waiting.removeValue(forKey: id) else { return }
+        if let approval = pending.first(where: { $0.id == id }) {
+            Journal.shared.recordApproval(approval, decision: answer.rawValue, sessionName: DaemonClient.shared.session(approval.session)?.name)
+        }
         let session = pending.first { $0.id == id }?.session
         pending.removeAll { $0.id == id }
         Self.notifications?.removeDeliveredNotifications(withIdentifiers: [id.uuidString])

@@ -145,6 +145,12 @@ final class Workspace: ObservableObject {
         }
     }
 
+    /// What the focused session's agent did, step by step (⌥⌘T).
+    func showTranscript() {
+        guard let id = focusedSessionID ?? client.sessions.first(where: { $0.agent != nil })?.id else { return }
+        open(.transcript(id), besideSession: id)
+    }
+
     func showBrew() {
         open(.brew, besideSession: focusedSessionID)
     }
@@ -296,7 +302,7 @@ final class Workspace: ObservableObject {
         // left, the pane closes, or the last pane turns into Home.
         var changed = false
         for index in panes.indices.reversed() {
-            if case .changes(let id) = panes[index].content, !ids.contains(id) {
+            if let id = panes[index].content.toolSession, !ids.contains(id) {
                 if panes.count > 1 { panes.remove(at: index) } else { panes[index].content = .home }
                 changed = true
                 continue
@@ -353,7 +359,7 @@ final class Workspace: ObservableObject {
             switch pane.content {
             case .home, .approvals, .brew: return true
             case .git(let root): return fileExists(root)
-            case .session(let id), .changes(let id): return ids.contains(id)
+            case .session(let id), .changes(let id), .transcript(let id): return ids.contains(id)
             case .file(let path): return fileExists(path)
             case .browser(let id): return tabs.contains(id)
             }
@@ -377,17 +383,27 @@ enum PaneContent: Codable, Equatable, Hashable {
     case git(String)
     /// Homebrew: outdated, installed, search, services.
     case brew
+    /// What a session's agent did, step by step.
+    case transcript(UUID)
 
     var sessionID: UUID? {
         if case .session(let id) = self { return id }
         return nil
     }
 
+    /// The session a tool pane belongs to (it closes with the session).
+    var toolSession: UUID? {
+        switch self {
+        case .changes(let id), .transcript(let id): return id
+        default: return nil
+        }
+    }
+
     /// Tools are everything that isn't Home or a terminal.
     var isTool: Bool {
         switch self {
         case .home, .session: return false
-        case .file, .browser, .changes, .approvals, .git, .brew: return true
+        case .file, .browser, .changes, .approvals, .git, .brew, .transcript: return true
         }
     }
 }

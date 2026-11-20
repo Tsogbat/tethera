@@ -54,8 +54,37 @@ private struct GeneralSettings: View {
                 Text("Sessions keep running when you quit Tethera (⌘Q). To stop them all, use Quit and End All Sessions (⌥⌘Q).")
                     .foregroundStyle(.secondary)
             }
+            Section {
+                LabeledContent("Daily spend limit") {
+                    HStack(spacing: 6) {
+                        Text("$")
+                        TextField("off", value: $store.value.dailyBudgetUSD, format: .number.precision(.fractionLength(0...2)))
+                            .frame(width: 70)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                Toggle("Pause working agents at the limit", isOn: $store.value.pauseAgentsOverBudget)
+                    .disabled(store.value.dailyBudgetUSD == nil)
+                LabeledContent("Warn at context use") {
+                    HStack(spacing: 6) {
+                        TextField("off", value: $store.value.contextAlertPercent, format: .number.precision(.fractionLength(0)))
+                            .frame(width: 50)
+                            .multilineTextAlignment(.trailing)
+                        Text("%")
+                    }
+                }
+            } header: {
+                Text("Budgets")
+            } footer: {
+                Text(budgetFooter).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+    }
+
+    private var budgetFooter: String {
+        let spent = String(format: "$%.2f", BudgetWatcher.shared.todaySpend)
+        return "Spent today: \(spent), from agents' own cost reports (Claude Code's status line; connect it in Agents). Pausing sends Escape, which stops the current turn without quitting the agent. Leave a field empty to turn it off."
     }
 
     private func chooseFolder() {
@@ -89,6 +118,21 @@ private struct AppearanceSettings: View {
                     Text("Match appearance (Graphite / Paper)").tag("auto")
                     Divider()
                     ForEach(TerminalPalette.named, id: \.id) { Text($0.name).tag($0.id) }
+                    if !store.value.customPalettes.isEmpty {
+                        Divider()
+                        ForEach(store.value.customPalettes) { Text($0.name).tag($0.id) }
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Import Theme…") { _ = ThemeImport.chooseAndImport() }
+                        .help("An iTerm2 color preset (.itermcolors) or a Ghostty theme file")
+                    if store.value.customPalettes.contains(where: { $0.id == store.value.terminalPalette }) {
+                        Button("Remove") {
+                            store.value.customPalettes.removeAll { $0.id == store.value.terminalPalette }
+                            store.value.terminalPalette = "auto"
+                        }
+                    }
                 }
             }
             Section {
@@ -114,18 +158,22 @@ private struct AppearanceSettings: View {
 }
 
 private struct ShortcutSettings: View {
-    private let shortcuts: [(String, String)] = [
-        ("⌘T", "New shell session"), ("⌘K  ⌘P", "Command palette"), ("⇧⌘A", "Agents overview"),
-        ("⇧⌘U", "Go to the session that needs you"), ("⌘]  ⌘[", "Next / previous session"), ("⌘1 … ⌘9", "Session by position"),
-        ("⌘D  ⇧⌘D", "Split right / down"), ("⌘W", "Close pane (the session keeps running)"),
-        ("⌥⌘W", "End session"), ("⇧⌘R", "Rename session"), ("⌥⌘I", "Inspector"),
-        ("⌘+  ⌘-  ⌘0", "Font size"), ("⌘Q", "Quit — sessions keep running"), ("⌥⌘Q", "Quit and end all sessions"),
+    /// Shortcuts that stay as they are (system conventions, or a series like ⌘1…⌘9).
+    private let fixed: [(String, String)] = [
+        ("⌘]  ⌘[", "Next / previous session"), ("⌘1 … ⌘9", "Session by position"), ("⌥⌘1 … ⌥⌘4", "New agent session"),
+        ("⌘W", "Close pane (the session keeps running)"), ("⌥⌘W", "End session"),
+        ("⌘+  ⌘-  ⌘0", "Font size"), ("⌘Q", "Quit, sessions keep running"), ("⌥⌘Q", "Quit and end all sessions"),
     ]
 
     var body: some View {
         Form {
             Section {
-                ForEach(shortcuts, id: \.0) { keys, action in
+                ForEach(KeyBindings.commands) { ShortcutRecorder(command: $0) }
+            } footer: {
+                Text("Click a shortcut, then press the new keys (with ⌘, ⌥ or ⌃). Escape cancels.").foregroundStyle(.secondary)
+            }
+            Section("Fixed") {
+                ForEach(fixed, id: \.0) { keys, action in
                     LabeledContent(action) { Text(keys).font(.system(.body, design: .monospaced)).foregroundStyle(.secondary) }
                 }
             }

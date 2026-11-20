@@ -191,6 +191,33 @@ public enum AgentIntegrations {
                     note: "Running Claude Code sessions pick this up when they restart.")
     }
 
+    /// Sets Claude Code's status line to Tethera's own, rendered from `format`. The status line
+    /// the user had (if it wasn't Tethera's) is kept on the side, as with the wrapper.
+    public static func statusLinePlan(format: String) -> Plan {
+        let file = Target.claude.configFile
+        let original = readJSON(file) ?? [:]
+        var json = original
+        var sideFiles: [URL: Data] = [:]
+        let existing = original["statusLine"] as? [String: Any]
+        if let existing, !isOurs(existing["command"] as? String ?? "") {
+            sideFiles[savedStatusLine] = (try? JSONSerialization.data(withJSONObject: existing, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        }
+        let quoted = "'" + format.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        json["statusLine"] = ["type": "command", "command": command("statusline claude --format \(quoted)"),
+                              "padding": (existing?["padding"] as? Int) ?? 0] as [String: Any]
+        return Plan(changes: [.init(file: file, before: render(readJSON(file)), after: render(json))], sideFiles: sideFiles,
+                    manualSteps: nil, note: "Claude Code shows the new status line on its next update.")
+    }
+
+    /// The format of Tethera's status line, if that's what Claude Code is using.
+    public static func currentStatusLineFormat() -> String? {
+        guard let command = (readJSON(Target.claude.configFile)?["statusLine"] as? [String: Any])?["command"] as? String,
+              isOurs(command), let range = command.range(of: "--format ") else { return nil }
+        var format = String(command[range.upperBound...])
+        if format.hasPrefix("'") && format.hasSuffix("'") { format = String(format.dropFirst().dropLast()) }
+        return format.replacingOccurrences(of: "'\\''", with: "'")
+    }
+
     // MARK: Codex
 
     private static func codexConnect() -> Plan {

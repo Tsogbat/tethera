@@ -11,15 +11,19 @@ struct AgentSettings: View {
     @State private var wrapStatusLine = true
     @State private var review: Review?
     @State private var error: String?
+    @State private var editingStatusLine = false
 
     struct Review: Identifiable {
         let target: AgentIntegrations.Target
         let connecting: Bool
         let plan: AgentIntegrations.Plan
         var browser = false
-        var id: String { "\(target.rawValue)-\(connecting)-\(browser)" }
+        /// A title for changes that aren't connecting or disconnecting (the status line).
+        var customTitle: String?
+        var id: String { "\(target.rawValue)-\(connecting)-\(browser)-\(customTitle ?? "")" }
         var title: String {
-            browser
+            if let customTitle { return customTitle }
+            return browser
                 ? "\(connecting ? "Add the browser to" : "Remove the browser from") \(AgentSettings.browserAgent(target).displayName)"
                 : "\(connecting ? "Connect" : "Disconnect") \(target.kind.displayName)"
         }
@@ -57,6 +61,14 @@ struct AgentSettings: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: reload)
+        .sheet(isPresented: $editingStatusLine) {
+            StatusLineEditor { plan in
+                editingStatusLine = false
+                DispatchQueue.main.async { review = Review(target: .claude, connecting: true, plan: plan, customTitle: "Change Claude Code's status line") }
+            } cancel: {
+                editingStatusLine = false
+            }
+        }
         .sheet(item: $review) { review in
             PlanReview(review: review) {
                 apply(review)
@@ -104,6 +116,9 @@ struct AgentSettings: View {
                 Toggle("Also show model, context and cost (wraps your status line; it keeps working unchanged)", isOn: $wrapStatusLine)
                     .font(.caption)
                     .disabled(connected[.claude] == true)
+                    .padding(.leading, 24)
+                Button("Design the status line…") { editingStatusLine = true }
+                    .controlSize(.small)
                     .padding(.leading, 24)
             }
         }
@@ -229,7 +244,7 @@ private struct PlanReview: View {
             HStack {
                 Spacer()
                 Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
-                Button(review.browser ? (review.connecting ? "Add" : "Remove") : (review.connecting ? "Connect" : "Disconnect"), action: confirm)
+                Button(review.customTitle != nil ? "Apply" : (review.browser ? (review.connecting ? "Add" : "Remove") : (review.connecting ? "Connect" : "Disconnect")), action: confirm)
                     .keyboardShortcut(.defaultAction)
                     .disabled(!review.plan.hasChanges)
             }

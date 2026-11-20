@@ -15,7 +15,7 @@ import TetheraKit
 ///     tethera changes                    show this session's live diff
 ///     tethera mcp                        the browser MCP server for agents (stdio)
 
-let version = "0.7.1"
+let version = "0.8.0"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 
@@ -245,11 +245,22 @@ case "title":
     exit(0)
 
 case "statusline":
-    // Claude Code's status line: report the JSON to Tethera, then run the user's own status line.
+    // Claude Code's status line: report the JSON to Tethera, then print a line. With
+    // --format, Tethera renders it; otherwise the user's own saved status line runs.
     let source = arguments.first ?? "claude"
     let payload = HookRelay.readStdin()
     HookRelay.forward(source: "\(source)-statusline", payload: payload)
-    HookRelay.runSavedStatusLine(for: source, input: payload)
+    if let flag = arguments.firstIndex(of: "--format"), arguments.count > flag + 1 {
+        let json = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any] ?? [:]
+        let format = arguments[flag + 1]
+        var branch: String?
+        if format.contains("{branch}"), let folder = (json["workspace"] as? [String: Any])?["current_dir"] as? String ?? json["cwd"] as? String {
+            branch = HookRelay.gitBranch(in: folder)
+        }
+        print(StatusLineFormat.render(format, values: StatusLineFormat.values(from: json, branch: branch)))
+    } else {
+        HookRelay.runSavedStatusLine(for: source, input: payload)
+    }
     exit(0)
 
 case "open", "changes":

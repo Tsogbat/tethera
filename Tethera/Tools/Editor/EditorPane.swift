@@ -78,10 +78,18 @@ struct DiffSheet: View {
 struct MonoText: NSViewRepresentable {
     let text: NSAttributedString
     let key: String
+    /// Prose and command output wrap; diffs and graphs keep their columns.
+    var wraps = false
     @Environment(\.theme) private var theme
 
     func makeNSView(context: Context) -> NSScrollView {
-        DiffText.makeScroll()
+        let scroll = DiffText.makeScroll()
+        if wraps, let textView = scroll.documentView as? NSTextView {
+            textView.isHorizontallyResizable = false
+            textView.textContainer?.widthTracksTextView = true
+            scroll.hasHorizontalScroller = false
+        }
+        return scroll
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {

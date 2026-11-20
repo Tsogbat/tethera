@@ -220,6 +220,9 @@ struct PaneView: View {
             case .brew:
                 BrewPane(paneID: pane.id)
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
+            case .transcript(let id):
+                TranscriptPane(sessionID: id, paneID: pane.id)
+                    .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })
             case .approvals:
                 ApprovalsPane(paneID: pane.id)
                     .simultaneousGesture(TapGesture().onEnded { workspace.focus(pane: pane.id) })

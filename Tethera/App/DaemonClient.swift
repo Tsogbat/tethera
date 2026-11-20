@@ -21,6 +21,10 @@ final class DaemonClient: ObservableObject {
 
     /// Receives every session update with the previous value (for notifications).
     var onUpdate: ((SessionInfo, SessionInfo?) -> Void)?
+    var onRemove: ((SessionInfo) -> Void)?
+    /// True while the first session list after connecting is delivered: those sessions
+    /// existed already, they didn't just start.
+    private(set) var deliveringInitialList = false
 
     private let ioQueue = DispatchQueue(label: "tethera.client", qos: .userInteractive)
     private var socket: FramedSocket?
@@ -113,8 +117,10 @@ final class DaemonClient: ObservableObject {
         case .sessions:
             let previous = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
             sessions = (message.sessions ?? []).sorted { $0.order < $1.order }
+            deliveringInitialList = !hasLoaded
             hasLoaded = true
             for session in sessions { onUpdate?(session, previous[session.id]) }
+            deliveringInitialList = false
             reattachSinks()
         case .created:
             guard let info = message.info else { return }
@@ -125,6 +131,7 @@ final class DaemonClient: ObservableObject {
             upsert(info)
         case .removed:
             guard let id = message.session else { return }
+            if let gone = sessions.first(where: { $0.id == id }) { onRemove?(gone) }
             sessions.removeAll { $0.id == id }
         case .error:
             NSLog("tethera daemon: \(message.message ?? "error")")

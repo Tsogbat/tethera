@@ -49,6 +49,16 @@ struct Preferences: Codable, Equatable {
     var checkForUpdates = true
     /// The first-run "Get started" strip on Home was dismissed.
     var dismissedGetStarted = false
+    /// Warn when agents' spend today passes this (USD); nil is off.
+    var dailyBudgetUSD: Double?
+    /// Also interrupt working agents at the daily budget.
+    var pauseAgentsOverBudget = false
+    /// Warn when a session's context use passes this percent; nil is off.
+    var contextAlertPercent: Double?
+    /// Terminal color themes imported from iTerm2 or Ghostty.
+    var customPalettes: [CustomPalette] = []
+    /// Shortcuts you changed, by command id (the rest keep their defaults).
+    var keyBindings: [String: KeyBinding] = [:]
 
     init() {}
 
@@ -72,6 +82,11 @@ struct Preferences: Codable, Equatable {
         showNowPlaying = (try? c.decode(Bool.self, forKey: .showNowPlaying)) ?? d.showNowPlaying
         checkForUpdates = (try? c.decode(Bool.self, forKey: .checkForUpdates)) ?? d.checkForUpdates
         dismissedGetStarted = (try? c.decode(Bool.self, forKey: .dismissedGetStarted)) ?? d.dismissedGetStarted
+        dailyBudgetUSD = try? c.decodeIfPresent(Double.self, forKey: .dailyBudgetUSD)
+        pauseAgentsOverBudget = (try? c.decode(Bool.self, forKey: .pauseAgentsOverBudget)) ?? d.pauseAgentsOverBudget
+        contextAlertPercent = try? c.decodeIfPresent(Double.self, forKey: .contextAlertPercent)
+        customPalettes = (try? c.decode([CustomPalette].self, forKey: .customPalettes)) ?? d.customPalettes
+        keyBindings = (try? c.decode([String: KeyBinding].self, forKey: .keyBindings)) ?? d.keyBindings
     }
 }
 
@@ -112,6 +127,7 @@ final class PreferencesStore: ObservableObject {
 
     var terminalPalette: TerminalPalette {
         if let named = TerminalPalette.named.first(where: { $0.id == value.terminalPalette }) { return named.palette }
+        if let custom = value.customPalettes.first(where: { $0.id == value.terminalPalette }) { return custom.palette }
         return isDark ? .graphite : .paper
     }
 

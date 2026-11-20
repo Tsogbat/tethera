@@ -116,6 +116,12 @@ Home is SwiftUI lists, plus `RetroComputerView`: an `SCNView` of the model in `V
 
 **Worktrees.** `WorktreeService` runs `git worktree add -b tethera/<agent>-N <repo>.worktrees/<agent>-N <base>` and remembers the base in `branch.<name>.tetheraBase`. Merge is `--no-ff` in the main checkout, refused if either side has uncommitted work, and aborted on conflicts. `WorktreeMonitor` caches each folder's repository and worktree, for grouping and labels.
 
+**Journal.** The app appends one JSON line per event to `TETHERA_HOME/journal/YYYY-MM-DD.jsonl`: agent state changes (with the last message), costs (Claude's running total from its status line), approvals, budgets, sessions starting and ending. "While you were away" (`AwayTracker`, after 15 minutes in the background or asleep) and `BudgetWatcher` read it. Spend is how far each session's running total grew, and a total that drops counts as a new conversation.
+
+**Transcripts.** `TranscriptParser` reads Claude Code logs (`~/.claude/projects/<cwd, non-alphanumerics as ->/*.jsonl`) and Codex logs (`~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, matched by `cwd`) into steps, skipping anything it doesn't recognize. Both formats are the agents' own and can change. The pane tails the file while it's open.
+
+**Status line.** `tethera statusline claude --format '…'` renders `{model} {context} {cost} {branch} {folder} {time}` from the JSON Claude Code sends; a placeholder with no value drops with its separator. The branch is read from `.git/HEAD` directly so it stays fast.
+
 **`tethera mcp`** is a stdio MCP server (JSON-RPC, protocol `2025-06-18`) exposing Playwright MCP's browser tools. Each call goes to the app, which acts in the tab beside the calling session (`TETHERA_SESSION_ID`). Snapshots are an accessibility-style outline with `ref`s, built by a script injected into the page. Settings → Agents adds it to each agent's config with the same preview/backup/undo as hooks (Claude Code through its own `claude mcp add`).
 
 A custom `TETHERA_HOME` also gets its own defaults suite (`AppDefaults`), so test runs never touch the layout or preferences of the Tethera you use.

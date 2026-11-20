@@ -309,6 +309,7 @@ struct SessionRow: View {
             NSPasteboard.general.setString(session.cwd, forType: .string)
         }
         if session.agent != nil {
+            Button("Show Transcript") { workspace.open(.transcript(session.id), besideSession: session.id) }
             Button("Interrupt (⌃C)") { DaemonClient.shared.interrupt(session.id) }
         }
         Divider()

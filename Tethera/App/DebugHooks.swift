@@ -85,6 +85,13 @@ enum DebugHooks {
         } else if step.hasPrefix("@worktree:") {
             WorktreeActions.newAgent(AgentKind(rawValue: String(step.dropFirst(10))))
             try? await Task.sleep(nanoseconds: 2_500_000_000)
+        } else if step.hasPrefix("@away:") {
+            AwayTracker.shared.simulateReturn(since: Date().addingTimeInterval(-(TimeInterval(step.dropFirst(6)) ?? 3600)))
+            workspace.showHome()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        } else if step == "@transcript" {
+            workspace.showTranscript()
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
         } else if step == "@approvals" {
             workspace.showApprovals()
             try? await Task.sleep(nanoseconds: 800_000_000)

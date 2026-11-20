@@ -49,6 +49,30 @@ enum HookRelay {
         return ApprovalDecision.claude(answer)
     }
 
+    /// The current branch of a folder, read straight from `.git/HEAD` (no git process: the
+    /// status line runs often and must be fast).
+    static func gitBranch(in folder: String) -> String? {
+        var current = (folder as NSString).standardizingPath
+        let fm = FileManager.default
+        while !current.isEmpty {
+            var gitDir = (current as NSString).appendingPathComponent(".git")
+            var isDirectory: ObjCBool = false
+            if fm.fileExists(atPath: gitDir, isDirectory: &isDirectory) {
+                if !isDirectory.boolValue, let pointer = try? String(contentsOfFile: gitDir, encoding: .utf8),
+                   pointer.hasPrefix("gitdir: ") {
+                    // A worktree: .git is a file pointing at the real git dir.
+                    gitDir = pointer.dropFirst(8).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                guard let head = try? String(contentsOfFile: (gitDir as NSString).appendingPathComponent("HEAD"), encoding: .utf8) else { return nil }
+                let trimmed = head.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.hasPrefix("ref: refs/heads/") ? String(trimmed.dropFirst(16)) : String(trimmed.prefix(7))
+            }
+            if current == "/" { break }
+            current = (current as NSString).deletingLastPathComponent
+        }
+        return nil
+    }
+
     /// Adds the event name (passed as an argument) to a payload that doesn't carry one.
     static func injecting(event: String, into payload: String) -> String {
         guard var json = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any] else {

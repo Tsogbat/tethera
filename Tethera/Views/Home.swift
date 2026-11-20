@@ -9,6 +9,7 @@ struct HomeView: View {
     @ObservedObject private var workspace = Workspace.shared
     @ObservedObject private var detector = AgentDetector.shared
     @ObservedObject private var updater = Updater.shared
+    @ObservedObject private var awayTracker = AwayTracker.shared
     @Environment(\.theme) private var theme
     @State private var connected: [AgentIntegrations.Target: Bool] = [:]
     @State private var recents: [String] = []
@@ -28,6 +29,11 @@ struct HomeView: View {
                 if let release = updater.available {
                     UpdateRow(release: release, state: updater.state)
                         .padding(.bottom, 24)
+                }
+                if let away = awayTracker.summary {
+                    AwaySummaryView(summary: away)
+                        .frame(maxWidth: 1000)
+                        .padding(.bottom, 26)
                 }
                 if showGetStarted {
                     GetStarted(connected: connected.values.contains(true), firstAgent: detector.installed.first { $0 != .ollama })

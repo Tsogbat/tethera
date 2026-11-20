@@ -40,6 +40,21 @@ Coding agents run in terminals, and you end up with five of them in five tabs, c
   <img src="docs/assets/screens/v07-inbox.png" width="49%" alt="The approval inbox with Allow and Deny">
 </p>
 
+## See what your agents did
+
+- **Transcript** (⌥⌘T). Every step a Claude Code or Codex session took: your prompts, its replies, each tool call, results and errors, with tokens per step. Click an edit to see its diff. Filter to tools, edits or errors. It follows the session live.
+- **While you were away.** Come back after a while and Home lists what changed: who finished, who needs you, who hit an error, each with its last message and what it spent.
+- **Budgets.** Settings → General: a daily spend limit (optionally pausing working agents), and a warning when a session's context fills up.
+- **Your status line, designed.** Settings → Agents → *Design the status line…*: pick model, context, cost, branch, folder or time, see it, apply it. `tethera statusline claude --format '{model} · {cost}'` renders it.
+- **Themes and shortcuts.** Import iTerm2 (`.itermcolors`) and Ghostty themes; change any shortcut in Settings → Shortcuts.
+
+All of this comes from a journal Tethera keeps on your Mac (`~/Library/Application Support/Tethera/journal/`), nowhere else.
+
+<p align="center">
+  <img src="docs/assets/screens/v08-transcript.png" width="49%" alt="The transcript of a Claude Code session, step by step">
+  <img src="docs/assets/screens/v08-away.png" width="49%" alt="While you were away, on Home">
+</p>
+
 ## Tools
 
 Tools open as panes beside the session that needs them.
@@ -104,6 +119,7 @@ Agents start inside a shell, so when one exits, the session (and its scrollback)
 | ⌘L | New browser tab |
 | ⇧⌘E | Changes |
 | ⌥⌘A | Approvals |
+| ⌥⌘T | Transcript |
 | ⌥⌘G · ⌥⌘B | Git · Homebrew |
 | ⌘S · ⌃G | Save · go to line (editor) |
 | ⌘K / ⌘P | Command palette |
@@ -167,7 +183,6 @@ Needs Xcode 26 (Swift 6.2). The icon is rendered from the same SceneKit model as
 
 ## What's next
 
-- Insight: a transcript debugger, "while you were away", budgets, a status line editor
 - Remote control of your sessions, from other Macs and your phone
 - Teams: a shared agent board, approval policies, a cost dashboard and an audit log
 

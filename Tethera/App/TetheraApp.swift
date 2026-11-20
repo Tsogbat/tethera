@@ -24,10 +24,13 @@ struct TetheraApp: App {
 }
 
 struct TetheraCommands: Commands {
+    /// Rebuilds the menus when a shortcut is changed in Settings.
+    @ObservedObject private var preferences = PreferencesStore.shared
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Shell") { Workspace.shared.newSession() }
-                .keyboardShortcut("t", modifiers: .command)
+                .keyboardShortcut(KeyBindings.shortcut("newShell"))
             Menu("New Agent Session") {
                 ForEach(Array(AgentDetector.launchable.filter { $0 != .ollama }.enumerated()), id: \.element) { index, kind in
                     if index < 4 {
@@ -39,22 +42,24 @@ struct TetheraCommands: Commands {
                 }
             }
             Button("New Shell in Folder…") { SessionActions.newSessionInChosenFolder() }
-                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("folder"))
             Button("Open File…") { Workspace.shared.chooseFileToOpen() }
-                .keyboardShortcut("o", modifiers: .command)
+                .keyboardShortcut(KeyBindings.shortcut("openFile"))
             Button("New Browser Tab") { Workspace.shared.newBrowserTab() }
-                .keyboardShortcut("l", modifiers: .command)
+                .keyboardShortcut(KeyBindings.shortcut("browser"))
             Button("Show Changes") { Workspace.shared.showChanges() }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("changes"))
+            Button("Transcript") { Workspace.shared.showTranscript() }
+                .keyboardShortcut(KeyBindings.shortcut("transcript"))
             Button("Git") { Workspace.shared.showGit() }
-                .keyboardShortcut("g", modifiers: [.command, .option])
+                .keyboardShortcut(KeyBindings.shortcut("git"))
             Button("Homebrew") { Workspace.shared.showBrew() }
-                .keyboardShortcut("b", modifiers: [.command, .option])
+                .keyboardShortcut(KeyBindings.shortcut("brew"))
             Divider()
             Button("Split Right") { Workspace.shared.split(.horizontal) }
-                .keyboardShortcut("d", modifiers: .command)
+                .keyboardShortcut(KeyBindings.shortcut("splitRight"))
             Button("Split Down") { Workspace.shared.split(.vertical) }
-                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("splitDown"))
             Divider()
             Button("Close Pane") { closePaneOrWindow() }
                 .keyboardShortcut("w", modifiers: .command)
@@ -79,17 +84,17 @@ struct TetheraCommands: Commands {
         }
         CommandMenu("Session") {
             Button("Home") { Workspace.shared.showHome() }
-                .keyboardShortcut("h", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("home"))
             Button("Command Palette") { Workspace.shared.showPalette.toggle() }
-                .keyboardShortcut("k", modifiers: .command)
+                .keyboardShortcut(KeyBindings.shortcut("palette"))
             Button("Command Palette") { Workspace.shared.showPalette.toggle() }
                 .keyboardShortcut("p", modifiers: .command)
             Button("Agents Overview") { Workspace.shared.showOverview.toggle() }
-                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("overview"))
             Button("Approvals") { Workspace.shared.showApprovals() }
-                .keyboardShortcut("a", modifiers: [.command, .option])
+                .keyboardShortcut(KeyBindings.shortcut("approvals"))
             Button("Go to Session That Needs You") { Workspace.shared.jumpToNeedsYou() }
-                .keyboardShortcut("u", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("needsYou"))
             Divider()
             Button("Next Session") { Workspace.shared.cycle(1) }
                 .keyboardShortcut("]", modifiers: .command)
@@ -101,14 +106,14 @@ struct TetheraCommands: Commands {
             }
             Divider()
             Button("Rename Session…") { Workspace.shared.renaming = Workspace.shared.focusedSessionID }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .keyboardShortcut(KeyBindings.shortcut("rename"))
             Button("Interrupt") {
                 if let id = Workspace.shared.focusedSessionID { DaemonClient.shared.interrupt(id) }
             }
         }
         CommandGroup(after: .sidebar) {
             Button("Toggle Inspector") { PreferencesStore.shared.value.showInspector.toggle() }
-                .keyboardShortcut("i", modifiers: [.command, .option])
+                .keyboardShortcut(KeyBindings.shortcut("inspector"))
             Divider()
             Button("Bigger") { PreferencesStore.shared.adjustFontSize(by: 1) }
                 .keyboardShortcut("+", modifiers: .command)
@@ -146,7 +151,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 AgentIntegrations.refreshCLILink(to: DaemonClient.cliPath)
             }
             let client = DaemonClient.shared
-            client.onUpdate = { [weak self] session, previous in self?.notifyIfNeeded(session, previous: previous) }
+            client.onUpdate = { [weak self] session, previous in
+                if !client.deliveringInitialList { Journal.shared.record(session, previous: previous) }
+                self?.notifyIfNeeded(session, previous: previous)
+                BudgetWatcher.shared.check(session)
+            }
+            client.onRemove = { session in Journal.shared.recordEnded(session) }
+            AwayTracker.shared.start()
             client.connect()
             Self.startAppServer()
             _ = NowPlaying.shared
