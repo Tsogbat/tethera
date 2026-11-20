@@ -317,6 +317,8 @@ h2 {
   border: 1px solid var(--line); border-radius: 6px; background: var(--tint);
 }
 .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: 13.5px; color: var(--ink); }
+.cmd + .cmd { margin-top: 8px; }
+.cmd + p { margin-top: 16px; font-size: 13.5px; color: var(--ink-3, var(--ink-2)); }
 .copy {
   flex: none; height: 28px; padding: 0 11px; border-radius: 4px; cursor: pointer;
   font: 500 12.5px/1 var(--font); color: var(--ink); background: transparent; border: 1px solid var(--line-2);

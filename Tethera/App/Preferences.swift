@@ -45,6 +45,8 @@ struct Preferences: Codable, Equatable {
     var openHomeOnLaunch = false
     /// Music or Spotify's current track in the status bar.
     var showNowPlaying = true
+    /// Look for a new release once a day.
+    var checkForUpdates = true
 
     init() {}
 
@@ -66,6 +68,7 @@ struct Preferences: Codable, Equatable {
         sidebarWidth = (try? c.decode(Double.self, forKey: .sidebarWidth)) ?? d.sidebarWidth
         openHomeOnLaunch = (try? c.decode(Bool.self, forKey: .openHomeOnLaunch)) ?? d.openHomeOnLaunch
         showNowPlaying = (try? c.decode(Bool.self, forKey: .showNowPlaying)) ?? d.showNowPlaying
+        checkForUpdates = (try? c.decode(Bool.self, forKey: .checkForUpdates)) ?? d.checkForUpdates
     }
 }
 

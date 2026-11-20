@@ -128,6 +128,8 @@ make app      # dist/Tethera.app + dist/Tethera-macOS.dmg
 
 `scripts/package.sh` builds arm64 and x86_64 separately with SwiftPM's native build system and merges them with `lipo`. It copies `tethera-cli` to `Contents/Helpers/tethera`, signs the helper and then the app, and creates the DMG.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, packages and publishes to the GitHub Release. The website is `docs/` on GitHub Pages.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, packages and publishes to the GitHub Release. It publishes `Tethera-macOS.dmg` and its `.sha256`. The website is `docs/` on GitHub Pages, including `install.sh` (the one-line installer). A Homebrew cask lives in `Tsogbat/homebrew-tap`.
+
+**Updates.** `Updater` checks `releases/latest` daily and only offers a release that has `Tethera-macOS.dmg.sig`. That is an Ed25519 signature of the DMG, checked against the public key built into the app. It then mounts the DMG, checks the bundle id and version, and hands a detached helper the swap: wait for the app to quit, replace the bundle (restoring the old one if the copy fails), reopen. The daemon isn't touched, so sessions keep running. Releases are signed on the maintainer's Mac, so the private key never leaves it: `scripts/sign_release.sh vX.Y.Z` (key in `~/.config/tethera/update-signing.key`; `scripts/sign_update.swift` does the cryptography). CI signs instead if a `TETHERA_UPDATE_KEY` secret is set.
 
 Debug builds include `DebugHooks` (`TETHERA_SNAPSHOT_DIR`, `TETHERA_SCRIPT`) for scripted runs and window captures. `TETHERA_HOME` points the app and daemon at an isolated session store for tests.

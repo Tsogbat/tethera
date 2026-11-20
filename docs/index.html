@@ -300,11 +300,16 @@ window.TETHERA_SHOTS = {
       <a class="btn btn-lg btn-ghost" href="https://github.com/Tsogbat/tethera/releases">All releases</a>
     </div>
     <div class="quarantine">
-      <p>The build isn’t notarized yet. The first time, right-click Tethera.app → Open, or run:</p>
+      <p>Or install from Terminal. It checks the download, and Tethera opens straight away:</p>
       <div class="cmd">
-        <code>xattr -dr com.apple.quarantine /Applications/Tethera.app</code>
-        <button class="copy" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Tethera.app" aria-label="Copy command">Copy</button>
+        <code>curl -fsSL https://tsogbat.github.io/tethera/install.sh | bash</code>
+        <button class="copy" type="button" data-copy="curl -fsSL https://tsogbat.github.io/tethera/install.sh | bash" aria-label="Copy command">Copy</button>
       </div>
+      <div class="cmd">
+        <code>brew install --cask tsogbat/tap/tethera</code>
+        <button class="copy" type="button" data-copy="brew install --cask tsogbat/tap/tethera" aria-label="Copy command">Copy</button>
+      </div>
+      <p>Using the DMG? Tethera isn’t notarized yet, so the first time, macOS says it can’t verify it. Open System Settings → Privacy &amp; Security and click <b>Open Anyway</b>. You only do this once.</p>
     </div>
   </div>
 </section>

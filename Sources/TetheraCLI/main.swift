@@ -15,7 +15,7 @@ import TetheraKit
 ///     tethera changes                    show this session's live diff
 ///     tethera mcp                        the browser MCP server for agents (stdio)
 
-let version = "0.6.0"
+let version = "0.6.1"
 var arguments = Array(CommandLine.arguments.dropFirst())
 let command = arguments.isEmpty ? "help" : arguments.removeFirst()
 

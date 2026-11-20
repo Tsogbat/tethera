@@ -71,6 +71,7 @@ struct TetheraCommands: Commands {
         }
         CommandGroup(replacing: .appInfo) {
             Button("About Tethera") { AboutWindow.show() }
+            Button("Check for Updates…") { Updater.shared.checkFromMenu() }
         }
         CommandMenu("Session") {
             Button("Home") { Workspace.shared.showHome() }
@@ -143,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             client.connect()
             Self.startAppServer()
             _ = NowPlaying.shared
+            Updater.shared.start()
             if Self.canNotify {
                 UNUserNotificationCenter.current().delegate = self
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }

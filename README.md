@@ -120,13 +120,23 @@ tethera mcp                          # the browser, as an MCP server for agents
 
 ## Install
 
-1. [Download **Tethera-macOS.dmg**](https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg), open it, and drag Tethera to Applications.
-2. The build isn't notarized yet, so the first time, right-click Tethera.app → **Open** → **Open**, or:
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/Tethera.app
-   ```
+The quickest way, in Terminal:
 
-Requires macOS 14 Sonoma or later, on Apple silicon or Intel.
+```bash
+curl -fsSL https://tsogbat.github.io/tethera/install.sh | bash
+```
+
+It downloads the latest release, checks its SHA-256, puts Tethera in Applications and links the `tethera` command. Or with Homebrew:
+
+```bash
+brew install --cask tsogbat/tap/tethera
+```
+
+Either way, Tethera opens straight away and updates itself (Tethera → Check for Updates…). Your sessions keep running through an update.
+
+**Or download the [DMG](https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg)** and drag Tethera to Applications. Tethera isn't notarized by Apple yet, so the first time macOS says it can't verify it. Click **Done**, then open **System Settings → Privacy & Security** and click **Open Anyway** next to Tethera. You only do this once.
+
+Requires macOS 14 Sonoma or later, on Apple silicon or Intel. Updates are signed (Ed25519) and checked before they're installed.
 
 ### Build from source
 

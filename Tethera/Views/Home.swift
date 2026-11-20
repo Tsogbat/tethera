@@ -8,6 +8,7 @@ struct HomeView: View {
     @ObservedObject private var client = DaemonClient.shared
     @ObservedObject private var workspace = Workspace.shared
     @ObservedObject private var detector = AgentDetector.shared
+    @ObservedObject private var updater = Updater.shared
     @Environment(\.theme) private var theme
     @State private var connected: [AgentIntegrations.Target: Bool] = [:]
     @State private var recents: [String] = []
@@ -23,7 +24,11 @@ struct HomeView: View {
                     .padding(.top, 12)
                 greeting
                     .padding(.top, 6)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, updater.available == nil ? 30 : 14)
+                if let release = updater.available {
+                    UpdateRow(release: release, state: updater.state)
+                        .padding(.bottom, 24)
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 230, maximum: 320), spacing: 36, alignment: .top)],
                           alignment: .leading, spacing: 28) {
                     start
@@ -345,5 +350,47 @@ enum ActionMenu {
             menu.addItem(item)
         }
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+}
+
+/// "Tethera 0.7.0 is available": one quiet line on Home, never a popup.
+private struct UpdateRow: View {
+    let release: Updater.Release
+    let state: Updater.State
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Tethera \(release.version) is available")
+                .font(TypeScale.ui(12.5, .medium))
+                .foregroundStyle(theme.text.color)
+            Button("What's new") { NSWorkspace.shared.open(release.page) }
+                .buttonStyle(.plain)
+                .font(TypeScale.ui(12.5))
+                .foregroundStyle(theme.text2.color)
+            Button {
+                Task { await Updater.shared.install() }
+            } label: {
+                Text(label)
+                    .font(TypeScale.ui(12, .semibold))
+                    .foregroundStyle(theme.bg.color)
+                    .padding(.horizontal, 10)
+                    .frame(height: 24)
+                    .background(RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(theme.text.color))
+            }
+            .buttonStyle(.plain)
+            .disabled(state != .available(release))
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 38)
+        .overlay(RoundedRectangle(cornerRadius: Metrics.panelRadius).strokeBorder(theme.hairline.color))
+    }
+
+    private var label: String {
+        switch state {
+        case .downloading: return "Downloading…"
+        case .installing: return "Installing…"
+        default: return "Update and restart"
+        }
     }
 }

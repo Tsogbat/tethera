@@ -30,12 +30,24 @@ jobs:
       - name: Package
         run: scripts/package.sh "${GITHUB_REF_NAME#v}"
 
+      - name: Checksum and signature
+        # The updater only offers releases with a signature. Sign here if the key is configured
+        # as a secret; otherwise scripts/sign_release.sh signs from the maintainer's Mac afterwards.
+        env:
+          TETHERA_UPDATE_KEY: ${{ secrets.TETHERA_UPDATE_KEY }}
+        run: |
+          cd dist
+          shasum -a 256 Tethera-macOS.dmg > Tethera-macOS.dmg.sha256
+          if [ -n "$TETHERA_UPDATE_KEY" ]; then
+            swift ../scripts/sign_update.swift sign Tethera-macOS.dmg > Tethera-macOS.dmg.sig
+          fi
+
       - name: Release notes
         run: |
           NOTES=".github/release-notes/${GITHUB_REF_NAME}.md"
           if [ ! -f "$NOTES" ]; then
             NOTES="$RUNNER_TEMP/notes.md"
-            echo "Download **Tethera-macOS.dmg** below, open it and drag Tethera to Applications." > "$NOTES"
+            echo 'Install with `curl -fsSL https://tsogbat.github.io/tethera/install.sh | bash`, or download **Tethera-macOS.dmg** below.' > "$NOTES"
           fi
           echo "NOTES=$NOTES" >> "$GITHUB_ENV"
 
@@ -44,4 +56,8 @@ jobs:
         with:
           name: Tethera ${{ github.ref_name }}
           body_path: ${{ env.NOTES }}
-          files: dist/Tethera-macOS.dmg
+          files: |
+            dist/Tethera-macOS.dmg
+            dist/Tethera-macOS.dmg.sha256
+            dist/Tethera-macOS.dmg.sig
+          fail_on_unmatched_files: false
