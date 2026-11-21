@@ -287,8 +287,13 @@ h2 {
 
 .sec-shot { margin: 40px 0 0; }
 .sec-shot-wide { grid-column: 1 / -1; }
-.sec-video video { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line); background: #111; }
-.sec-video figcaption { margin-top: 10px; font-size: 14px; color: var(--ink-3); }
+/* The launch film: full width, the one moving picture on the page besides the 3D scene. */
+.film-frame { grid-column: 1 / -1; margin: 40px 0 0; }
+.film-frame video {
+  display: block; width: 100%; height: auto; aspect-ratio: 16 / 9;
+  border-radius: 12px; border: 1px solid var(--line); background: #0E0E0F;
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, .55);
+}
 .sec-phone { grid-column: 9 / span 4; grid-row: 1 / span 2; align-self: center; margin: 0; }
 .sec-phone img { display: block; width: 100%; height: auto; border-radius: 28px; border: 1px solid var(--line); }
 

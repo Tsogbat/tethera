@@ -16,8 +16,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screens/v05-hero.png" alt="Tethera's Home: a small 3D retro computer above lists to start an agent, recent folders, connected agents and running sessions">
+  <img src="docs/assets/screens/v10-home.png" alt="Tethera's Home: a small 3D retro computer showing one agent needs you, the Approvals inbox, four agent sessions grouped by repository, and lists to start an agent and see who's running">
 </p>
+
+<p align="center"><a href="https://tsogbat.github.io/tethera/#film"><b>Watch the 21-second launch film</b></a></p>
 
 ## Why
 

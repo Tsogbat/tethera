@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tethera — the terminal for AI agents</title>
-<meta name="description" content="Tethera is a free, open-source macOS terminal for running and supervising AI coding agents. Sessions keep running when you quit, and the sidebar shows which agent is working, waiting or needs you.">
+<meta name="description" content="Tethera 1.0 is a free, open-source macOS terminal for running and supervising AI coding agents. Sessions keep running when you quit, the sidebar shows which agent needs you, and you can answer from one inbox, your phone, or a rule.">
 <link rel="canonical" href="https://tsogbat.github.io/tethera/">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#E7E4DE" media="(prefers-color-scheme: light)">
@@ -20,10 +20,10 @@
 <script>
 window.TETHERA_SHOTS = {
   // End of the hero zoom: the display becomes this screenshot.
-  hero:     { src: 'assets/screens/v05-hero.png', w: 2400, h: 1568,
-              alt: 'Tethera’s Home: a small 3D computer showing one agent needs you, above lists to start an agent, recent folders, connected agents and running sessions.' },
-  // Social preview (mirror in og:image and twitter:image below).
-  og:       'assets/screens/v05-hero.png',
+  hero:     { src: 'assets/screens/v10-home.png', w: 2400, h: 1568,
+              alt: 'Tethera’s Home: a small 3D computer showing one agent needs you, above the Approvals inbox, four agent sessions grouped by repository, and lists to start an agent and see who’s running.' },
+  // Social preview (mirror in og:image and twitter:image below): the launch film's poster.
+  og:       'assets/launch-poster.jpg',
   // Optional figures under sections. Empty = hidden.
   home:     { src: 'assets/screens/v05-light.png', w: 2400, h: 1568, alt: 'Home: start an agent, recent folders, running sessions and connected integrations.' },
   agents:   { src: 'assets/screens/v05-overview.png', w: 2400, h: 1568, alt: 'The Agents overview: every session in one table, sorted by what needs you.' },
@@ -37,13 +37,15 @@ window.TETHERA_SHOTS = {
 <meta property="og:site_name" content="Tethera">
 <meta property="og:url" content="https://tsogbat.github.io/tethera/">
 <meta property="og:title" content="Tethera — the terminal for AI agents">
-<meta property="og:description" content="Run Claude Code, Codex, OpenCode and more in sessions that keep going when you quit — and see which agent needs you. Free and open source for macOS.">
-<meta property="og:image" content="https://tsogbat.github.io/tethera/assets/screens/v05-hero.png">
-<meta property="og:image:alt" content="Tethera’s Home: a small 3D computer above lists of agents, folders and running sessions.">
+<meta property="og:description" content="Tethera 1.0: run Claude Code, Codex, OpenCode and more in sessions that keep going when you quit. Answer them from one inbox, your phone, or a rule. Free and open source for macOS.">
+<meta property="og:image" content="https://tsogbat.github.io/tethera/assets/launch-poster.jpg">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="1080">
+<meta property="og:image:alt" content="Tethera 1.0, free for Mac: the cream retro computer with “tethera_” on its screen beside its six-key keyboard.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Tethera — the terminal for AI agents">
-<meta name="twitter:description" content="Sessions that outlive the app, and a sidebar that shows which agent needs you. Free and open source for macOS.">
-<meta name="twitter:image" content="https://tsogbat.github.io/tethera/assets/screens/v05-hero.png">
+<meta name="twitter:description" content="Tethera 1.0: sessions that outlive the app, a sidebar that shows which agent needs you, and answers from one inbox, your phone, or a rule. Free for macOS.">
+<meta name="twitter:image" content="https://tsogbat.github.io/tethera/assets/launch-poster.jpg">
 
 <link rel="icon" type="image/png" sizes="64x64" href="assets/icon-64.png">
 <link rel="icon" type="image/png" sizes="256x256" href="assets/icon-256.png">
@@ -79,11 +81,11 @@ window.TETHERA_SHOTS = {
       <span>Tethera</span>
     </a>
     <nav class="nav-links" aria-label="Primary">
+      <a href="#film">Film</a>
       <a href="#sessions">Sessions</a>
       <a href="#agents">Agents</a>
-      <a href="#home">Home</a>
       <a href="#tools">Tools</a>
-      <a href="#cli">CLI</a>
+      <a href="#anywhere">Anywhere</a>
       <a href="#trust">Trust</a>
       <a href="https://github.com/Tsogbat/tethera">GitHub</a>
     </nav>
@@ -115,7 +117,7 @@ window.TETHERA_SHOTS = {
           GitHub
         </a>
       </div>
-      <p class="meta">macOS 14+ <i>·</i> Apple silicon &amp; Intel <i>·</i> free</p>
+      <p class="meta">Version 1.0 <i>·</i> macOS 14+ <i>·</i> Apple silicon &amp; Intel <i>·</i> free</p>
       <div class="keys-a11y" role="group" aria-label="Press a key on the 3D keyboard to change what the computer’s screen shows">
         <button type="button" data-key="t" aria-label="t: boot screen">t</button>
         <button type="button" data-key="esc" aria-label="esc: Home">esc</button>
@@ -129,13 +131,26 @@ window.TETHERA_SHOTS = {
     <img class="hero-still" data-still src="assets/hero-still.png" loading="lazy" decoding="async" alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard." width="2400" height="1499">
     <noscript><img class="hero-still is-on" src="assets/hero-still.png" alt="A cream retro all-in-one computer showing “tethera” on its screen, connected by a coiled cable to a huge six-key keyboard."></noscript>
 
-    <div class="hero-shot" data-hero-shot><img data-shot="hero" src="assets/screens/v05-hero.png" width="2400" height="1568" decoding="async" alt="Tethera’s Home: a small 3D computer showing one agent needs you, above lists to start an agent, recent folders, connected agents and running sessions."></div>
+    <div class="hero-shot" data-hero-shot><img data-shot="hero" src="assets/screens/v10-home.png" width="2400" height="1568" decoding="async" alt="Tethera’s Home: a small 3D computer showing one agent needs you, above the Approvals inbox, four agent sessions grouped by repository, and lists to start an agent and see who’s running."></div>
     <p class="cue" data-cue aria-hidden="true"><span>Scroll</span></p>
   </div>
 </section>
 
 <!-- Shown instead of the zoom when motion is reduced or 3D isn't available -->
-<figure class="hero-figure wrap"><img data-shot="hero" src="assets/screens/v05-hero.png" width="2400" height="1568" loading="lazy" decoding="async" alt="Tethera’s Home: a small 3D computer showing one agent needs you, above lists to start an agent, recent folders, connected agents and running sessions."></figure>
+<figure class="hero-figure wrap"><img data-shot="hero" src="assets/screens/v10-home.png" width="2400" height="1568" loading="lazy" decoding="async" alt="Tethera’s Home: a small 3D computer showing one agent needs you, above the Approvals inbox, four agent sessions grouped by repository, and lists to start an agent and see who’s running."></figure>
+
+<!-- ================= The launch film ================= -->
+<section class="sec film" id="film" aria-labelledby="film-title">
+  <div class="wrap grid">
+    <div class="sec-head sec-head-wide">
+      <h2 id="film-title">Tethera 1.0, in 21&nbsp;seconds.</h2>
+    </div>
+    <figure class="film-frame">
+      <video data-film src="assets/launch.mp4" poster="assets/launch-poster.jpg" width="1920" height="1080" controls muted loop playsinline preload="metadata"
+             aria-label="Tethera 1.0 launch film: quit the app and the agents keep working; see which agent needs you; allow it from one inbox, your phone, or a rule; update without stopping an agent."></video>
+    </figure>
+  </div>
+</section>
 
 <!-- ================= 01 Sessions ================= -->
 <section class="sec" id="sessions" aria-labelledby="sessions-title">
@@ -314,10 +329,7 @@ window.TETHERA_SHOTS = {
       <li><span class="k">Updates</span><p>The session daemon hands itself to the new version in place. Shells, agents and screens carry on.</p></li>
       <li><span class="k">Suggestions</span><p>Gray text from your history as you type; <kbd>⌃Space</kbd> for commands, flags, files, branches and scripts.</p></li>
     </ul>
-    <figure class="sec-shot sec-shot-wide sec-video">
-      <video src="assets/tour.mp4" poster="assets/screens/v10-costs.png" width="1600" height="1040" controls muted playsinline preload="none" aria-label="A 35-second tour of Tethera: approvals, transcripts, other Macs, the phone dashboard, suggestions, policies, costs and the audit log."></video>
-      <figcaption>A 35-second tour, from real screens.</figcaption>
-    </figure>
+    <figure class="sec-shot sec-shot-wide"><img src="assets/screens/v10-costs.png" width="2400" height="1568" loading="lazy" decoding="async" alt="The Costs pane: two weeks of agent spend as one bar per day, with totals by agent and by repository."></figure>
   </div>
 </section>
 
@@ -327,7 +339,7 @@ window.TETHERA_SHOTS = {
   <div class="wrap finale-copy">
     <p class="finale-cap" aria-hidden="true">Press the key.</p>
     <h2 id="download-title">Get Tethera.</h2>
-    <p class="lede">Free and open source. macOS 14+, Apple silicon &amp; Intel.</p>
+    <p class="lede">Version 1.0. Free and open source. macOS 14+, Apple silicon &amp; Intel.</p>
     <div class="cta">
       <a class="btn btn-lg" href="https://github.com/Tsogbat/tethera/releases/latest/download/Tethera-macOS.dmg">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>
@@ -405,6 +417,21 @@ window.TETHERA_SHOTS = {
       clearTimeout(t); t = setTimeout(() => { btn.textContent = 'Copy'; live.textContent = ''; }, 1800);
     });
   });
+
+  /* The launch film plays, muted, while it's on screen (not with reduced motion), until
+     the visitor takes over with its controls. */
+  const film = document.querySelector('[data-film]');
+  if (film && 'IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    let auto = true;
+    const takeOver = () => { auto = false; };
+    film.addEventListener('volumechange', takeOver);
+    film.addEventListener('pause', () => { if (!film.dataset.autoPause) takeOver(); delete film.dataset.autoPause; });
+    new IntersectionObserver(([entry]) => {
+      if (!auto) return;
+      if (entry.isIntersecting) { film.play().catch(() => {}); }
+      else if (!film.paused) { film.dataset.autoPause = '1'; film.pause(); }
+    }, { threshold: 0.45 }).observe(film);
+  }
 
   /* If the 3D scene never arrives (CDN blocked, old browser), show the still */
   setTimeout(() => {
