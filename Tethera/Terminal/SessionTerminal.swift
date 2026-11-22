@@ -9,7 +9,7 @@ protocol TerminalSurface: AnyObject {
     var hostView: NSView { get }
     var gridSize: (cols: Int, rows: Int) { get }
     func feed(_ bytes: Data)
-    func focus()
+    @discardableResult func focus() -> Bool
     func apply(_ preferences: Preferences, palette: TerminalPalette, theme: Theme, font: NSFont)
 }
 
@@ -51,7 +51,11 @@ final class SessionTerminal: NSObject, TerminalSurface, TerminalViewDelegate {
         terminalView.scrollerStyle = .overlay
         terminalView.allowMouseReporting = true
         terminalView.glyphFallbackProvider = SymbolFallback.shared
-        terminalView.onLayoutReady = { [weak self] in self?.attachIfNeeded() }
+        terminalView.onLayoutReady = { [weak self] in
+            guard let self else { return }
+            self.attachIfNeeded()
+            TerminalStore.shared.landed(self)
+        }
         // Over the terminal, in the container: SwiftTerm's Metal layer doesn't draw subviews.
         ghost.isHidden = true
         container.addSubview(ghost)
@@ -105,9 +109,12 @@ final class SessionTerminal: NSObject, TerminalSurface, TerminalViewDelegate {
         if PreferencesStore.shared.value.suggestCommands { mirror?.feed(byteArray: Array(bytes)) } else { mirror = nil }
     }
 
-    func focus() {
-        guard let window = terminalView.window, window.firstResponder !== terminalView else { return }
-        window.makeFirstResponder(terminalView)
+    /// Gives this terminal the keyboard; false while its view isn't in a window yet.
+    @discardableResult
+    func focus() -> Bool {
+        guard let window = terminalView.window else { return false }
+        if window.firstResponder !== terminalView { window.makeFirstResponder(terminalView) }
+        return window.firstResponder === terminalView
     }
 
     var hasFocus: Bool {
@@ -364,6 +371,9 @@ final class TerminalStore {
     private let keepAttached = 6
     private var clickMonitor: Any?
     private var keyMonitor: Any?
+    /// A focus request whose terminal isn't in the window yet: SwiftUI moves a terminal into its
+    /// pane on its next update, which can land after the request. Kept briefly, then dropped.
+    private var pendingFocus: (id: UUID, until: Date)?
 
     private init() {
         // SwiftTerm's becomeFirstResponder isn't overridable, so a click tells us which pane took focus.
@@ -373,6 +383,13 @@ final class TerminalStore {
                     terminal.dismissPopup()
                     let point = terminal.hostView.convert(event.locationInWindow, from: nil)
                     if terminal.hostView.bounds.contains(point) { terminal.onFocus?() }
+                }
+                // The sidebar is a List, whose table view takes the keyboard when a click lands
+                // between or below its rows; once the click is handled, the terminal gets it back.
+                if event.locationInWindow.x < PreferencesStore.shared.value.sidebarWidth {
+                    DispatchQueue.main.async {
+                        if event.window?.firstResponder is NSTableView { Workspace.shared.focusTerminalSoon() }
+                    }
                 }
             }
             return event
@@ -401,6 +418,22 @@ final class TerminalStore {
 
     func existing(_ id: UUID) -> SessionTerminal? {
         terminals[id]
+    }
+
+    /// Focuses a session's terminal now if it's on screen, or as soon as it gets there.
+    func requestFocus(_ id: UUID) {
+        if let terminal = terminals[id], terminal.focus() {
+            pendingFocus = nil
+        } else {
+            pendingFocus = (id, Date().addingTimeInterval(1.5))
+        }
+    }
+
+    /// A terminal's view reached a window with a real size: it takes a focus request waiting for it.
+    func landed(_ terminal: SessionTerminal) {
+        guard let pending = pendingFocus, pending.id == terminal.sessionID else { return }
+        guard pending.until > Date(), Workspace.shared.renaming == nil else { pendingFocus = nil; return }
+        if terminal.focus() { pendingFocus = nil }
     }
 
     private func touch(_ id: UUID) {

@@ -213,10 +213,13 @@ final class Workspace: ObservableObject {
         save()
     }
 
+    /// Puts the keyboard in the focused session's terminal, once this event's changes have
+    /// settled; if SwiftUI hasn't moved the terminal into its pane yet, it's focused on arrival.
+    /// Never while a session name is being edited.
     func focusTerminalSoon() {
         DispatchQueue.main.async { [weak self] in
-            guard let id = self?.focusedSessionID else { return }
-            TerminalStore.shared.existing(id)?.focus()
+            guard let self, self.renaming == nil, let id = self.focusedSessionID else { return }
+            TerminalStore.shared.requestFocus(id)
         }
     }
 

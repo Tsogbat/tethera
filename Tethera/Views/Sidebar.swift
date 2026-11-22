@@ -262,8 +262,10 @@ struct SessionRow: View {
         )
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture(count: 2) { startRename() }
+        // A click switches at once; the double-click that renames runs alongside it rather than
+        // making every single click wait out the double-click interval.
         .onTapGesture { workspace.show(session.id) }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { startRename() })
         .contextMenu { menu }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
@@ -287,8 +289,14 @@ struct SessionRow: View {
                 .textFieldStyle(.plain)
                 .font(TypeScale.ui(13, .medium))
                 .focused($nameFocused)
-                .onSubmit(commitRename)
-                .onExitCommand { workspace.renaming = nil }
+                .onSubmit {
+                    commitRename()
+                    workspace.focusTerminalSoon()
+                }
+                .onExitCommand {
+                    workspace.renaming = nil
+                    workspace.focusTerminalSoon()
+                }
                 .onAppear {
                     draftName = session.name
                     nameFocused = true

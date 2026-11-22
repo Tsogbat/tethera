@@ -283,7 +283,7 @@ struct TerminalHost: NSViewRepresentable {
     func updateNSView(_ slot: TerminalSlot, context: Context) {
         let terminal = TerminalStore.shared.terminal(for: sessionID)
         terminal.onFocus = { Workspace.shared.focus(pane: paneID) }
-        slot.show(terminal.hostView)
+        slot.show(terminal)
         terminal.attachIfNeeded()
     }
 }
@@ -296,6 +296,21 @@ final class TerminalSlot: NSView {
         view.frame = bounds
         view.autoresizingMask = [.width, .height]
         addSubview(view)
+    }
+
+    /// Shows a session's terminal. The keyboard stays with the slot: if the terminal it showed
+    /// had focus (or this one did, wherever it was), the terminal moving in gets it, so
+    /// switching sessions never leaves keys going nowhere.
+    func show(_ terminal: SessionTerminal) {
+        guard terminal.hostView.superview !== self else { return }
+        let hadFocus = terminal.hasFocus || subviews.contains { holdsFocus($0) }
+        show(terminal.hostView)
+        if hadFocus { TerminalStore.shared.requestFocus(terminal.sessionID) }
+    }
+
+    private func holdsFocus(_ view: NSView) -> Bool {
+        guard let responder = window?.firstResponder as? NSView else { return false }
+        return responder.isDescendant(of: view)
     }
 }
 

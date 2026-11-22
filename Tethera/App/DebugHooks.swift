@@ -187,6 +187,61 @@ enum DebugHooks {
                 _ = terminal.handleKey(event)
             }
             try? await Task.sleep(nanoseconds: 600_000_000)
+        } else if step.hasPrefix("@clickrow:") {
+            // A real click (posted mouse events, through SwiftUI's gestures) on the i-th sidebar
+            // session row, timed until the pane switches. Rows: 40 pt apart from y 81 below the
+            // window's top, with no Approvals row or repository headers above them.
+            let index = Int(step.dropFirst(10)) ?? 0
+            guard let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            // Past the last row is the empty sidebar below them.
+            let target = client.sessions.indices.contains(index) ? client.sessions[index].id : nil
+            let point = NSPoint(x: 120, y: window.contentLayoutRect.maxY - 81 - CGFloat(index) * 40)
+            let start = Date()
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                  windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                    NSApp.postEvent(event, atStart: false)
+                }
+            }
+            guard let target else { return print("[DebugHooks] click below the rows") }
+            while workspace.focusedSessionID != target, Date().timeIntervalSince(start) < 2 {
+                try? await Task.sleep(nanoseconds: 5_000_000)
+            }
+            print("[DebugHooks] click \(client.sessions[index].name): switched=\(workspace.focusedSessionID == target) after \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+        } else if step.hasPrefix("@dblclickrow:") || step == "@esc" {
+            // A real double-click on the i-th session row (it should start renaming), or Escape.
+            guard let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            if step == "@esc" {
+                for type in [NSEvent.EventType.keyDown, .keyUp] {
+                    if let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: now, windowNumber: window.windowNumber,
+                                                    context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) {
+                        NSApp.postEvent(event, atStart: false)
+                    }
+                }
+            } else {
+                let index = Int(step.dropFirst(13)) ?? 0
+                let point = NSPoint(x: 120, y: window.contentLayoutRect.maxY - 81 - CGFloat(index) * 40)
+                for clicks in [1, 2] {
+                    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                        if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: now, windowNumber: window.windowNumber,
+                                                          context: nil, eventNumber: 0, clickCount: clicks, pressure: 1) {
+                            NSApp.postEvent(event, atStart: false)
+                        }
+                    }
+                }
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            print("[DebugHooks] \(step): renaming=\(workspace.renaming.flatMap { client.session($0)?.name } ?? "none")")
+        } else if step == "@focus" {
+            // Whether typing would reach the focused session: prints the session and the window's first responder.
+            let name = workspace.focusedSession?.name ?? "none"
+            let typing = workspace.focusedSessionID.flatMap { TerminalStore.shared.existing($0)?.hasFocus } ?? false
+            let responder = NSApp.windows.first { $0.isVisible && !($0 is NSPanel) }?.firstResponder.map { String(describing: Swift.type(of: $0)) } ?? "nil"
+            print("[DebugHooks] focus \(name): terminal=\(typing) responder=\(responder)")
         } else if step == "@quit" {
             NSApp.terminate(nil)
         } else if !step.isEmpty {
