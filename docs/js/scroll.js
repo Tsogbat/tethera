@@ -57,8 +57,10 @@ export function createTimeline({ hero, copy, shot, cue, reduced, side }) {
   }
 
   function update(dt) {
+    const prev = st.p;
     st.p = raw();
-    if (st.snap) { st.pd = st.p; st.snap = false; }
+    // A jump (a nav link, Home/End) lands at once instead of flying back through the zoom.
+    if (st.snap || Math.abs(st.p - prev) > 0.35) { st.pd = st.p; st.snap = false; }
     else st.pd = damp(st.pd, st.p, 7.5, dt);
     if (Math.abs(st.pd - st.p) < 0.0005) st.pd = st.p;
     const p = st.pd;

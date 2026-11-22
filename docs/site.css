@@ -143,7 +143,7 @@ main, .footer { position: relative; z-index: 1; }
 .hero-copy > * { max-width: min(468px, 37vw); }
 .hero h1 {
   margin: 0 0 22px;
-  font-size: clamp(44px, 2.4rem + 2.6vw, 76px); line-height: .98; letter-spacing: -.045em;
+  font-size: clamp(44px, 2.4rem + 2.6vw, 76px); line-height: .98; letter-spacing: -.04em;
 }
 .hero-sub { margin: 0 0 32px; color: var(--ink-2); font-size: clamp(17px, 1rem + .3vw, 19px); line-height: 1.55; }
 .cta { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -218,7 +218,8 @@ main, .footer { position: relative; z-index: 1; }
 }
 
 /* ---------- Sections ---------- */
-.sec { padding-top: clamp(120px, 20vh, 220px); scroll-margin-top: 20px; }
+/* Nav links land with the section's rule just under the fixed nav, not after its top padding. */
+.sec { padding-top: clamp(120px, 20vh, 220px); scroll-margin-top: calc(84px - clamp(120px, 20vh, 220px)); }
 .grid {
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: 24px;
   border-top: 1px solid var(--line); padding-top: 28px;
@@ -277,18 +278,27 @@ h2 {
   50% { content: "⠴"; } 60% { content: "⠦"; } 70% { content: "⠧"; } 80% { content: "⠇"; } 90% { content: "⠏"; }
 }
 
-/* Agent wordmarks: plain text */
+/* Agent wordmarks: plain text. Each name carries its slash in front, in a fixed-width gutter; the list
+   is pulled left by one gutter and clipped there, so the slash that would start a line never shows. */
 .marks {
-  grid-column: 1 / -1; grid-row: 2; list-style: none; margin: 8px 0 48px; padding: 0;
+  --sep: .9em;
+  grid-column: 1 / -1; grid-row: 2; list-style: none; margin: 8px 0 48px calc(-1 * var(--sep)); padding: 0;
   display: flex; flex-wrap: wrap; align-items: baseline;
+  clip-path: inset(-.3em -.3em -.3em var(--sep));
   font-size: clamp(30px, 1.3rem + 2.6vw, 58px); font-weight: 500; letter-spacing: -.04em; line-height: 1.18;
 }
-.marks li:not(:last-child)::after { content: "/"; margin: 0 .32em; color: var(--line-2); font-weight: 400; }
+.marks li { position: relative; padding-left: var(--sep); }
+.marks li::before {
+  content: "/"; content: "/" / "";
+  position: absolute; left: 0; width: var(--sep); text-align: center;
+  color: var(--line-2); font-weight: 400;
+}
 
 .sec-shot { margin: 40px 0 0; }
 .sec-shot-wide { grid-column: 1 / -1; }
-/* The launch film: full width, the one moving picture on the page besides the 3D scene. */
-.film-frame { grid-column: 1 / -1; margin: 40px 0 0; }
+/* The launch film: full width, the one moving picture on the page besides the 3D scene.
+   On short screens it narrows so the whole frame and its controls fit under the heading. */
+.film-frame { grid-column: 1 / -1; margin: 28px 0 0; max-width: calc((100svh - 236px) * 16 / 9); }
 .film-frame video {
   display: block; width: 100%; height: auto; aspect-ratio: 16 / 9;
   border-radius: 12px; border: 1px solid var(--line); background: #0E0E0F;
@@ -312,7 +322,8 @@ h2 {
 .finale { padding-top: clamp(120px, 20vh, 220px); text-align: center; }
 .finale-stage { height: clamp(300px, 54vh, 560px); }
 .finale-copy { display: flex; flex-direction: column; align-items: center; }
-.finale-cap { margin: 0 0 30px; font: 500 12px/1 var(--font); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-2); }
+/* The 3D key's caption, set like the other keys' captions and kept with the key, not the heading. */
+.finale-cap { margin: 6px 0 52px; font: 400 13.5px/1.4 var(--font); color: var(--ink-2); }
 .finale h2 { font-size: clamp(44px, 2rem + 3vw, 84px); margin-bottom: 14px; }
 .finale .lede { margin: 0 auto 30px; }
 .finale .cta { justify-content: center; }
@@ -330,6 +341,7 @@ h2 {
   font: 500 12.5px/1 var(--font); color: var(--ink); background: transparent; border: 1px solid var(--line-2);
 }
 .copy:hover { background: var(--tint); }
+.copy:active { transform: translateY(1px); }
 .no-webgl .finale-stage, .no-webgl .finale-cap { display: none; }
 
 /* ---------- Footer ---------- */
@@ -367,4 +379,13 @@ h2 {
   .states li { grid-template-columns: 26px 96px minmax(0, 1fr); }
   .states li > span:last-child { font-size: 14px; }
   .marks { font-size: 30px; }
+  /* Install commands wrap instead of hiding their ends; Copy still copies the exact line. */
+  .cmd code { white-space: normal; overflow-wrap: anywhere; overflow-x: visible; line-height: 1.5; }
 }
+/* Touch: the small controls grow to a comfortable target. */
+@media (pointer: coarse) {
+  .snd { width: 40px; height: 40px; }
+  .btn-sm { height: 40px; padding: 0 15px; }
+  .copy { height: 36px; padding: 0 13px; }
+}
+@media (prefers-reduced-motion: reduce) { .st-working::before { animation: none; } }
